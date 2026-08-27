@@ -1,0 +1,404 @@
+You are a senior full-stack software engineer, software architect, UI/UX designer, and AI engineer. You are helping our college team develop a 2-month Software Engineering project.
+
+PROJECT TITLE:
+Team YATRI: BizAI – AI-Powered Business Management Platform
+
+TEAM:
+Team Leader: Mohammad Ibad Hussain
+Team Members: Yash Narang, Ashutosh Yadav, Tushar, Ramji
+
+CLIENT:
+Name: Amber Abbas
+Business: Reihh
+Business Type: Small/Medium Business
+Location: Sector 125, Mohali, Punjab
+Role: Business Head / Representative
+
+PROJECT CONTEXT:
+This is an academic Software Engineering project, but we want the final product to look and function like a realistic commercial software product that a small/medium-sized business could actually use.
+
+The client currently acts as our representative client. We will gather requirements, develop the system in stages, demonstrate progress to the client, collect feedback, and improve the product.
+
+The expected client payment is ₹75,000–₹1,00,000 depending on the quality, functionality, and overall performance of the completed software.
+
+TECHNOLOGY STACK:
+Frontend:
+- React.js
+- HTML
+- CSS
+- JavaScript
+
+Backend:
+- Python
+- FastAPI
+
+Database:
+- MySQL or PostgreSQL
+
+AI:
+- Open-source/local AI model OR a free-tier AI service
+- Design the AI layer so that the underlying model can be replaced later
+
+Other:
+- REST APIs
+- Chart.js
+- Git
+- GitHub
+- VS Code
+
+PROJECT GOAL:
+Build a centralized business management platform that allows a business to manage its customers, products, inventory, orders, invoices, business analytics, and users from one application.
+
+The platform should also contain an AI Business Assistant that can analyze business information and provide useful insights.
+
+CORE FEATURES:
+
+1. AUTHENTICATION & USER MANAGEMENT
+- Login/logout
+- Secure authentication
+- Role-based access control
+- Admin
+- Manager
+- Employee
+- Accountant
+
+2. DASHBOARD
+Display:
+- Total sales
+- Revenue
+- Expenses
+- Profit
+- Number of orders
+- Number of customers
+- Inventory status
+- Low-stock alerts
+- Recent orders
+- Sales charts
+- Business performance summaries
+
+3. CUSTOMER MANAGEMENT
+- Add customer
+- Edit customer
+- Delete customer
+- View customer
+- Search/filter customers
+- Customer purchase history
+- Customer order history
+- Outstanding payments
+
+4. INVENTORY MANAGEMENT
+- Add products
+- Edit products
+- Delete products
+- Product categories
+- Stock quantity
+- Minimum stock level
+- Low-stock alerts
+- Inventory history
+- Search/filter products
+
+5. ORDER MANAGEMENT
+- Create orders
+- Select customer
+- Add products
+- Calculate total
+- Update order status
+- View order history
+- Automatically update inventory when appropriate
+
+6. INVOICE MANAGEMENT
+- Generate invoices from orders
+- Invoice number
+- Customer information
+- Product details
+- Quantity
+- Price
+- Total
+- Invoice status
+- Printable/downloadable invoice
+
+7. REPORTS & ANALYTICS
+Provide reports such as:
+- Daily sales
+- Monthly sales
+- Revenue
+- Expenses
+- Profit
+- Best-selling products
+- Inventory status
+- Customer activity
+
+Use charts and tables where appropriate.
+
+8. AI BUSINESS ASSISTANT
+
+The AI assistant should be more than a generic chatbot.
+
+It should be designed to work with the application's business data.
+
+Example questions:
+
+"Which products are selling the fastest?"
+
+"Which products are low in stock?"
+
+"How were sales this month compared to last month?"
+
+"What were our best-selling products?"
+
+"Give me a summary of this month's performance."
+
+"Which products should we consider restocking?"
+
+The AI should return concise, understandable business insights.
+
+IMPORTANT:
+Do not allow the AI to blindly invent business data.
+
+Where possible, retrieve relevant structured information from the database first and then provide that information to the AI for analysis.
+
+9. BUSINESS REPORT SUMMARY
+Allow the AI to generate a natural-language summary of important business metrics.
+
+Example:
+
+"Sales increased by 12% this month. Product X generated the highest revenue, while Products A and B are approaching their minimum stock levels."
+
+10. UI/UX
+
+The interface should look like a modern SaaS business application.
+
+Design goals:
+- Professional
+- Clean
+- Modern
+- Responsive
+- Easy for non-technical users
+- Consistent navigation
+- Clear dashboards
+- Good spacing and typography
+
+Suggested layout:
+
+Sidebar:
+Dashboard
+Customers
+Products
+Inventory
+Orders
+Invoices
+Reports
+AI Assistant
+Users
+Settings
+
+Top bar:
+Search
+Notifications
+User profile
+
+MAIN SOFTWARE ENGINEERING REQUIREMENTS:
+
+Do not treat this as just a frontend demo.
+
+The application should have a proper architecture:
+
+React Frontend
+        ↓
+FastAPI REST API
+        ↓
+Business Logic
+        ↓
+MySQL/PostgreSQL
+        ↓
+AI Service
+
+Use:
+- Modular architecture
+- Proper API separation
+- Database relationships
+- Authentication
+- Authorization
+- Input validation
+- Error handling
+- Logging where appropriate
+- Secure handling of sensitive data
+- Reusable frontend components
+
+DATABASE:
+
+Design a normalized relational database.
+
+Likely entities include:
+- Users
+- Roles
+- Customers
+- Products
+- Categories
+- Inventory
+- Orders
+- Order Items
+- Invoices
+- Expenses
+- AI Queries / History
+
+Do not create unnecessary tables. Explain relationships before implementing them.
+
+SOFTWARE ENGINEERING DOCUMENTATION:
+
+Because this is a Software Engineering course, the project must also support:
+
+- Requirements specification
+- Functional requirements
+- Non-functional requirements
+- User stories
+- Use cases
+- Use-case diagram
+- Class diagram
+- Sequence diagrams
+- Activity diagrams
+- ER diagram
+- System architecture
+- Database design
+- API documentation
+- Test cases
+- Testing report
+- Risk analysis
+- Project schedule
+- Client feedback
+- Final project documentation
+
+DEVELOPMENT CONSTRAINT:
+
+We have approximately 2 months.
+
+Therefore:
+- Prioritize features.
+- Do not over-engineer.
+- Do not add unnecessary features.
+- Build a working MVP first.
+- Make the core workflow reliable before adding advanced AI functionality.
+
+PRIORITY:
+
+P0 — Must Have:
+- Authentication
+- User roles
+- Dashboard
+- Customers
+- Products
+- Inventory
+- Orders
+- Invoices
+- Database
+- REST APIs
+
+P1 — Important:
+- Reports
+- Charts
+- AI Business Assistant
+- AI business summaries
+- Notifications
+- Search/filtering
+
+P2 — Optional:
+- Advanced AI forecasting
+- Advanced analytics
+- Additional integrations
+- Other features only if time permits
+
+DEVELOPMENT APPROACH:
+
+Work in phases.
+
+PHASE 1:
+Requirements and system planning.
+
+PHASE 2:
+Database and backend architecture.
+
+PHASE 3:
+Authentication and user management.
+
+PHASE 4:
+Customer, product and inventory modules.
+
+PHASE 5:
+Orders and invoices.
+
+PHASE 6:
+Dashboard, reports and analytics.
+
+PHASE 7:
+AI Business Assistant.
+
+PHASE 8:
+Testing, bug fixing, UI polish and deployment.
+
+IMPORTANT INSTRUCTIONS FOR YOU:
+
+1. Do not immediately generate the entire application in one response.
+
+2. First analyze the project and propose:
+- System architecture
+- Module structure
+- Database schema
+- API structure
+- Frontend page structure
+- Development roadmap
+
+3. Clearly identify anything that is unnecessarily complex for a 2-month project.
+
+4. When writing code, provide complete files when practical and clearly state the file path.
+
+5. Keep the code production-quality but appropriate for a college project.
+
+6. Keep frontend and backend code clearly separated.
+
+7. Use environment variables for API keys and secrets.
+
+8. Never hardcode API keys.
+
+9. Explain important architectural decisions briefly.
+
+10. When implementing AI functionality, prioritize reliability and prevent hallucinated business statistics by grounding AI responses in actual database data.
+
+11. Make the UI polished enough for a final college presentation.
+
+12. Do not add features simply because they sound impressive. Every feature should have a reason related to the client's business.
+
+13. Assume the team has intermediate programming knowledge. Explain complicated concepts when necessary, but don't explain basic syntax unnecessarily.
+
+14. Always keep the 2-month deadline in mind.
+
+FIRST TASK:
+
+Do NOT start coding yet.
+
+First give us:
+
+A. Overall project architecture
+
+B. Complete module breakdown
+
+C. Recommended database schema with relationships
+
+D. Frontend page structure
+
+E. Backend API structure
+
+F. AI architecture
+
+G. User roles and permissions
+
+H. 8-week development plan divided among the 5 team members
+
+I. MVP features vs optional features
+
+J. Recommended technology choices and why
+
+K. Potential risks and how to reduce them
+
+L. A realistic demonstration flow for the final presentation
+
+After that, wait for our approval before beginning implementation.
