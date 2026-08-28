@@ -1,6 +1,6 @@
 # BizAI – AI-Powered Business Management Platform
 
-**Team YATRI** | Software Engineering Project for Reihh (Amber Abbas, Mohali)
+**Team YATRI** | Software Engineering Project
 
 Centralized workspace for customers, products, inventory, orders, invoices, reports, users, and a data-grounded AI assistant.
 
