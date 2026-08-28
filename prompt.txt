@@ -402,3 +402,119 @@ K. Potential risks and how to reduce them
 L. A realistic demonstration flow for the final presentation
 
 After that, wait for our approval before beginning implementation.
+The architecture is good, but I want you to revise it specifically for an 8-week college Software Engineering project with 5 intermediate students.
+
+Keep the project looking professional and commercially realistic, but reduce unnecessary implementation complexity.
+
+Important: do NOT remove the professional architecture or software-engineering aspects from the documentation. Instead, distinguish clearly between:
+1. What we MUST actually build
+2. What we SHOULD build if time permits
+3. What is only part of the documented architecture/design and does not need full implementation
+
+Our core product should be:
+
+BizAI – AI-Powered Business Management Platform
+
+The main real-world workflow should be:
+
+Login
+→ Dashboard
+→ Customer Management
+→ Product Management
+→ Inventory
+→ Create Order
+→ Automatically update stock
+→ Generate Invoice
+→ Reports/Analytics
+→ AI Business Assistant
+
+The AI should NOT be a generic chatbot. It should be a Data-Grounded AI Business Assistant that answers a controlled set of useful business questions using actual data retrieved from our database.
+
+Examples:
+- What are our best-selling products?
+- Which products are low in stock?
+- What were our sales this month?
+- How much revenue did we generate?
+- Which products should we restock?
+- Give me a summary of this month's performance.
+
+Do not promise unrestricted AI capabilities.
+
+For the AI architecture, avoid unnecessarily complicated RAG/vector-database systems. Use a simple backend data-retrieval approach:
+User question → identify supported intent → retrieve relevant database data → provide structured data to LLM → generate answer.
+
+Call this "Data-Grounded AI" rather than heavily emphasizing RAG.
+
+Simplify the implementation where appropriate:
+- No microservices
+- No Redis
+- No WebSockets
+- No Kubernetes
+- No GraphQL
+- No Redux unless genuinely necessary
+- No advanced AI forecasting
+- No unnecessary integrations
+- No multi-tenancy
+- No payment gateway
+- No mobile app
+
+PostgreSQL + FastAPI + React/Vite is fine.
+
+The final product should prioritize reliability over having many features.
+
+Set the actual MVP as:
+
+P0 — MUST COMPLETE:
+- Login/authentication
+- Basic role-based access
+- Dashboard
+- Customer management
+- Product management
+- Inventory management
+- Order management
+- Automatic stock updates
+- Invoice generation
+- PostgreSQL database
+- REST API
+
+P1 — COMPLETE IF POSSIBLE:
+- Sales/revenue reports
+- Charts
+- Expense tracking
+- AI Business Assistant
+- AI business summary
+- Search/filtering
+- PDF invoices
+
+P2 — OPTIONAL:
+- Advanced AI features
+- Email notifications
+- CSV/Excel export
+- Audit logs
+- Dark mode
+- Other enhancements
+
+Also revise the 8-week plan so that we have a working end-to-end system BEFORE Week 7.
+
+I want the following milestone structure:
+
+Week 1: Planning, UI design, database and project setup
+Week 2: Authentication + basic frontend/backend integration
+Week 3: Customers + Products
+Week 4: Inventory + Orders
+Week 5: Invoices + complete core workflow
+Week 6: Dashboard + Reports + Charts
+Week 7: AI Assistant + UI polish
+Week 8: Testing + bug fixing + deployment + documentation + presentation
+
+Make sure the core system is functional by the end of Week 5, so Weeks 6–8 are not spent desperately trying to finish basic features.
+
+Keep the 5-person team division, but make sure work is balanced and members are not blocked waiting for each other.
+
+Also revise the final presentation around ONE strong end-to-end scenario:
+
+Login → Dashboard → Customer → Product → Inventory → Order → Stock automatically decreases → Invoice → Reports → Ask AI a business question → AI answers using real database data.
+
+Finally, give me the revised architecture/planning document in the same A–L structure, but remove unnecessary complexity and clearly mark what is actually required to build within 8 weeks.
+
+start coding.

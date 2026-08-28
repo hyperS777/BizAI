@@ -1,54 +1,53 @@
 # BizAI – AI-Powered Business Management Platform
 
-**Team YATRI** | Software Engineering Project
+**Team YATRI** | Software Engineering Project for Reihh (Amber Abbas, Mohali)
 
-## Overview
+Centralized workspace for customers, products, inventory, orders, invoices, reports, users, and a data-grounded AI assistant.
 
-BizAI is a centralized business management platform that allows a small/medium business to manage customers, products, inventory, orders, invoices, business analytics, and users — all from one application. It includes an AI Business Assistant that analyzes real business data to provide actionable insights.
+## Tech stack
 
-## Team
+| Layer | Choice |
+|------|--------|
+| Frontend | React + Vite, Chart.js |
+| Backend | FastAPI |
+| Database | SQLite for local/dev (switch `DATABASE_URL` to PostgreSQL for production) |
+| AI | Snapshot from the database, then Groq if `GROQ_API_KEY` is set; otherwise a deterministic fallback |
 
-| Role | Name |
-|------|------|
-| Team Leader | Mohammad Ibad Hussain |
-| Member | Yash Narang |
-| Member | Ashutosh Yadav |
-| Member | Tushar |
-| Member | Ramji |
+## Run locally
 
-## Client
+Backend:
 
-- **Name:** Amber Abbas
-- **Business:** Reihh
-- **Type:** Small/Medium Business
-- **Location:** Sector 125, Mohali, Punjab
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React.js, HTML, CSS, JavaScript, Chart.js |
-| Backend | Python, FastAPI |
-| Database | PostgreSQL |
-| AI | Pluggable AI service layer (local/free-tier model) |
-| Tools | Git, GitHub, VS Code |
-
-## Project Structure
-
-```
-bizai/
-├── frontend/          # React.js application
-├── backend/           # FastAPI application
-├── docs/              # Project documentation (SE artifacts)
-├── .gitignore
-├── README.md
-└── prompt.txt
+```bash
+cd backend
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+uvicorn main:app --reload --port 8000
 ```
 
-## Getting Started
+The API creates tables on startup and seeds demo data if the database is empty.
 
-> Setup instructions will be added once the architecture is finalized and implementation begins.
+Frontend:
 
-## License
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-Academic Project – All Rights Reserved.
+Open http://localhost:5173 and sign in as `admin@bizai.com` / `admin123`.
+
+Other seeded accounts:
+
+- Manager: `manager@bizai.com` / `manager123`
+- Employee: `staff@bizai.com` / `staff123`
+- Accountant: `accounts@bizai.com` / `accounts123`
+
+## Intended workflow
+
+1. Sign in
+2. Review dashboard metrics, Chart.js sales, and low-stock alerts
+3. Manage customers and products
+4. Create an order, confirm it (stock is deducted), generate an invoice PDF
+5. Open Reports and ask the AI assistant questions about **live** records
