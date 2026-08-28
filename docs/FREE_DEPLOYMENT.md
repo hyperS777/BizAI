@@ -1,4 +1,4 @@
-# Free deployment
+# Free deployment with Render
 
 ## 1. Create the database
 
@@ -53,4 +53,4 @@ Never commit `.env` files or API keys. Revoke any key that has been shared publi
 
 ## Free-tier note
 
-Render free services sleep after inactivity. The first request after sleeping may take some time. Neon may pause inactive databases depending on its current free-tier policy.
+Render free web services sleep after inactivity. The first request after sleeping may take some time. Neon may pause inactive databases depending on its current free-tier policy. Check the current provider terms before publishing a public production service.
