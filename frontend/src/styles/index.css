@@ -57,6 +57,7 @@ a.nav-item{text-decoration:none}
 .chat-bubble.user{background:#eaf4f1;margin-left:auto}
 .chat-bubble.assistant{background:#f4f6f5}
 .chat-form{display:flex;gap:10px}
+.chat-form input{flex:1;min-width:0;width:100%;padding:13px 14px}
 .chat-form .primary-btn{margin-top:0}
 .loading.compact{min-height:180px}
 #root{width:100%;max-width:none;margin:0;text-align:left;border:0;min-height:100vh;display:block}
