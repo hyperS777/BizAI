@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Users } from 'lucide-react';
 import client from '../api/client';
 import { EmptyState, Modal, PageHeader } from '../components/ui';
@@ -10,6 +10,7 @@ const blank = { name: '', email: '', phone: '', company: '', address: '', gstin:
 
 export default function Customers() {
   const { can } = useAuth();
+  const navigate = useNavigate();
   const canEdit = can(['admin', 'manager', 'employee']);
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get('q') || '');
@@ -80,7 +81,7 @@ export default function Customers() {
             <tbody>
               {customers.map((customer) => (
                 <tr key={customer.id}>
-                  <td><strong>{customer.name}</strong></td>
+                  <td><button className="customer-name" onClick={() => navigate(`/customers/${customer.id}`)}><strong>{customer.name}</strong><small>View profile</small></button></td>
                   <td>{customer.company || '—'}</td>
                   <td>{customer.email || customer.phone || '—'}</td>
                   <td>{money(customer.outstanding_balance)}</td>

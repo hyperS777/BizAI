@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Customers from './pages/Customers';
+import CustomerDetail from './pages/CustomerDetail';
 import Inventory from './pages/Inventory';
 import Orders from './pages/Orders';
 import Invoices from './pages/Invoices';
@@ -27,6 +28,7 @@ export default function App() {
         <Route element={<ProtectedLayout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/customers" element={<Customers />} />
+          <Route path="/customers/:customerId" element={<CustomerDetail />} />
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/invoices" element={<Invoices />} />
