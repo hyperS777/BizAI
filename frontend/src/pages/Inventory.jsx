@@ -44,7 +44,7 @@ export default function Inventory() {
       <PageHeader eyebrow="Warehouse" title="Inventory" subtitle="Stock on hand, minimum levels, and movement history." />
       {error && <div className="notice error">{error}</div>}
       {products.length ? (
-        <section className="panel table-panel">
+        <section className="panel table-panel inventory-table-panel">
           <table className="data-table">
             <thead><tr><th>Product</th><th>On hand</th><th>Minimum</th><th>Status</th><th /></tr></thead>
             <tbody>

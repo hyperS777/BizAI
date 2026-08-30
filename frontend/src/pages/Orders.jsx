@@ -86,7 +86,7 @@ export default function Orders() {
       </div>
       {error && <div className="notice error">{error}</div>}
       {orders.length ? (
-        <section className="panel table-panel">
+        <section className="panel table-panel order-table-panel">
           <table className="data-table">
             <thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Total</th><th>Date</th><th /></tr></thead>
             <tbody>

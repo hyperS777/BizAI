@@ -33,7 +33,7 @@ export default function Invoices() {
       <PageHeader eyebrow="Billing" title="Invoices" subtitle="Generated from orders. Download a printable PDF at any time." />
       {error && <div className="notice error">{error}</div>}
       {invoices.length ? (
-        <section className="panel table-panel">
+        <section className="panel table-panel invoice-table-panel">
           <table className="data-table">
             <thead><tr><th>Invoice</th><th>Customer</th><th>Status</th><th>Amount</th><th>Due</th><th /></tr></thead>
             <tbody>

@@ -73,7 +73,7 @@ export default function Customers() {
       </div>
       {error && <div className="notice error">{error}</div>}
       {loading ? <div className="loading compact">Loading customers…</div> : customers.length ? (
-        <section className="panel table-panel">
+        <section className="panel table-panel customer-table-panel">
           <table className="data-table">
             <thead>
               <tr><th>Name</th><th>Company</th><th>Contact</th><th>Outstanding</th><th /></tr>
