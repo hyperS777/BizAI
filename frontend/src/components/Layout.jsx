@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bell, Box, Check, ClipboardList, FileBarChart, LayoutDashboard, LogOut, Menu,
   Search, Settings, Sparkles, UserRound, Users, Warehouse, X, CircleDollarSign, Moon, Sun,
@@ -25,6 +25,7 @@ export default function Layout() {
   const [query, setQuery] = useState('');
   const [dark, setDark] = useState(() => localStorage.getItem('bizai-theme') === 'dark');
   const navigate = useNavigate();
+  const location = useLocation();
 
   const toggleTheme = () => {
     const next = !dark;
@@ -34,6 +35,7 @@ export default function Layout() {
   };
 
   const visibleNav = navItems.filter((item) => !item.roles || item.roles.includes(role));
+  const currentPage = visibleNav.find((item) => item.to === location.pathname)?.label || 'Workspace';
 
   const search = (event) => {
     event.preventDefault();
@@ -82,6 +84,7 @@ export default function Layout() {
               placeholder="Search customers"
             />
           </form>
+          <div className="current-page"><span>Workspace</span><strong>{currentPage}</strong></div>
           <div className="topbar-actions">
             <button className="icon-btn" aria-label={dark ? 'Use light mode' : 'Use dark mode'} onClick={toggleTheme}><>{dark ? <Sun size={19} /> : <Moon size={19} />}</></button>
             <button className="icon-btn" aria-label="Notifications" onClick={() => setNoticeOpen((v) => !v)}>
@@ -94,6 +97,7 @@ export default function Layout() {
                 <small>{user?.role?.name || 'Staff'}</small>
               </span>
             </button>
+            <span className="live-status"><i /> Live</span>
             {noticeOpen && (
               <div className="notification-popover">
                 <strong>Notifications</strong>
