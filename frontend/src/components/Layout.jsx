@@ -92,7 +92,7 @@ export default function Layout() {
         <div className="sidebar-bottom">
           <div className="sidebar-note">
             <Sparkles size={17} />
-            <span><strong>AI insights</strong><small>Grounded in live data</small></span>
+            <span><strong>Workspace status</strong><small>Connected to live data</small></span>
           </div>
           <button className="nav-item" onClick={() => { logout(); navigate('/login'); }}>
             <LogOut size={18} /> Sign out

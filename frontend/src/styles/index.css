@@ -96,3 +96,146 @@ body{background:radial-gradient(circle at 90% 0%,rgba(14,118,110,.06),transparen
 [data-theme='dark'] .notif-item:hover{background:#1e2f2c}
 .notif-item strong{display:block;font-size:12px;line-height:1.3}
 
+/* Product-style dark theme: neutral surfaces and restrained teal actions. */
+[data-theme='dark'] {
+  --ink: #e8eeec;
+  --muted: #9aa9a5;
+  --paper: #101514;
+  --surface: #181e1d;
+  --line: #303a37;
+  --teal: #4fc0ad;
+  --teal-dark: #2d8f80;
+  --yellow: #e8bd5d;
+  --coral: #e1846d;
+  --blue: #79a8c8;
+}
+
+[data-theme='dark'] body {
+  background: #101514;
+  color: var(--ink);
+}
+
+[data-theme='dark'] .sidebar,
+[data-theme='dark'] .topbar {
+  background: #151b1a;
+  border-color: #2b3532;
+}
+
+[data-theme='dark'] .topbar {
+  box-shadow: 0 1px 0 rgba(255,255,255,.03);
+}
+
+[data-theme='dark'] .content {
+  background: radial-gradient(circle at 100% 0, rgba(79,192,173,.035), transparent 25rem), var(--paper);
+}
+
+[data-theme='dark'] .panel,
+[data-theme='dark'] .metric,
+[data-theme='dark'] .modal,
+[data-theme='dark'] .notification-popover,
+[data-theme='dark'] .outline-btn,
+[data-theme='dark'] .theme-toggle {
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: 0 5px 18px rgba(0,0,0,.16);
+}
+
+[data-theme='dark'] .panel:hover,
+[data-theme='dark'] .metric:hover {
+  box-shadow: 0 8px 22px rgba(0,0,0,.22);
+}
+
+[data-theme='dark'] .nav-item {
+  color: #aab8b4;
+}
+
+[data-theme='dark'] .nav-item:hover {
+  background: #202927;
+  color: var(--ink);
+}
+
+[data-theme='dark'] .nav-item.active {
+  background: #1d3732;
+  color: #dff8f2;
+}
+
+[data-theme='dark'] input,
+[data-theme='dark'] select,
+[data-theme='dark'] .filter-input,
+[data-theme='dark'] .toolbar select,
+[data-theme='dark'] .data-table select,
+[data-theme='dark'] .stack-form input,
+[data-theme='dark'] .stack-form select,
+[data-theme='dark'] .chat-form input {
+  background: #121817;
+  color: var(--ink);
+  border-color: #394642;
+}
+
+[data-theme='dark'] input::placeholder {
+  color: #71817c;
+}
+
+[data-theme='dark'] input:focus,
+[data-theme='dark'] select:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(79,192,173,.13);
+}
+
+[data-theme='dark'] .data-table td {
+  border-color: #293330;
+}
+
+[data-theme='dark'] .data-table th {
+  color: #91a29d;
+  border-color: var(--line);
+}
+
+[data-theme='dark'] .chat-bubble.user,
+[data-theme='dark'] .insight-explainer,
+[data-theme='dark'] .command-strip {
+  background: #1b332e;
+  border-color: #2d5149;
+}
+
+[data-theme='dark'] .chat-bubble.assistant,
+[data-theme='dark'] .order-items {
+  background: #202927;
+}
+
+[data-theme='dark'] .command-strip button {
+  background: #1b2321;
+  border-color: #303c38;
+  color: var(--ink);
+}
+
+[data-theme='dark'] .command-strip button:hover,
+[data-theme='dark'] .notif-item:hover {
+  background: #26312e;
+}
+
+[data-theme='dark'] .status-pill.pending {
+  background: #403821;
+  color: #f1ce78;
+}
+
+[data-theme='dark'] .status-pill.overdue,
+[data-theme='dark'] .status-pill.cancelled {
+  background: #422b27;
+  color: #f0a18d;
+}
+
+[data-theme='dark'] .status-pill.confirmed,
+[data-theme='dark'] .status-pill.sent,
+[data-theme='dark'] .status-pill.paid,
+[data-theme='dark'] .status-pill.delivered {
+  background: #1d3b34;
+  color: #83d8c6;
+}
+
+[data-theme='dark'] .primary-btn:hover,
+[data-theme='dark'] .outline-btn:hover,
+[data-theme='dark'] .nav-item:hover {
+  transform: none;
+}
+
