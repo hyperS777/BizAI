@@ -239,3 +239,70 @@ body{background:radial-gradient(circle at 90% 0%,rgba(14,118,110,.06),transparen
   transform: none;
 }
 
+/* Keep settings cards inside the content column on compact screens. */
+.main-area,
+.content,
+.settings-grid,
+.simulator-panel {
+  min-width: 0;
+}
+
+.settings-grid {
+  width: 100%;
+}
+
+.simulator-panel {
+  width: 100%;
+  padding: 24px;
+  overflow: hidden;
+}
+
+.simulator-icon {
+  width: 40px;
+  height: 40px;
+  margin-bottom: 20px;
+  background: transparent;
+  border: 1px solid rgba(14,118,110,.35);
+  color: var(--teal);
+}
+
+.simulator-panel h2 {
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.demo-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  width: 100%;
+}
+
+.demo-controls select {
+  min-width: 0;
+  width: 100%;
+}
+
+.simulator-button {
+  max-width: 100%;
+  white-space: normal;
+}
+
+[data-theme='dark'] .simulator-icon {
+  background: #1b332e;
+  border-color: #35665b;
+}
+
+[data-theme='dark'] .simulator-panel {
+  background: #181e1d;
+}
+
+@media (max-width: 600px) {
+  .simulator-panel {
+    padding: 20px;
+  }
+
+  .demo-controls {
+    grid-template-columns: 1fr;
+  }
+}
+
