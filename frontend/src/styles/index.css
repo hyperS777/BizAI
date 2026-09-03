@@ -88,3 +88,11 @@ body{background:radial-gradient(circle at 90% 0%,rgba(14,118,110,.06),transparen
 @media(max-width:900px){.customer-detail-grid{grid-template-columns:1fr}.customer-hero{align-items:flex-start;flex-direction:column}.customer-contact{width:100%;padding-top:14px;border-top:1px solid var(--line)}.customer-kpis{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:600px){.customer-kpis{grid-template-columns:1fr 1fr}.customer-order summary{gap:8px}.customer-order summary .status-pill{font-size:9px}.customer-order summary>b{font-size:11px}.order-item{grid-template-columns:1fr auto}.order-item b{grid-column:2;grid-row:1}.order-item span:nth-child(2){grid-column:1}}
 @media(max-width:700px){.data-table{width:100%;font-size:12px}.data-table th,.data-table td{padding:12px 10px}.customer-table-panel .data-table th:nth-child(2),.customer-table-panel .data-table td:nth-child(2),.customer-table-panel .data-table th:nth-child(3),.customer-table-panel .data-table td:nth-child(3),.invoice-table-panel .data-table th:nth-child(2),.invoice-table-panel .data-table td:nth-child(2),.invoice-table-panel .data-table th:nth-child(5),.invoice-table-panel .data-table td:nth-child(5),.order-table-panel .data-table th:nth-child(2),.order-table-panel .data-table td:nth-child(2),.order-table-panel .data-table th:nth-child(5),.order-table-panel .data-table td:nth-child(5),.product-table-panel .data-table th:nth-child(2),.product-table-panel .data-table td:nth-child(2),.product-table-panel .data-table th:nth-child(3),.product-table-panel .data-table td:nth-child(3){display:none}.customer-table-panel .row-actions{gap:7px}.customer-table-panel .row-actions .text-btn{font-size:11px}.data-table td:last-child{white-space:nowrap}}
+
+/* Notification popover list styles */
+.notif-list{display:grid;gap:1px;margin:12px 0 8px}
+.notif-item{display:flex;gap:10px;padding:10px 8px;border-radius:5px;cursor:pointer;transition:background .15s}
+.notif-item:hover{background:#f4f6f5}
+[data-theme='dark'] .notif-item:hover{background:#1e2f2c}
+.notif-item strong{display:block;font-size:12px;line-height:1.3}
+

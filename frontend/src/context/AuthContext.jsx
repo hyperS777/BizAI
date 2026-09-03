@@ -15,14 +15,16 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem('token');
     if (!token) {
       setLoading(false);
-      return;
+      return null;
     }
     try {
       const response = await client.get('/auth/me');
       setUser(response.data);
+      return response.data;
     } catch {
       localStorage.removeItem('token');
       setUser(null);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -40,7 +42,10 @@ export function AuthProvider({ children }) {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
     localStorage.setItem('token', response.data.access_token);
-    await fetchUser();
+    const authenticatedUser = await fetchUser();
+    if (!authenticatedUser) {
+      throw new Error('The API could not verify the signed-in user.');
+    }
   };
 
   const logout = () => {

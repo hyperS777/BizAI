@@ -7,12 +7,7 @@ TEAM:
 Team Leader: Mohammad Ibad Hussain
 Team Members: Yash Narang, Ashutosh Yadav, Tushar, Ramji
 
-CLIENT:
-Name: Amber Abbas
-Business: Reihh
-Business Type: Small/Medium Business
-Location: Sector 125, Mohali, Punjab
-Role: Business Head / Representative
+
 
 PROJECT CONTEXT:
 This is an academic Software Engineering project, but we want the final product to look and function like a realistic commercial software product that a small/medium-sized business could actually use.
@@ -403,6 +398,134 @@ L. A realistic demonstration flow for the final presentation
 
 After that, wait for our approval before beginning implementation.
 The architecture is good, but I want you to revise it specifically for an 8-week college Software Engineering project with 5 intermediate students.
+
+
+COMMERCE-READY PRODUCT REQUIREMENTS ADDENDUM:
+
+The final application must feel like a real sellable SaaS product for a small business, not a collection of disconnected academic screens. Every visible button, tab, filter, menu, form, chart, and navigation item must either perform its stated action or be removed. Do not use fake business numbers in the production experience.
+
+1. PROFESSIONAL PRODUCT FOUNDATION
+- Give the product a consistent name, logo treatment, color system, typography system, spacing system, and component style.
+- Use a persistent application shell with sidebar navigation, top-bar search, notifications, profile menu, responsive mobile navigation, breadcrumbs where useful, and clear page titles.
+- Add a proper first-run experience with loading, empty, error, success, and permission-denied states.
+- Use confirmation dialogs for destructive actions and toast notifications for successful or failed actions.
+- Use skeleton loading states for dashboard cards and tables instead of unexplained blank space.
+- Add a friendly 404 page and a useful API-unavailable state.
+- Make all important screens keyboard accessible and ensure visible focus states, readable contrast, labels, and useful ARIA names.
+- Use responsive layouts that remain usable on laptop, tablet, and mobile widths.
+
+2. REAL COMMERCE WORKFLOWS
+- Customer workflow: create, view, edit, archive, search, filter, paginate, and open a customer detail page with contact information, orders, invoices, payments, notes, and outstanding balance.
+- Product workflow: create, view, edit, archive, categorize, search, filter, paginate, and open a product detail page with price, cost, stock, reorder level, and inventory movement history.
+- Inventory workflow: record stock received, stock adjustment, stock sale, and stock return with reason, quantity, user, and timestamp. Never silently change stock.
+- Order workflow: create an order, select an existing customer or walk-in customer, add products, validate available stock, calculate subtotal/tax/discount/total, save a draft, confirm the order, update status, and show order history.
+- Invoice workflow: generate from a confirmed order, preview, print, download as PDF, mark as sent, record payment, show balance due, and prevent invalid status transitions.
+- Expense workflow: add, edit, categorize, filter, and report business expenses so profit is not calculated from sales alone.
+- Add pagination, sorting, filters, and search to all list screens where data can grow.
+- Preserve unsaved form changes and show clear validation messages near the relevant field.
+
+3. CLIENT TRUST, SECURITY, AND ACCOUNTABILITY
+- Enforce permissions in the backend, not only by hiding frontend buttons.
+- Define an explicit permission matrix for Admin, Manager, Accountant, and Employee.
+- Protect secrets with environment variables and use secure password hashing and JWT expiry/refresh handling.
+- Add audit logs for login, logout, create, edit, archive, delete, stock adjustment, order status change, invoice status change, and payment events.
+- Never expose passwords, tokens, internal errors, or sensitive configuration in the UI or API responses.
+- Validate all request bodies, query parameters, file uploads, currency values, quantities, and status transitions.
+- Add rate limiting or basic abuse protection to authentication and AI endpoints.
+- Add a privacy notice and clarify that AI suggestions are advisory and require human review.
+
+4. DASHBOARD AND REPORTING QUALITY
+- Dashboard metrics must come from the database and show the selected date range.
+- Add date range controls such as Today, This week, This month, Last month, and Custom range.
+- Charts must show real aggregated values with labels, currency formatting, tooltips, and a truthful empty state when no records exist.
+- Do not render decorative charts with invented values when sales, orders, or customers are zero.
+- Add export actions for important tables and reports in CSV, with PDF export where practical.
+- Show the data freshness time and a manual refresh action.
+- Explain metric definitions such as revenue, profit, expenses, outstanding balance, and low stock.
+- Include report totals and a clear “no data for this period” message.
+
+5. NOTIFICATIONS, PROFILE, AND SETTINGS
+- Notifications should have a real source: low-stock alerts, overdue invoices, failed operations, and important order events.
+- Provide unread/read state, mark-all-as-read, notification timestamps, and a notification preferences screen.
+- Profile tab should show name, email, role, avatar/initials, account activity, and a change-password flow.
+- Settings should include business name, logo, currency, tax settings, invoice numbering, timezone, notification preferences, and AI preferences.
+- Make settings persist through the backend for account/business settings and local storage only for harmless UI preferences.
+- Add a session/sign-out control and show the current signed-in account clearly.
+
+6. AI ASSISTANT QUALITY BAR
+- Ground every numeric answer in structured database queries and show the date range used.
+- Display a small source/context indicator such as “Based on 42 orders from 1–31 August.”
+- If data is missing, say that it is missing instead of guessing.
+- Support suggested prompts, recent questions, loading state, retry state, and clear error handling.
+- Separate database calculations from natural-language generation so the AI cannot change totals.
+- Add a disclaimer that recommendations are advisory, especially for stock purchasing and financial decisions.
+- Store AI query history only when appropriate and avoid storing sensitive data unnecessarily.
+
+7. DEMO DATA AND DEMONSTRATION MODE
+- Add an authenticated “Demo data simulator” for development and presentation use.
+- Label all generated records as synthetic/demo data and never mix them invisibly with real client records.
+- Offer actions to generate a small coherent dataset containing customers, products, stock movements, orders, invoices, expenses, and notifications.
+- Show exactly what the simulator will create before confirmation.
+- Add a safe “Remove demo data” action that deletes only records created by the simulator.
+- Keep the simulator disabled or restricted in production deployments unless explicitly enabled by an environment variable.
+
+8. FORMS, TABLES, AND DOCUMENT QUALITY
+- Use reusable form components with field labels, required indicators, inline validation, disabled/loading states, and server-error handling.
+- Use reusable data-table components with responsive behavior, column alignment, empty states, pagination, sorting, and row actions.
+- Format all money, dates, quantities, statuses, and percentages consistently using business settings.
+- Add print-ready invoice layouts with business identity, customer identity, line items, tax, totals, payment status, and terms.
+- Support a branded email/share-ready invoice view even if actual email delivery remains optional for the MVP.
+- Use status badges with text, not color alone.
+
+9. TESTING AND RELEASE READINESS
+- Add backend tests for authentication, permissions, CRUD operations, stock calculations, invoice totals, report calculations, and simulator isolation.
+- Add frontend tests for login, navigation, form validation, empty states, error states, and key create/update workflows.
+- Add one end-to-end demonstration test covering login → create customer → create product → create order → generate invoice → dashboard update.
+- Test zero-data, one-record, large-list, API-error, expired-token, unauthorized-role, and mobile layouts.
+- Add seed/demo instructions, environment setup instructions, API documentation, database migration instructions, and a troubleshooting guide.
+- Provide a deployment checklist covering environment variables, database backup, HTTPS, CORS, logging, migrations, and admin account setup.
+
+10. REVISED PRIORITY FOR THE 8-WEEK PROJECT
+
+P0 — Required for a credible client product:
+- Authentication and backend-enforced roles
+- Dashboard with real metrics and honest empty states
+- Customer, product, inventory, order, and invoice CRUD workflows
+- Search, filters, pagination, validation, loading/error/success states
+- Printable/downloadable invoices
+- Responsive application shell with working navigation
+- Basic audit log and notification system
+- Seed/demo simulator isolated from real data
+- Automated tests for critical business calculations and permissions
+
+P1 — Add after P0 is stable:
+- Expenses and profit reporting
+- CSV exports and date-range reports
+- Customer and product detail pages
+- Inventory movement history
+- Profile and business settings
+- Grounded AI assistant with source context
+- PDF invoice export and branded templates
+
+P2 — Only if the team has time and P0/P1 are reliable:
+- Forecasting and reorder recommendations
+- Email/SMS integrations
+- Payment gateway integration
+- Multi-business tenancy
+- Advanced dashboards and scheduled reports
+- Offline support or mobile application
+
+DEFINITION OF DONE FOR THE CLIENT DEMO:
+- A new user can sign in and understands the interface without explanation.
+- Every primary navigation item opens a real, useful screen.
+- A user can create a customer, product, order, and invoice from start to finish.
+- Inventory changes are validated and traceable.
+- Dashboard totals update from saved records and remain correct after refresh.
+- Zero records produce clear empty states, not fake charts or placeholder business values.
+- Unauthorized users cannot perform restricted actions through either the UI or API.
+- Notifications, profile, settings, search, filters, exports, and simulator controls work or are removed from the interface.
+- The application works on a normal laptop and mobile viewport and handles API failures gracefully.
+- The final presentation can demonstrate the complete workflow using either real records or clearly marked synthetic demo data.
 
 Keep the project looking professional and commercially realistic, but reduce unnecessary implementation complexity.
 

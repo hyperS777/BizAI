@@ -1,17 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Bell, Box, Check, ClipboardList, FileBarChart, LayoutDashboard, LogOut, Menu,
-  Search, Settings, Sparkles, UserRound, Users, Warehouse, X, CircleDollarSign, Moon, Sun,
+  AlertTriangle, Bell, Box, Check, CircleDollarSign, ClipboardList, FileBarChart,
+  LayoutDashboard, LogOut, Menu, Moon, Package, Receipt, Search, Settings,
+  Sparkles, Sun, UserRound, Users, Warehouse, X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import client from '../api/client';
 
 const navItems = [
   { label: 'Dashboard', to: '/', icon: LayoutDashboard },
   { label: 'Customers', to: '/customers', icon: Users },
+  { label: 'Products', to: '/products', icon: Package },
   { label: 'Inventory', to: '/inventory', icon: Warehouse },
   { label: 'Orders', to: '/orders', icon: ClipboardList },
   { label: 'Invoices', to: '/invoices', icon: CircleDollarSign },
+  { label: 'Expenses', to: '/expenses', icon: Receipt },
   { label: 'Reports', to: '/reports', icon: FileBarChart },
   { label: 'AI Assistant', to: '/ai', icon: Sparkles },
   { label: 'Users', to: '/users', icon: UserRound, roles: ['admin'] },
@@ -22,10 +26,30 @@ export default function Layout() {
   const { user, logout, role } = useAuth();
   const [open, setOpen] = useState(false);
   const [noticeOpen, setNoticeOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
   const [query, setQuery] = useState('');
   const [dark, setDark] = useState(() => localStorage.getItem('bizai-theme') === 'dark');
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Initialise dark mode from localStorage on mount
+  useEffect(() => {
+    if (dark) document.documentElement.dataset.theme = 'dark';
+  }, []);
+
+  // Load real notifications from backend
+  useEffect(() => {
+    client.get('/notifications')
+      .then((res) => setNotifications(res.data?.items || []))
+      .catch(() => {}); // Silent — notifications are best-effort
+    // Refresh every 2 minutes
+    const interval = setInterval(() => {
+      client.get('/notifications')
+        .then((res) => setNotifications(res.data?.items || []))
+        .catch(() => {});
+    }, 120_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const toggleTheme = () => {
     const next = !dark;
@@ -43,6 +67,8 @@ export default function Layout() {
     if (!value) return;
     navigate(`/customers?q=${encodeURIComponent(value)}`);
   };
+
+  const unreadCount = notifications.length;
 
   return (
     <div className="app-shell">
@@ -86,9 +112,16 @@ export default function Layout() {
           </form>
           <div className="current-page"><span>Workspace</span><strong>{currentPage}</strong></div>
           <div className="topbar-actions">
-            <button className="icon-btn" aria-label={dark ? 'Use light mode' : 'Use dark mode'} onClick={toggleTheme}><>{dark ? <Sun size={19} /> : <Moon size={19} />}</></button>
-            <button className="icon-btn" aria-label="Notifications" onClick={() => setNoticeOpen((v) => !v)}>
-              <Bell size={19} /><i />
+            <button className="icon-btn" aria-label={dark ? 'Use light mode' : 'Use dark mode'} onClick={toggleTheme}>
+              <>{dark ? <Sun size={19} /> : <Moon size={19} />}</>
+            </button>
+            <button
+              className="icon-btn"
+              aria-label={`Notifications${unreadCount ? ` (${unreadCount})` : ''}`}
+              onClick={() => setNoticeOpen((v) => !v)}
+            >
+              <Bell size={19} />
+              {unreadCount > 0 && <i style={{ position: 'absolute', width: 6, height: 6, background: 'var(--coral)', borderRadius: '50%', right: 1, top: 0, border: '1px solid #fff' }} />}
             </button>
             <button className="profile profile-button" onClick={() => navigate('/profile')}>
               <span className="avatar">{user?.full_name?.slice(0, 1) || 'A'}</span>
@@ -100,8 +133,22 @@ export default function Layout() {
             <span className="live-status"><i /> Live</span>
             {noticeOpen && (
               <div className="notification-popover">
-                <strong>Notifications</strong>
-                <p><Check size={15} /> Low-stock alerts appear on Inventory and Dashboard.</p>
+                <strong>Notifications {unreadCount > 0 && <span style={{ color: 'var(--coral)', fontSize: 12 }}>({unreadCount})</span>}</strong>
+                {notifications.length === 0 ? (
+                  <p><Check size={15} /> All systems normal — no alerts right now.</p>
+                ) : (
+                  <div className="notif-list">
+                    {notifications.slice(0, 6).map((n) => (
+                      <div key={n.id} className="notif-item" onClick={() => { setNoticeOpen(false); navigate(n.link); }}>
+                        <AlertTriangle size={15} style={{ color: n.severity === 'error' ? 'var(--coral)' : 'var(--yellow)', flexShrink: 0, marginTop: 2 }} />
+                        <span>
+                          <strong style={{ fontSize: 13 }}>{n.title}</strong>
+                          <small style={{ color: 'var(--muted)', display: 'block', fontSize: 11, marginTop: 2 }}>{n.message}</small>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <button className="text-btn" onClick={() => { setNoticeOpen(false); navigate('/inventory'); }}>
                   Review inventory
                 </button>

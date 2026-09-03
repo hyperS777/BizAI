@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from database import engine, Base
 import models  # noqa: F401
-from routers import auth, users, customers, products, orders, invoices, reports, ai, demo, expenses
+from routers import auth, users, customers, products, orders, invoices, reports, ai, demo, expenses, notifications
 
 logging.basicConfig(level=logging.INFO if settings.DEBUG else logging.WARNING)
 logger = logging.getLogger("bizai")
@@ -54,6 +54,7 @@ app.include_router(reports.router)
 app.include_router(ai.router)
 app.include_router(expenses.router)
 app.include_router(demo.router)
+app.include_router(notifications.router)
 
 
 @app.get("/")

@@ -158,6 +158,83 @@ def get_sales_series(db: Session, days: int = 30):
     return series
 
 
+def get_top_products(db: Session, limit: int = 10):
+    rows = (
+        db.query(
+            Product.id,
+            Product.name,
+            Product.sku,
+            func.sum(OrderItem.quantity).label("total_quantity"),
+            func.sum(OrderItem.total_price).label("total_revenue"),
+        )
+        .join(OrderItem, OrderItem.product_id == Product.id)
+        .join(Order, Order.id == OrderItem.order_id)
+        .filter(Order.status != OrderStatus.CANCELLED.value)
+        .group_by(Product.id, Product.name, Product.sku)
+        .order_by(func.sum(OrderItem.total_price).desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "product_id": r.id,
+            "name": r.name,
+            "sku": r.sku,
+            "total_quantity": int(r.total_quantity or 0),
+            "total_revenue": float(r.total_revenue or 0),
+        }
+        for r in rows
+    ]
+
+
+def get_customer_activity(db: Session, limit: int = 10):
+    rows = (
+        db.query(
+            Customer.id,
+            Customer.name,
+            Customer.email,
+            func.count(Order.id).label("order_count"),
+            func.coalesce(func.sum(Order.total_amount), 0).label("total_spent"),
+        )
+        .outerjoin(Order, (Order.customer_id == Customer.id) & (Order.status != OrderStatus.CANCELLED.value))
+        .group_by(Customer.id, Customer.name, Customer.email)
+        .order_by(func.coalesce(func.sum(Order.total_amount), 0).desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "customer_id": r.id,
+            "name": r.name,
+            "email": r.email,
+            "order_count": int(r.order_count or 0),
+            "total_spent": float(r.total_spent or 0),
+        }
+        for r in rows
+    ]
+
+
+def get_expense_summary(db: Session, start_date=None, end_date=None):
+    q = db.query(
+        Expense.category,
+        func.coalesce(func.sum(Expense.amount), 0).label("total"),
+        func.count(Expense.id).label("count"),
+    )
+    if start_date:
+        q = q.filter(Expense.date >= start_date)
+    if end_date:
+        q = q.filter(Expense.date <= end_date)
+    rows = q.group_by(Expense.category).order_by(func.sum(Expense.amount).desc()).all()
+    total_all = float(db.query(func.coalesce(func.sum(Expense.amount), 0)).scalar() or 0)
+    return {
+        "total": total_all,
+        "by_category": [
+            {"category": r.category or "Uncategorized", "total": float(r.total or 0), "count": int(r.count or 0)}
+            for r in rows
+        ],
+    }
+
+
 def build_business_snapshot(db: Session) -> dict:
     metrics = get_dashboard_metrics(db)
     low_items = (

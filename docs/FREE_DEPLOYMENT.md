@@ -35,6 +35,10 @@ uvicorn main:app --host 0.0.0.0 --port $PORT
 VITE_API_URL=https://YOUR-API.onrender.com/api
 ```
 
+This variable must be configured in Vercel under Project Settings > Environment Variables for Preview and Production, then the frontend must be redeployed. Do not use `/api`, `localhost`, or `127.0.0.1` in the deployed Vercel environment unless a Vercel proxy to the API has been configured.
+
+Before testing login, open `https://YOUR-API.onrender.com/api/health` in a browser. It must return `{"status":"ok"}`. If it returns 404, the URL is not the deployed FastAPI service and the Vercel frontend cannot sign in through it.
+
 The included `frontend/vercel.json` keeps React Router routes working after refresh.
 
 ## 4. Finish CORS

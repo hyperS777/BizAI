@@ -5,9 +5,11 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Customers from './pages/Customers';
 import CustomerDetail from './pages/CustomerDetail';
+import Products from './pages/Products';
 import Inventory from './pages/Inventory';
 import Orders from './pages/Orders';
 import Invoices from './pages/Invoices';
+import Expenses from './pages/Expenses';
 import Reports from './pages/Reports';
 import AIAssistant from './pages/AIAssistant';
 import UsersPage from './pages/Users';
@@ -29,9 +31,11 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/customers" element={<Customers />} />
           <Route path="/customers/:customerId" element={<CustomerDetail />} />
+          <Route path="/products" element={<Products />} />
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/invoices" element={<Invoices />} />
+          <Route path="/expenses" element={<Expenses />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/ai" element={<AIAssistant />} />
           <Route path="/users" element={<UsersPage />} />
