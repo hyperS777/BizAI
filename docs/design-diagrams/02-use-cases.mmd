@@ -1,0 +1,28 @@
+flowchart LR
+    Admin[Admin] --> Login[Login]
+    Admin --> Customers[Manage Customers]
+    Admin --> Products[Manage Products]
+    Admin --> Orders[Manage Orders]
+    Admin --> Reports[View Reports]
+    Admin --> AI[Ask AI Questions]
+
+    Manager[Manager] --> Customers
+    Manager --> Products
+    Manager --> Orders
+    Manager --> Reports
+
+    Employee[Employee] --> Orders
+    Employee --> Products
+
+    Accountant[Accountant] --> Invoice[Generate Invoices]
+    Accountant --> Payments[Record Payments]
+    Accountant --> Reports
+
+    Login --> System[BizAI System]
+    Customers --> System
+    Products --> System
+    Orders --> System
+    Reports --> System
+    AI --> System
+    Invoice --> System
+    Payments --> System

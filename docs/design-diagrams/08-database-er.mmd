@@ -1,0 +1,65 @@
+erDiagram
+    USERS ||--o{ ORDERS : creates
+    USERS ||--o{ EXPENSES : records
+    USERS ||--o{ AI_QUERIES : asks
+    CUSTOMERS ||--o{ ORDERS : places
+    CATEGORIES ||--o{ PRODUCTS : contains
+    PRODUCTS ||--o{ ORDER_ITEMS : includes
+    ORDERS ||--o{ ORDER_ITEMS : contains
+    ORDERS ||--o| INVOICES : generates
+
+    USERS {
+      int id PK
+      string email
+      string password_hash
+      string full_name
+    }
+
+    CUSTOMERS {
+      int id PK
+      string name
+      string phone
+      string company
+    }
+
+    PRODUCTS {
+      int id PK
+      string name
+      float price
+      int stock_qty
+    }
+
+    ORDERS {
+      int id PK
+      int customer_id FK
+      float total_amount
+      string status
+    }
+
+    ORDER_ITEMS {
+      int id PK
+      int order_id FK
+      int product_id FK
+      int quantity
+    }
+
+    INVOICES {
+      int id PK
+      int order_id FK
+      float total_amount
+      string status
+    }
+
+    EXPENSES {
+      int id PK
+      int user_id FK
+      string description
+      float amount
+    }
+
+    AI_QUERIES {
+      int id PK
+      int user_id FK
+      string question
+      string answer
+    }

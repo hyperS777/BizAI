@@ -1,7 +1,5 @@
 # BizAI – Project Architecture & Planning Document
 
-> Team YATRI | Client: Amber Abbas (Reihh) | Timeline: 8 Weeks
-
 ---
 
 ## A. Overall Project Architecture
@@ -375,6 +373,320 @@ frontend/
 ---
 
 ## E. Backend API Structure
+
+---
+
+## M. Design Diagram Presentation Pack
+
+The following diagrams are the implementation-aligned source material for the Design Diagram Presentation. They should be recreated or imported into Microsoft Visio, reviewed against the current code and database, and exported with the editable Visio source files. The diagrams below intentionally show the core 8-week scope rather than undocumented future features.
+
+### M.1 System Architecture Diagram
+
+```mermaid
+flowchart TB
+       Browser[User Browser]
+       Frontend[React + Vite SPA\nPages, forms, tables, charts]
+       Client[Axios API client\nJWT Authorization header]
+       API[FastAPI REST API]
+       Auth[Authentication + RBAC\nJWT, role permissions]
+       Services[Business services\nOrders, stock, invoices, reports]
+       ORM[SQLAlchemy models + validation]
+       DB[(PostgreSQL database)]
+       AI[Data-Grounded AI service\nSupported intent -> database query -> answer]
+       LLM[Optional LLM provider\nGroq or local model]
+
+       Browser --> Frontend --> Client --> API
+       API --> Auth
+       API --> Services
+       Services --> ORM --> DB
+       Services --> AI
+       AI --> DB
+       AI -. structured context only .-> LLM
+       LLM -. grounded answer .-> AI
+```
+
+### M.2 Use-Case Diagram
+
+```mermaid
+flowchart LR
+       Admin([Admin])
+       Manager([Manager])
+       Employee([Employee])
+       Accountant([Accountant])
+       Assistant([Data-Grounded AI Assistant])
+
+       subgraph BizAI[BizAI Business Management Platform]
+              Login((Sign in))
+              Users((Manage users and roles))
+              Customers((Manage customers))
+              Products((Manage products))
+              Inventory((Manage inventory))
+              Orders((Create and manage orders))
+              Stock((Validate and update stock))
+              Invoices((Generate and manage invoices))
+              Payments((Record payments))
+              Reports((View reports))
+              Notifications((View notifications))
+              AskAI((Ask supported business question))
+       end
+
+       Admin --> Login & Users & Customers & Products & Inventory & Orders & Invoices & Payments & Reports & Notifications & AskAI
+       Manager --> Login & Customers & Products & Inventory & Orders & Invoices & Reports & Notifications & AskAI
+       Employee --> Login & Customers & Products & Orders & Notifications
+       Accountant --> Login & Customers & Invoices & Payments & Reports & Notifications
+       Assistant --> AskAI
+       Orders -. includes .-> Stock
+       Orders -. includes .-> Invoices
+       AskAI -. uses .-> Reports
+```
+
+### M.3 Context and Level 1 DFD
+
+```mermaid
+flowchart LR
+       User[Admin, Manager, Employee, Accountant]
+       Browser[React frontend]
+       API((BizAI REST API))
+       DB[(PostgreSQL)]
+       AI[AI service / optional LLM]
+       Notify[Notification generation]
+
+       User -->|credentials and business actions| Browser
+       Browser -->|JSON requests + JWT| API
+       API -->|validated reads and writes| DB
+       DB -->|records and metrics| API
+       API -->|JSON responses and errors| Browser
+       Browser -->|tables, forms, charts, answers| User
+       API -->|structured business context| AI
+       AI -->|grounded response| API
+       DB -->|low stock, overdue invoice, order events| Notify
+       Notify -->|notification records| DB
+```
+
+```mermaid
+flowchart TB
+       Input[Authenticated request]
+       P1((1. Authenticate and authorize))
+       P2((2. Manage customers and products))
+       P3((3. Process order and stock))
+       P4((4. Generate invoice and payment))
+       P5((5. Calculate reports))
+       P6((6. Answer grounded AI question))
+       D1[(Users and roles)]
+       D2[(Customers and products)]
+       D3[(Orders and stock movements)]
+       D4[(Invoices and expenses)]
+       D5[(Notifications and AI history)]
+       Output[Validated response / report / notification]
+
+       Input --> P1 --> D1
+       P1 --> P2 --> D2
+       P2 --> P3 --> D3
+       P3 --> P4 --> D4
+       D2 --> P5
+       D3 --> P5
+       D4 --> P5
+       P5 --> Output
+       Input --> P6
+       D2 --> P6
+       D3 --> P6
+       D4 --> P6
+       P6 --> D5 --> Output
+```
+
+### M.4 Core Sequence Diagrams
+
+#### Login
+
+```mermaid
+sequenceDiagram
+       actor User
+       participant UI as React Login
+       participant API as FastAPI /auth/login
+       participant Security as Password/JWT service
+       participant DB as PostgreSQL
+
+       User->>UI: Enter email and password
+       UI->>API: POST form credentials
+       API->>DB: Find user by email
+       DB-->>API: User record
+       API->>Security: Verify password and create JWT
+       Security-->>API: Access token
+       API-->>UI: 200 token response
+       UI->>API: GET /auth/me with Bearer token
+       API->>DB: Load active user and role
+       DB-->>API: User and permissions
+       API-->>UI: Authenticated user
+       UI-->>User: Open dashboard
+```
+
+#### Order, stock, and invoice
+
+```mermaid
+sequenceDiagram
+       actor User
+       participant UI as React Orders
+       participant API as FastAPI Orders
+       participant Service as Order service
+       participant DB as PostgreSQL
+       participant Invoice as Invoice service
+
+       User->>UI: Select customer and products
+       UI->>API: POST /orders
+       API->>Service: Validate payload and available stock
+       Service->>DB: Read products and prices
+       DB-->>Service: Product records
+       Service->>DB: Save order and line items
+       Service-->>API: Draft order
+       API-->>UI: Order created
+       User->>UI: Confirm order
+       UI->>API: PUT /orders/{id}/status
+       API->>Service: Confirm and deduct stock transactionally
+       Service->>DB: Update stock and order status
+       DB-->>Service: Committed transaction
+       Service-->>API: Confirmed order
+       API-->>UI: Updated order and stock
+       User->>UI: Generate invoice
+       UI->>API: POST /invoices/from-order/{id}
+       API->>Invoice: Create one invoice for confirmed order
+       Invoice->>DB: Save invoice
+       DB-->>Invoice: Invoice record
+       Invoice-->>API: Invoice response
+       API-->>UI: Printable invoice
+```
+
+#### Grounded AI question
+
+```mermaid
+sequenceDiagram
+       actor User
+       participant UI as React AI Assistant
+       participant API as FastAPI /ai/chat
+       participant Intent as Supported-intent handler
+       participant DB as PostgreSQL
+       participant LLM as Optional LLM
+
+       User->>UI: Ask supported business question
+       UI->>API: POST question with JWT
+       API->>Intent: Identify supported intent
+       Intent->>DB: Query exact metrics and date range
+       DB-->>Intent: Structured records and totals
+       Intent->>LLM: Provide only structured context
+       LLM-->>Intent: Concise explanation
+       Intent-->>API: Answer plus source context
+       API-->>UI: Grounded answer and date range
+       UI-->>User: Display answer and advisory notice
+```
+
+### M.5 Database Design and Normalization Evidence
+
+```mermaid
+erDiagram
+       ROLES ||--o{ USERS : assigns
+       USERS ||--o{ ORDERS : creates
+       USERS ||--o{ EXPENSES : records
+       USERS ||--o{ AI_QUERIES : asks
+       CATEGORIES ||--o{ PRODUCTS : groups
+       CUSTOMERS ||--o{ ORDERS : places
+       ORDERS ||--|{ ORDER_ITEMS : contains
+       PRODUCTS ||--o{ ORDER_ITEMS : appears_in
+       ORDERS ||--o| INVOICES : generates
+       PRODUCTS ||--o{ STOCK_MOVEMENTS : changes
+       USERS ||--o{ STOCK_MOVEMENTS : records
+
+       ROLES { int id PK string name }
+       USERS { int id PK int role_id FK string email string password_hash string full_name boolean is_active }
+       CUSTOMERS { int id PK string name string email string phone string company float outstanding_balance }
+       CATEGORIES { int id PK string name string description }
+       PRODUCTS { int id PK int category_id FK string name string sku float price float cost_price int stock_qty int min_stock_level }
+       ORDERS { int id PK int customer_id FK int created_by FK string order_number string status float total_amount datetime created_at }
+       ORDER_ITEMS { int id PK int order_id FK int product_id FK int quantity float unit_price float total_price }
+       INVOICES { int id PK int order_id FK string invoice_number string status float total_amount float paid_amount date due_date }
+       EXPENSES { int id PK int created_by FK string description float amount string category date date }
+       STOCK_MOVEMENTS { int id PK int product_id FK int created_by FK string movement_type int quantity string reason datetime created_at }
+       AI_QUERIES { int id PK int user_id FK string query_text string response_text datetime created_at }
+```
+
+Normalization sheet to include beside the ER diagram:
+
+| Table | 1NF evidence | 2NF evidence | 3NF evidence |
+|---|---|---|---|
+| `orders` | Each column stores one value; no repeating item columns | The order identifier determines each order attribute | Customer and creator details remain in their own tables |
+| `order_items` | One product and quantity per row | Every non-key value depends on the complete line-item identity | Product details remain in `products`; order details remain in `orders` |
+| `products` | One SKU, price, and stock value per row | The single product key determines product attributes | Category name remains in `categories`, referenced by `category_id` |
+| `invoices` | One invoice and payment state per row | Invoice attributes depend on `invoice_id` | Customer data is reached through the related order |
+| `stock_movements` | One stock event per row | Event attributes depend on `movement_id` | Product and user details remain in their source tables |
+
+Cached order and invoice totals are justified only as transactionally maintained values used for reporting and document stability. The service must recalculate totals from line items when creating or updating records.
+
+### M.6 UML Class Diagram for Code Modules
+
+```mermaid
+classDiagram
+       class AuthRouter {
+              +login(credentials)
+              +getCurrentUser(token)
+       }
+       class CustomerRouter {
+              +listCustomers(filters)
+              +createCustomer(data)
+              +updateCustomer(id, data)
+       }
+       class ProductRouter {
+              +listProducts(filters)
+              +createProduct(data)
+              +updateStock(id, adjustment)
+       }
+       class OrderRouter {
+              +listOrders(filters)
+              +createOrder(data)
+              +updateStatus(id, status)
+       }
+       class InvoiceRouter {
+              +listInvoices(filters)
+              +generateFromOrder(orderId)
+              +recordPayment(id, amount)
+       }
+       class ReportService {
+              +dashboardMetrics(dateRange)
+              +salesReport(dateRange)
+              +profitReport(dateRange)
+       }
+       class AIService {
+              +identifyIntent(question)
+              +retrieveBusinessData(intent)
+              +generateGroundedAnswer(context)
+       }
+       class Customer
+       class Product
+       class Order
+       class OrderItem
+       class Invoice
+       class User
+
+       AuthRouter --> User
+       CustomerRouter --> Customer
+       ProductRouter --> Product
+       OrderRouter --> Order
+       Order --> OrderItem
+       OrderItem --> Product
+       InvoiceRouter --> Invoice
+       Invoice --> Order
+       ReportService --> Order
+       ReportService --> Product
+       AIService --> ReportService
+       AIService --> Order
+```
+
+### M.7 Diagram Review and Presentation Checklist
+
+- Recreate these diagrams in Microsoft Visio using standard UML, DFD, ER, and flowchart notation.
+- Verify every endpoint and class name against the current repository before final export.
+- Verify the database diagram against PostgreSQL migrations/models, including nullable and unique fields.
+- Verify every use-case actor against backend role checks.
+- Present the sequence diagrams through one scenario: Login → Dashboard → Customer → Product → Inventory → Order → Automatic Stock Update → Invoice → Reports → Grounded AI Answer.
+- All five team members must attend and each member must explain one diagram.
+- Submit the Visio editable files, exported PDF/images, and this architecture document.
 
 ### Auth (`/api/auth`)
 | Method | Endpoint | Description |

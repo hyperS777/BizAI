@@ -1,0 +1,10 @@
+flowchart LR
+    User[User] --> Frontend[React Frontend]
+    Frontend --> API[FastAPI API]
+    API --> DB[(PostgreSQL)]
+    API --> AI[AI Service]
+    AI --> DB
+
+    Frontend -->|Login / requests| API
+    API -->|JSON data| Frontend
+    AI -->|Answer| Frontend

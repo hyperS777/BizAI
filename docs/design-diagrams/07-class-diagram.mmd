@@ -1,0 +1,84 @@
+classDiagram
+    class User {
+      +id: int
+      +email: string
+      +full_name: string
+      +role: Role
+      +login()
+      +viewDashboard()
+    }
+
+    class Role {
+      +id: int
+      +name: string
+    }
+
+    class Customer {
+      +id: int
+      +name: string
+      +email: string
+      +phone: string
+      +company: string
+      +outstanding_balance: float
+      +createOrder()
+    }
+
+    class Product {
+      +id: int
+      +name: string
+      +sku: string
+      +price: float
+      +stock_qty: int
+      +min_stock_level: int
+      +is_active: bool
+      +updateStock()
+    }
+
+    class Order {
+      +id: int
+      +order_number: string
+      +status: string
+      +total_amount: float
+      +createOrderItem()
+      +generateInvoice()
+    }
+
+    class OrderItem {
+      +id: int
+      +quantity: int
+      +unit_price: float
+      +total_price: float
+    }
+
+    class Invoice {
+      +id: int
+      +invoice_number: string
+      +status: string
+      +total_amount: float
+      +paid_amount: float
+      +due_date: date
+    }
+
+    class Expense {
+      +id: int
+      +description: string
+      +amount: float
+      +category: string
+      +expense_date: date
+    }
+
+    class AIQuery {
+      +id: int
+      +query_text: string
+      +response_text: string
+      +created_at: datetime
+    }
+
+    Role "1" --> "many" User
+    User "1" --> "many" Orders : creates
+    Customer "1" --> "many" Order
+    Product "1" --> "many" OrderItem
+    Order "1" --> "many" OrderItem
+    Order "1" --> "0..1" Invoice
+    User "1" --> "many" Expense
+    User "1" --> "many" AIQuery

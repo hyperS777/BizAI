@@ -1,0 +1,18 @@
+sequenceDiagram
+    actor User as Manager/Employee
+    participant UI as React Frontend
+    participant API as FastAPI Orders API
+    participant DB as PostgreSQL
+
+    User->>UI: Create order
+    UI->>API: POST /api/orders
+    API->>DB: Validate customer
+    DB-->>API: Customer exists
+    API->>DB: Check product stock
+    DB-->>API: Stock available
+    API->>DB: Save order header
+    API->>DB: Save order items
+    API->>DB: Update inventory quantity
+    DB-->>API: Order saved
+    API-->>UI: Order created successfully
+    UI-->>User: Show order summary and invoice status
