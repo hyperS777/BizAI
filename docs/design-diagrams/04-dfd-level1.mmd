@@ -1,0 +1,46 @@
+flowchart TB
+    IN["HTTP Request"]
+    OUT["HTTP Response"]
+
+    P1(("1.0\nAuth"))
+    P2(("2.0\nCustomers\nProducts"))
+    P3(("3.0\nOrders\nInventory"))
+    P4(("4.0\nInvoices\nPayments"))
+    P5(("5.0\nReports"))
+    P6(("6.0\nAI Query"))
+
+    D1[("D1 users, roles")]
+    D2[("D2 customers, products")]
+    D3[("D3 orders, order_items")]
+    D4[("D4 invoices, expenses")]
+    D5[("D5 ai_queries")]
+
+    IN --> P1
+    P1 <-->|"user lookup"| D1
+    P1 --> P2
+    P1 --> P3
+    P1 --> P4
+    P1 --> P5
+    P1 --> P6
+
+    P2 <-->|"CRUD"| D2
+    P2 --> OUT
+
+    D2 -->|"prices, stock"| P3
+    P3 <-->|"orders, stock"| D3
+    P3 --> OUT
+
+    D3 -->|"order data"| P4
+    P4 <-->|"invoices"| D4
+    P4 --> OUT
+
+    D2 --> P5
+    D3 --> P5
+    D4 --> P5
+    P5 --> OUT
+
+    D2 --> P6
+    D3 --> P6
+    D4 --> P6
+    P6 <-->|"query log"| D5
+    P6 --> OUT

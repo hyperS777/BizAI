@@ -1,0 +1,36 @@
+sequenceDiagram
+    actor U as User
+    participant FE as React App
+    participant API as FastAPI
+    participant DB as Database
+
+    Note over U,DB: PHASE 1 - Create Order
+    U->>FE: select customer + products
+    FE->>API: POST /api/orders
+    API->>DB: validate customer exists
+    API->>DB: fetch product prices
+    API->>DB: INSERT order (status=pending)
+    API->>DB: INSERT order_items
+    API-->>FE: 201 Order created
+    FE-->>U: show order summary
+
+    Note over U,DB: PHASE 2 - Confirm + Deduct Stock
+    U->>FE: click Confirm Order
+    FE->>API: PATCH /api/orders/id/status
+    API->>DB: BEGIN TRANSACTION
+
+    loop each order item
+        API->>DB: check stock >= quantity
+        alt insufficient stock
+            API->>DB: ROLLBACK
+            API-->>FE: 400 Insufficient stock
+        else OK
+            API->>DB: UPDATE product stock
+            API->>DB: INSERT inventory_movement
+        end
+    end
+
+    API->>DB: UPDATE order status=confirmed
+    API->>DB: COMMIT
+    API-->>FE: 200 Order confirmed
+    FE-->>U: show updated status

@@ -1,0 +1,108 @@
+classDiagram
+    direction TB
+
+    class Role {
+        +int id
+        +str name
+        +str description
+    }
+
+    class User {
+        +int id
+        +str email
+        +str password_hash
+        +str full_name
+        +int role_id
+        +bool is_active
+    }
+
+    class Customer {
+        +int id
+        +str name
+        +str email
+        +str phone
+        +str company
+        +float outstanding_balance
+    }
+
+    class Category {
+        +int id
+        +str name
+    }
+
+    class Product {
+        +int id
+        +str name
+        +str sku
+        +float price
+        +float cost_price
+        +int stock_qty
+        +int min_stock_level
+        +bool is_active
+        +is_low_stock() bool
+    }
+
+    class Order {
+        +int id
+        +str order_number
+        +int customer_id
+        +int created_by
+        +str status
+        +float total_amount
+    }
+
+    class OrderItem {
+        +int id
+        +int order_id
+        +int product_id
+        +int quantity
+        +float unit_price
+        +float total_price
+    }
+
+    class Invoice {
+        +int id
+        +str invoice_number
+        +int order_id
+        +str status
+        +float total_amount
+        +float paid_amount
+        +date due_date
+        +balance_due() float
+    }
+
+    class Expense {
+        +int id
+        +str description
+        +float amount
+        +str category
+        +date date
+        +int created_by
+    }
+
+    class InventoryMovement {
+        +int id
+        +int product_id
+        +int quantity_change
+        +str reason
+        +int created_by
+    }
+
+    class AIQuery {
+        +int id
+        +int user_id
+        +str query_text
+        +str response_text
+        +str intent
+    }
+
+    Role "1" --> "*" User
+    User "1" --> "*" Order
+    User "1" --> "*" Expense
+    User "1" --> "*" AIQuery
+    Customer "1" --> "*" Order
+    Category "1" --> "*" Product
+    Order "1" *-- "1..*" OrderItem
+    Product "1" --> "*" OrderItem
+    Order "1" --> "0..1" Invoice
+    Product "1" --> "*" InventoryMovement

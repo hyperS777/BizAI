@@ -1,10 +1,30 @@
-flowchart LR
-    User[User] --> Frontend[React Frontend]
-    Frontend --> API[FastAPI API]
-    API --> DB[(PostgreSQL)]
-    API --> AI[AI Service]
-    AI --> DB
+flowchart TD
+    subgraph CLIENT["Client Layer — Browser"]
+        UI["React + Vite SPA"]
+        AXIOS["Axios HTTP Client + JWT"]
+    end
 
-    Frontend -->|Login / requests| API
-    API -->|JSON data| Frontend
-    AI -->|Answer| Frontend
+    subgraph SERVER["Server Layer — FastAPI"]
+        MW["JWT Auth + CORS Middleware"]
+        ROUTER["API Routers"]
+        SVC["Service Layer"]
+        ORM["SQLAlchemy ORM"]
+    end
+
+    subgraph AI["AI Layer"]
+        SNAP["Business Snapshot Builder"]
+        LLM["Groq LLM"]
+    end
+
+    subgraph DB["Database — SQLite / PostgreSQL"]
+        TABLES["11 Tables: roles, users, customers,\ncategories, products, orders, order_items,\ninvoices, expenses, inventory_movements, ai_queries"]
+    end
+
+    UI --> AXIOS
+    AXIOS -->|"REST JSON"| MW
+    MW --> ROUTER --> SVC --> ORM
+    ORM -->|"SQL"| DB
+    DB -->|"results"| ORM
+    SVC --> SNAP --> LLM
+    LLM -.->|"answer"| SVC
+    SNAP -->|"queries"| DB

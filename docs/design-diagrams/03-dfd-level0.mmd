@@ -1,0 +1,24 @@
+flowchart LR
+    A1["Admin"]
+    A2["Manager"]
+    A3["Employee"]
+    A4["Accountant"]
+    GROQ["Groq LLM"]
+
+    P(("BizAI\nPlatform"))
+
+    DB[("Database")]
+
+    A1 -->|"all operations"| P
+    A2 -->|"operations + AI"| P
+    A3 -->|"orders + products"| P
+    A4 -->|"invoices + reports"| P
+
+    P -->|"dashboards, PDFs,\nAI answers"| A1
+    P -->|"dashboards,\nAI answers"| A2
+    P -->|"order status,\nalerts"| A3
+    P -->|"invoices,\nreports"| A4
+
+    P <-->|"read/write"| DB
+    P -->|"JSON context"| GROQ
+    GROQ -->|"answer"| P

@@ -1,28 +1,47 @@
 flowchart LR
-    Admin[Admin] --> Login[Login]
-    Admin --> Customers[Manage Customers]
-    Admin --> Products[Manage Products]
-    Admin --> Orders[Manage Orders]
-    Admin --> Reports[View Reports]
-    Admin --> AI[Ask AI Questions]
+    %% Actors ordered by access level
+    ADMIN(["Admin"])
+    MANAGER(["Manager"])
+    EMPLOYEE(["Employee"])
+    ACCOUNTANT(["Accountant"])
 
-    Manager[Manager] --> Customers
-    Manager --> Products
-    Manager --> Orders
-    Manager --> Reports
+    %% Use Cases Grouped by Functional Area to improve readability
+    subgraph BIZAI["BizAI Platform"]
+        
+        subgraph Admin_Grp ["Administration (Admin Only)"]
+            direction TB
+            UC11(("Settings"))
+            UC2(("Manage\nUsers"))
+        end
+        
+        subgraph Mgmt_Grp ["Management (Admin, Manager)"]
+            direction TB
+            UC10(("AI Business\nAssistant"))
+            UC8(("Expenses"))
+        end
+        
+        subgraph Ops_Grp ["Operations (Admin, Manager, Employee)"]
+            direction TB
+            UC4(("Manage\nProducts"))
+            UC5(("Inventory\nManagement"))
+            UC6(("Create and\nManage Orders"))
+        end
+        
+        subgraph Shared_Grp ["General (All Roles)"]
+            direction TB
+            UC1(("Login\nLogout"))
+            UC3(("Manage\nCustomers"))
+            UC9(("Reports and\nDashboard"))
+        end
+        
+        subgraph Fin_Grp ["Finance (Admin, Manager, Accountant)"]
+            direction TB
+            UC7(("Invoicing\nand Payments"))
+        end
+    end
 
-    Employee[Employee] --> Orders
-    Employee --> Products
-
-    Accountant[Accountant] --> Invoice[Generate Invoices]
-    Accountant --> Payments[Record Payments]
-    Accountant --> Reports
-
-    Login --> System[BizAI System]
-    Customers --> System
-    Products --> System
-    Orders --> System
-    Reports --> System
-    AI --> System
-    Invoice --> System
-    Payments --> System
+    %% Connections
+    ADMIN --> UC11 & UC2 & UC10 & UC8 & UC4 & UC5 & UC6 & UC1 & UC3 & UC9 & UC7
+    MANAGER --> UC10 & UC8 & UC4 & UC5 & UC6 & UC1 & UC3 & UC9 & UC7
+    EMPLOYEE --> UC4 & UC5 & UC6 & UC1 & UC3 & UC9
+    ACCOUNTANT --> UC1 & UC3 & UC9 & UC7

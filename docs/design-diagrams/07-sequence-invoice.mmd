@@ -1,0 +1,28 @@
+sequenceDiagram
+    actor U as User
+    participant FE as React App
+    participant API as FastAPI
+    participant DB as Database
+
+    Note over U,DB: PHASE 1 - Generate Invoice
+    U->>FE: click Generate Invoice on confirmed order
+    FE->>API: POST /api/invoices (order_id)
+    API->>DB: check order status = confirmed
+    API->>DB: check no existing invoice for order
+    API->>DB: INSERT invoice (status=draft)
+    API-->>FE: 201 Invoice created
+    FE-->>U: show invoice preview
+
+    Note over U,DB: PHASE 2 - Record Payment
+    U->>FE: enter payment amount
+    FE->>API: PATCH /api/invoices/id/payment
+    API->>DB: get invoice total and paid_amount
+
+    alt fully paid
+        API->>DB: UPDATE status=paid
+    else partial payment
+        API->>DB: UPDATE paid_amount, status=sent
+    end
+
+    API-->>FE: 200 Payment recorded
+    FE-->>U: show updated status

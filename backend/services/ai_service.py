@@ -27,6 +27,13 @@ def _fallback_answer(query: str, snapshot: dict) -> str:
         lines = ", ".join(f"{item['name']} ({item['stock_qty']} left, min {item['min_stock_level']})" for item in low)
         return f"{inventory['low_stock_products']} products need attention: {lines}."
 
+    if "least" in q or "worst" in q or "slowest" in q:
+        bottom = metrics.get("bottom_products", [])
+        if not bottom:
+            return "There is not enough order history yet to rank products."
+        lines = ", ".join(f"{item['name']} (₹{item['total_revenue']:.0f})" for item in bottom[:3])
+        return f"Least-selling products by revenue: {lines}."
+
     if "best" in q or "fastest" in q or "selling" in q:
         if not top:
             return "There is not enough order history yet to rank best-selling products."

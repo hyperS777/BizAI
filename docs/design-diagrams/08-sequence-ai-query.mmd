@@ -1,0 +1,22 @@
+sequenceDiagram
+    actor U as User
+    participant FE as React App
+    participant API as FastAPI
+    participant DB as Database
+    participant GROQ as Groq LLM
+
+    U->>FE: type business question
+    FE->>API: POST /api/ai/chat
+    API->>DB: query sales, profit, stock data
+    DB-->>API: business snapshot
+
+    alt Groq API key configured
+        API->>GROQ: send snapshot + question
+        GROQ-->>API: natural language answer
+    else fallback mode
+        API->>API: keyword match on snapshot
+    end
+
+    API->>DB: INSERT ai_queries log
+    API-->>FE: 200 response
+    FE-->>U: display answer

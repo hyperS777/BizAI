@@ -1,0 +1,20 @@
+sequenceDiagram
+    actor U as User
+    participant FE as React App
+    participant API as FastAPI
+    participant DB as Database
+
+    U->>FE: select product, enter qty change + reason
+    FE->>API: PUT /api/products/id/stock
+
+    API->>DB: get product stock_qty
+    alt product not found
+        API-->>FE: 404 Not Found
+    else would go negative
+        API-->>FE: 400 Invalid adjustment
+    else valid
+        API->>DB: UPDATE product stock_qty
+        API->>DB: INSERT inventory_movement
+        API-->>FE: 200 Stock updated
+        FE-->>U: show new stock level
+    end

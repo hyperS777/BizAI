@@ -1,0 +1,24 @@
+sequenceDiagram
+    actor U as User
+    participant FE as React App
+    participant API as FastAPI
+    participant DB as Database
+
+    U->>FE: enter email + password
+    FE->>API: POST /api/auth/login
+    API->>DB: find user by email
+    DB-->>API: user record
+
+    alt invalid credentials
+        API-->>FE: 401 Unauthorized
+        FE-->>U: show error
+    else valid credentials
+        API->>API: bcrypt verify password
+        API->>API: create JWT (email, 30min expiry)
+        API-->>FE: 200 access_token
+        FE->>API: GET /api/auth/me + Bearer token
+        API->>DB: load user + role
+        DB-->>API: user profile
+        API-->>FE: 200 user profile
+        FE-->>U: redirect to Dashboard
+    end

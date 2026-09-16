@@ -112,6 +112,31 @@ def get_dashboard_metrics(db: Session):
     today = date.today()
     daily_sales, daily_orders = sales_between(db, today, today)
 
+    bottom_rows = (
+        db.query(
+            Product.id,
+            Product.name,
+            func.sum(OrderItem.quantity).label("qty"),
+            func.sum(OrderItem.total_price).label("revenue"),
+        )
+        .join(OrderItem, OrderItem.product_id == Product.id)
+        .join(Order, Order.id == OrderItem.order_id)
+        .filter(Order.status != OrderStatus.CANCELLED.value)
+        .group_by(Product.id, Product.name)
+        .order_by(func.sum(OrderItem.total_price).asc())
+        .limit(5)
+        .all()
+    )
+    bottom_products = [
+        {
+            "product_id": row.id,
+            "name": row.name,
+            "total_quantity": int(row.qty or 0),
+            "total_revenue": float(row.revenue or 0),
+        }
+        for row in bottom_rows
+    ]
+
     return {
         "sales_summary": {
             "total_sales": total_sales,
@@ -134,6 +159,7 @@ def get_dashboard_metrics(db: Session):
             "low_stock_products": low_stock_products,
         },
         "top_products": top_products,
+        "bottom_products": bottom_products,
         "recent_orders": recent_orders_list,
     }
 
