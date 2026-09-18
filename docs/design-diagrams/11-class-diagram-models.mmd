@@ -1,113 +1,26 @@
-%%{init: {'theme': 'base', 'class': {'rankSpacing': 150, 'nodeSpacing': 80}}}%%
+%% UML domain-model class diagram. Properties shown only where implemented in the ORM.
+%% Audit timestamps (created_at, updated_at) present in all entities are omitted for readability.
 classDiagram
-    direction LR
-
-    class Role {
-        +int id
-        +str name
-        +str description
-    }
-
-    class User {
-        +int id
-        +str email
-        -str password_hash
-        +str full_name
-        +int role_id
-        +bool is_active
-        +verify_password(plain_pwd: str) bool
-    }
-
-    class Customer {
-        +int id
-        +str name
-        +str email
-        +str phone
-        +str company
-        +float outstanding_balance
-        +add_balance(amount: float) float
-    }
-
-    class Category {
-        +int id
-        +str name
-    }
-
-    class Product {
-        +int id
-        +str name
-        +str sku
-        +float price
-        +float cost_price
-        +int stock_qty
-        +int min_stock_level
-        +bool is_active
-        +is_low_stock() bool
-        +adjust_stock(qty: int) bool
-    }
-
-    class Order {
-        +int id
-        +str order_number
-        +int customer_id
-        +int created_by
-        +str status
-        +float total_amount
-        +calculate_total() float
-    }
-
-    class OrderItem {
-        +int id
-        +int order_id
-        +int product_id
-        +int quantity
-        +float unit_price
-        +float total_price
-    }
-
-    class Invoice {
-        +int id
-        +str invoice_number
-        +int order_id
-        +str status
-        +float total_amount
-        +float paid_amount
-        +date due_date
-        +balance_due() float
-    }
-
-    class Expense {
-        +int id
-        +str description
-        +float amount
-        +str category
-        +date date
-        +int created_by
-    }
-
-    class InventoryMovement {
-        +int id
-        +int product_id
-        +int quantity_change
-        +str reason
-        +int created_by
-    }
-
-    class AIQuery {
-        +int id
-        +int user_id
-        +str query_text
-        +str response_text
-        +str intent
-    }
-
-    Role "1" --> "*" User
-    User "1" --> "*" Order
-    User "1" --> "*" Expense
-    User "1" --> "*" AIQuery
-    Customer "1" --> "*" Order
-    Category "1" --> "*" Product
-    Order "1" *-- "1..*" OrderItem
-    Product "1" --> "*" OrderItem
-    Order "1" --> "0..1" Invoice
-    Product "1" --> "*" InventoryMovement
+ direction LR
+ class Role { +id: Integer +name: String +description: String }
+ class User { +id: Integer +email: String -password_hash: String +full_name: String +role_id: Integer +is_active: Boolean }
+ class Customer { +id: Integer +name: String +email: String +phone: String +address: Text +company: String +gstin: String +outstanding_balance: Float }
+ class Category { +id: Integer +name: String +description: String }
+ class Product { +id: Integer +name: String +sku: String +description: Text +price: Float +cost_price: Float +stock_qty: Integer +min_stock_level: Integer +category_id: Integer +is_active: Boolean +is_low_stock: bool }
+ class Order { +id: Integer +order_number: String +customer_id: Integer +created_by: Integer +status: String +total_amount: Float +notes: Text }
+ class OrderItem { +id: Integer +order_id: Integer +product_id: Integer +quantity: Integer +unit_price: Float +total_price: Float }
+ class Invoice { +id: Integer +invoice_number: String +order_id: Integer +status: String +total_amount: Float +paid_amount: Float +due_date: Date +balance_due: float +issue_date: DateTime }
+ class Expense { +id: Integer +description: String +amount: Float +category: String +date: Date +notes: Text +created_by: Integer }
+ class InventoryMovement { +id: Integer +product_id: Integer +quantity_change: Integer +reason: String +notes: Text +created_by: Integer }
+ class AIQuery { +id: Integer +user_id: Integer +query_text: Text +response_text: Text +intent: String }
+ Role "1" --> "0..*" User : role
+ User "1" --> "0..*" Order : created_by_user
+ User "1" --> "0..*" Expense : created_by_user
+ User "1" --> "0..*" AIQuery : user
+ User "0..1" --> "0..*" InventoryMovement : creator
+ Customer "1" --> "0..*" Order : customer
+ Category "0..1" --> "0..*" Product : category
+ Order "1" *-- "1..*" OrderItem : items
+ Product "1" --> "0..*" OrderItem : product
+ Order "1" --> "0..1" Invoice : invoice
+ Product "1" --> "0..*" InventoryMovement : movements

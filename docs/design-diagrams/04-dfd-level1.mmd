@@ -1,56 +1,58 @@
 %%{init: {'flowchart': {'nodeSpacing': 80, 'rankSpacing': 150}}}%%
 flowchart LR
     %% External Entities
-    CLIENT["Client Users"]
-    LLM["External LLM"]
+    CLIENT["Authenticated Users"]
+    AI_PROVIDER["AI Provider Service"]
 
     %% Data Stores (Cylinders/Open Rectangles)
-    D1[("D1: Users DB")]
-    D2[("D2: Catalog DB")]
-    D3[("D3: Orders DB")]
+    D1[("D1: roles and users")]
+    D2[("D2: Customers and Catalog DB")]
+    D3[("D3: orders and order_items")]
     D4[("D4: Finance DB")]
-    D5[("D5: Logs DB")]
+    D5[("D5: ai_queries")]
 
     %% Processes (Circles)
     P1(("1.0\nAuthenticate\nUser"))
-    P2(("2.0\nManage\nCatalog"))
+    P2(("2.0\nManage Customers\nand Catalog"))
     P3(("3.0\nProcess\nOrders"))
-    P4(("4.0\nManage\nFinance"))
+    P4(("4.0\nManage Invoices\nand Expenses"))
     P5(("5.0\nGenerate\nReports"))
     P6(("6.0\nProcess AI\nQueries"))
 
     %% Flows
     CLIENT -- "Credentials" --> P1
-    P1 -- "Auth Request" --> D1
-    D1 -- "Auth Result" --> P1
+    P1 -- "credential lookup" --> D1
+    D1 -- "user and role record" --> P1
     P1 -- "Session Token" --> CLIENT
 
-    CLIENT -- "Product Data" --> P2
-    P2 -- "Catalog Updates" --> D2
-    D2 -- "Product List" --> P2
-    P2 -- "Catalog View" --> CLIENT
+    CLIENT -- "Customer or Catalog Data" --> P2
+    P2 -- "Customer or Catalog Updates" --> D2
+    D2 -- "Customer or Catalog Data" --> P2
+    P2 -- "Customer or Catalog Result" --> CLIENT
 
     CLIENT -- "Order Details" --> P3
-    P3 -- "Stock Check" --> D2
-    D2 -- "Stock Levels" --> P3
+    P3 -- "Product Lookup or Stock Update" --> D2
+    D2 -- "Product and Stock Data" --> P3
     P3 -- "Order Data" --> D3
-    D3 -- "Order Confirmation" --> P3
+    D3 -- "Saved Order Data" --> P3
     P3 -- "Order Status" --> CLIENT
 
-    CLIENT -- "Payment/Expense" --> P4
+    CLIENT -- "Invoice Update or\nExpense Record" --> P4
     P4 -- "Financial Data" --> D4
     D4 -- "Invoice/Receipt" --> P4
     P4 -- "Financial Status" --> CLIENT
 
     CLIENT -- "Report Request" --> P5
-    D3 -- "Sales Data" --> P5
+    D2 -- "Customer and Inventory Data" --> P5
+    D3 -- "Order and Sales Data" --> P5
     D4 -- "Financial Data" --> P5
-    P5 -- "Dashboard UI" --> CLIENT
+    P5 -- "Dashboard and Report Data" --> CLIENT
 
     CLIENT -- "Question" --> P6
-    D2 -- "Context Data" --> P6
-    D3 -- "Context Data" --> P6
-    P6 -- "Formatted Prompt" --> LLM
-    LLM -- "AI Answer" --> P6
+    D2 -- "Customer and Inventory Context" --> P6
+    D3 -- "Order Context" --> P6
+    D4 -- "Financial Context" --> P6
+    P6 -- "Business Context and Question" --> AI_PROVIDER
+    AI_PROVIDER -- "Generated Answer" --> P6
     P6 -- "Query Log" --> D5
     P6 -- "AI Response" --> CLIENT

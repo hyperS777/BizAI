@@ -1,383 +1,667 @@
-# BizAI — Diagram Explanation Guide
-### What to say to Sir for every diagram — Team YATRI
+# BizAI — In-Depth Presentation and Viva Explanation Guide
 
-> This file is written so any team member can pick it up, read their section, and speak confidently during the presentation. Follow the order below.
-
----
-
-## Presentation Order (match exactly what Sir asked for)
-
-| # | Diagram | Sir's Category |
-|---|---|---|
-| 1 | System Architecture | Architectural Diagram for the System |
-| 2 | Use Case | Use Cases for different requirements |
-| 3 | DFD Level 0 — Context | Data Flow Diagram |
-| 4 | DFD Level 1 — Detailed | Data Flow Diagram |
-| 5 | Sequence — Login | Sequence Diagrams for each action flow |
-| 6 | Sequence — Create and Confirm Order | Sequence Diagrams for each action flow |
-| 7 | Sequence — Generate Invoice and Payment | Sequence Diagrams for each action flow |
-| 8 | Sequence — AI Business Question | Sequence Diagrams for each action flow |
-| 9 | Sequence — Manual Stock Adjustment | Sequence Diagrams for each action flow |
-| 10 | ER Diagram | Database Design — ER Diagram |
-| 11 | RDBMS Schema Table | Database Design — RDBMS schema and table |
-| 12 | Normal Form Table | Database Design — show the NF in table |
-| 13 | UML Class Diagram — Models | Class Diagrams for Code Modules |
-| 14 | UML Class Diagram — Services | Class Diagrams for Code Modules |
+All notes below are derived from the **actual implemented codebase**. Every claim can be traced to a specific file. SQLite is the default database; PostgreSQL is supported only when `DATABASE_URL` is configured. The current API uses JWT/RBAC dependencies (not a custom JWT middleware class), and there is no rate limiter in the implementation.
 
 ---
 
-## DIAGRAM 1 — System Architecture Diagram
+## PROJECT OVERVIEW
 
-### What this diagram shows
-The full physical and logical structure of BizAI split into four layers:
-Client Layer (browser), Server Layer (FastAPI), AI Layer (grounded assistant), and Database Layer (SQLite/PostgreSQL).
+### What is BizAI?
 
-### What each box means
-| Box / Label | Meaning |
-|---|---|
-| React + Vite SPA | The website running in the user's browser. Vite is the build tool — it makes the app fast to load. |
-| Pages (Dashboard, Orders, etc.) | Each page is a React component. The user navigates between them without the page refreshing because it is a Single Page Application. |
-| Axios HTTP Client | The JavaScript library that sends all requests to the backend. Every request automatically includes the JWT token in the Authorization header. |
-| JWT Auth Middleware | The first thing the server checks — is this token valid? If not, the request is rejected with 401 before it reaches any code. |
-| CORS | Cross-Origin Resource Sharing — allows the browser at localhost:5173 to talk to the server at localhost:8000. |
-| Rate Limiter | Prevents abuse — if someone sends thousands of requests per second, they get blocked. |
-| API Router Layer | Routes the incoming URL to the right Python function. /orders goes to the orders router, /auth goes to the auth router, etc. |
-| Service Layer | Contains all business rules. For example: you cannot confirm an order if stock is insufficient. This logic lives here, not in the router. |
-| SQLAlchemy ORM | Converts Python class objects into SQL statements. We never write raw SQL — SQLAlchemy generates it. |
-| Business Snapshot Builder | Queries the database for key metrics — monthly sales, profit, low-stock products, top products. This is the data the AI uses. |
-| Intent Classifier | Reads the user's question and identifies what they are asking — is it about sales, stock, or profit? |
-| Groq LLM | An optional external AI model. It receives only the pre-queried structured data and formats it into a readable sentence. It cannot access the database directly. |
-| SQLite / PostgreSQL | The database. SQLite is used locally during development, PostgreSQL is used in production. SQLAlchemy works with both. |
+BizAI is an **AI-Powered Business Management Platform** built by **Team YATRI** as a Software Engineering academic project. It is a centralized workspace that allows a small or medium-sized business to manage its **customers, products, inventory, orders, invoices, expenses, reports, users, and get AI-driven business insights** — all from a single web application.
 
-### What to say out loud
-"BizAI is built in four layers. The user opens a React website in their browser. When they take any action — logging in, creating an order, or asking an AI question — Axios sends a secure HTTPS request with a JWT token to the FastAPI server. The server first validates the token in the middleware, then routes the request to the correct service. Services contain all business rules. They use SQLAlchemy ORM to read and write the PostgreSQL database. When an AI question is asked, the system first queries the real database for exact figures, and only then sends that structured data to the optional Groq language model to format the answer. The key point is that the AI never has direct database access — it only receives the result of a specific query."
+### Team
 
----
+| Role | Name |
+|------|------|
+| Team Leader | Mohammad Ibad Hussain |
+| Members | Yash Narang, Ashutosh Yadav, Tushar, Ramji |
 
-## DIAGRAM 2 — Use Case Diagram
+### Problem Statement
 
-### What this diagram shows
-Who uses the system and what each role is allowed to do. The four oval shapes around the edge are actors (real people). The circles inside the box are use cases (features of the system).
+Small businesses often rely on disconnected spreadsheets, paper records, and manual calculations to manage their daily operations. This leads to data inconsistencies, missed restock opportunities, invoice errors, and a lack of visibility into business performance. BizAI solves this by providing a single integrated platform where all business data is stored in a relational database and an AI assistant can answer natural-language questions grounded in that live data.
 
-### What each actor can access
-| Role | What they can do |
-|---|---|
-| Admin | Everything — users, roles, customers, products, inventory, orders, invoices, payments, reports, AI, settings |
-| Manager | Operations — customers, products, inventory, orders, invoices, payments, reports, AI |
-| Employee | Day-to-day — customers, products, inventory, creating orders, dashboard |
-| Accountant | Finance only — recording payments, downloading invoice PDFs, viewing reports |
+### Project Scope and Timeline
 
-### What the dashed arrows mean
-- **includes** means the use case always triggers another one automatically. Creating an order includes auto-deducting stock on confirmation — this always happens, the user cannot skip it.
-- **extends** means one use case can optionally add to another. Generating an invoice extends the confirm order flow — it is not automatic, the user does it manually after confirming.
-- **uses** means one use case internally relies on another. The AI assistant uses the same reports data to answer questions.
+- **Duration**: 8-week college Software Engineering project
+- **Development approach**: Phased, iterative development (Week 1: planning → Week 8: testing/deployment)
+- **Methodology alignment**: Incremental development model (Sommerville SE10, Chapter 2) — the system is developed and delivered in increments, each increment adding functionality to the previous one
+- **The MVP** was functional by end of Week 5 (customers → products → orders → invoices), with Weeks 6–8 dedicated to dashboard, reports, AI, polish, and testing
 
-### What to say out loud
-"This is our Use Case Diagram. The four actors are the people who use BizAI — Admin, Manager, Employee, and Accountant. Each circle is a feature of the system. The lines show which role can access which feature. This is called Role-Based Access Control. For example, only the Admin can manage users and system settings. The Accountant can only handle invoices and payments — they cannot create orders or manage products. The dashed arrows show dependencies — when a Manager confirms an order, stock deduction happens automatically as part of that use case. This diagram proves our system is designed around real business roles, not one generic user."
+### Technology Stack
 
----
+| Layer | Technology | Why chosen |
+|-------|-----------|------------|
+| **Frontend** | React 18 + Vite | Component-based SPA framework; Vite provides fast hot-module replacement during development |
+| **Backend** | Python FastAPI | High-performance async framework with automatic OpenAPI documentation, Pydantic validation, and dependency injection |
+| **ORM** | SQLAlchemy | Industry-standard Python ORM; provides database abstraction so we can switch between SQLite (dev) and PostgreSQL (prod) without code changes |
+| **Database** | SQLite (default) / PostgreSQL (configurable) | SQLite is zero-configuration for local development; PostgreSQL for production via `DATABASE_URL` environment variable |
+| **Authentication** | JWT (JSON Web Tokens) via `python-jose` | Stateless authentication — the server does not store sessions, making the API horizontally scalable |
+| **Password hashing** | bcrypt via `passlib` | Industry-standard adaptive hashing algorithm resistant to brute-force attacks |
+| **AI** | Groq API (LLaMA 3.1 8B) with deterministic fallback | External LLM provider for natural-language answers; the fallback ensures the system works even without an API key |
+| **Charts** | Chart.js | Lightweight charting library for sales trends and dashboard visualizations |
+| **PDF** | Server-side PDF generation | Invoice PDFs generated on the backend for download |
+| **API protocol** | REST over JSON | Stateless, resource-oriented API design aligned with HTTP semantics |
+| **Version control** | Git + GitHub | Standard version control with team collaboration |
 
-## DIAGRAM 3 — DFD Level 0 — Context Diagram
+### Architecture Pattern
 
-### What this diagram shows
-The system as one single black box. It shows everything that enters the system from outside and everything the system sends back out. This is called a Context Diagram or Level 0 DFD.
+BizAI follows a **layered architecture** (Sommerville SE10, Chapter 6, §6.3):
 
-### What each element means
-| Element | What it is |
-|---|---|
-| Admin, Manager, Employee, Accountant | External entities — people outside the system boundary |
-| BizAI Platform (the circle) | The entire system treated as a single process |
-| PostgreSQL Database | The data store — shown outside the process to show data persists |
-| Groq LLM | An external service outside the system boundary |
-| Arrows with labels | Data flows — what information crosses the boundary and in which direction |
+```
+Presentation Layer    →  React SPA (Vite)
+          ↓
+Communication Layer   →  REST JSON API + Bearer JWT
+          ↓
+Application Layer     →  FastAPI Routers + Dependencies (auth/RBAC)
+          ↓
+Business Logic Layer  →  Service modules (order_service, product_service, etc.)
+          ↓
+Data Access Layer     →  SQLAlchemy ORM models
+          ↓
+Database Layer        →  SQLite / PostgreSQL
+          ↓
+External Services     →  Configurable AI provider (Groq)
+```
 
-### What to say out loud
-"This is our Level 0 DFD — also called the Context Diagram. At this level we do not show the internal workings of the system. We just show what goes in and what comes out. The four actors send credentials, business data, and questions into the system. The system sends back dashboards, invoices, AI answers, and PDFs. The system reads and writes to the PostgreSQL database. When an AI question is asked, the system sends only structured JSON — not raw database data — to the external Groq LLM. This diagram establishes the boundary of our system and all external interactions."
+**Why layered?** Each layer depends only on the layer below it. The React frontend knows nothing about SQLAlchemy; it only communicates via REST. The service modules know nothing about HTTP — they receive database sessions and return model objects. This **separation of concerns** makes the system testable, maintainable, and allows any layer to be replaced independently.
 
 ---
 
-## DIAGRAM 4 — DFD Level 1 — Detailed Internal Processes
+## DESIGN DECISIONS — COMMON VIVA QUESTIONS
 
-### What this diagram shows
-It opens up the BizAI black box and shows the six internal processes and five data stores. The arrows show how data flows between each process and store.
+### Q: Why FastAPI instead of Django or Flask?
 
-### What each process does
-| Process | Responsibility |
-|---|---|
-| 1 — Authenticate and Authorize | Verifies the JWT token, loads the user and role, passes the verified user context to all other processes |
-| 2 — Manage Customers and Products | All CRUD operations: create, read, update, delete for customers, products, and categories |
-| 3 — Process Orders and Inventory | Creates orders, deducts stock on confirmation, logs all inventory movements |
-| 4 — Generate Invoices and Payments | Creates invoices from confirmed orders, records partial and full payments |
-| 5 — Build Reports and Dashboard | Aggregates data from multiple stores to produce KPI metrics, sales charts, and profit reports |
-| 6 — Process AI Business Question | Builds a live data snapshot, classifies intent, calls the LLM, logs the query |
+FastAPI was chosen because:
+1. **Automatic request validation** via Pydantic schemas — every request body is validated against a schema before reaching business logic
+2. **Automatic API documentation** — Swagger UI is generated at `/docs` without writing documentation manually
+3. **Dependency injection** — FastAPI's `Depends()` system allows us to inject database sessions, authenticated users, and role checks declaratively
+4. **Performance** — FastAPI is one of the fastest Python web frameworks, comparable to Node.js and Go
+5. **Appropriate complexity** — Django would be over-engineered for an API-only backend (we don't use Django templates); Flask would require manually adding validation, docs, and DI
 
-### What each data store holds
-| Store | Contents |
-|---|---|
-| D1 roles and users | Login credentials, role assignments |
-| D2 customers, categories, products | All customer records and product catalog |
-| D3 orders, order_items, inventory_movements | Order history, line items, every stock change |
-| D4 invoices, expenses | Invoice records with payment status, business expenses |
-| D5 ai_queries | History of every AI question and answer |
+### Q: Why SQLite instead of PostgreSQL?
 
-### What to say out loud
-"This is our Level 1 DFD. It breaks the system into six processes. Every request first goes through Process 1 — authentication. Without a valid JWT token, nothing else runs. Process 3 is the most critical — when a Manager confirms an order, this process atomically deducts stock and logs an inventory movement in the same database transaction. Process 6 — the AI process — is independent. It can read from all five data stores to build a snapshot and answer any supported business question. This diagram proves our system has no isolated or disconnected components — every process has a defined input, output, and data store."
+SQLite is the **default** for development convenience — it requires zero installation and creates a single file (`bizai.db`). The architecture supports PostgreSQL by changing one environment variable (`DATABASE_URL`). The `database.py` file auto-detects the database type and adjusts connection arguments accordingly. This is a common pattern for production-ready applications.
 
----
+### Q: Why JWT instead of session-based authentication?
 
-## DIAGRAM 5 — Sequence Diagram — Login and Authentication
+JWT (JSON Web Token) authentication is **stateless** — the server does not need to store session data in memory or in a database. The token contains the user's email and expiry time, signed with a secret key. This makes the API:
+1. **Horizontally scalable** — any server instance can validate the token
+2. **Mobile-friendly** — tokens work the same way for web and mobile clients
+3. **Simpler** — no session management, no server-side session store
 
-### What this diagram shows
-The exact sequence of messages between the user, the React frontend, the FastAPI backend, the security service, and the database when a user logs in.
+The token expires after 30 minutes (configurable via `ACCESS_TOKEN_EXPIRE_MINUTES`). Passwords are hashed with bcrypt (adaptive hashing, 12 rounds by default).
 
-### Step by step
-1. User enters email and password and clicks Sign In
-2. React sends a POST request to /auth/login
-3. The backend searches the users table for that email
-4. If the user is not found or is_active is false, a 401 error is returned immediately
-5. If found, bcrypt verifies the password against the stored hash — passwords are never stored in plain text
-6. The backend creates a JWT token signed with the user's email, expiring in 30 minutes
-7. The token is returned to the frontend
-8. The frontend immediately calls /auth/me with the token in the header
-9. The backend decodes the token, loads the full user profile, and returns it
-10. The frontend stores the profile and redirects to the Dashboard
+### Q: How does role-based access control (RBAC) work?
 
-### Key technical point — why JWT and not sessions
-Sessions require the server to store state for every logged-in user. JWT is stateless — all information is inside the token itself. This means the server can handle thousands of users without a session table.
+RBAC is enforced **in the backend**, not just by hiding UI buttons. The `permissions.py` file defines a `RoleChecker` class that acts as a FastAPI dependency:
 
-### What to say out loud
-"This is the Login Sequence Diagram. A sequence diagram shows messages between system components in time order, from top to bottom. The login process has two parts — first we verify the credentials and issue a JWT token, then we load the user profile with that token. We use bcrypt for password hashing — this is the industry standard. Even if the database is leaked, the passwords cannot be recovered because bcrypt is a one-way hash. The JWT token contains the user's email and expires in 30 minutes. Every other API call checks this token before doing anything."
+| Permission Level | Allowed Roles | Used For |
+|-----------------|---------------|----------|
+| `require_staff` | Admin, Manager, Employee, Accountant | Viewing any operational data |
+| `require_employee` | Admin, Manager, Employee | Creating customers, creating orders |
+| `require_accountant` | Admin, Manager, Accountant | Invoice updates, expense management |
+| `require_manager` | Admin, Manager | Stock adjustments, product management, reports |
+| `require_admin` | Admin only | User administration |
 
----
+If a user with the wrong role tries to access a protected endpoint, the API returns `403 Forbidden` regardless of what the frontend shows.
 
-## DIAGRAM 6 — Sequence Diagram — Create and Confirm Order with Stock Deduction
+### Q: How does the AI assistant work? Is it just ChatGPT?
 
-### What this diagram shows
-The most important business workflow in BizAI — how an order goes from draft to confirmed with automatic, atomic stock deduction.
+No. The AI assistant uses a **Data-Grounded AI** approach (not RAG/vector databases):
 
-### Phase 1 — Create Draft Order
-The Manager selects a customer and products. The system validates the customer exists, fetches current product prices, calculates totals, and saves the order with status pending.
+1. **User submits a question** → `POST /api/ai/chat`
+2. **`ai_service.answer_query()`** calls **`report_service.build_business_snapshot(db)`** which queries the database for:
+   - Sales summary (total, daily, monthly, previous month)
+   - Revenue and profit calculations
+   - Inventory summary (total products, low-stock count)
+   - Top 5 and bottom 5 products by revenue
+   - Recent orders
+   - Low-stock product details
+   - Outstanding customer balances
+3. **If a Groq API key is configured**: The snapshot JSON + user question is sent to LLaMA 3.1 8B with a system prompt that says "Answer only from the JSON snapshot. Never invent numbers."
+4. **If no API key**: A deterministic keyword-based fallback function (`_fallback_answer`) parses the question for keywords like "low stock", "best selling", "compared", "summary" and returns pre-formatted answers from the snapshot data
+5. **The question and answer are logged** in the `ai_queries` table
 
-### Phase 2 — Confirm Order (the critical part)
-When the Manager clicks Confirm, the system starts a database transaction. Inside this transaction it: subtracts the ordered quantity from each product's stock, logs an inventory_movement record for each product, then updates the order status to confirmed. Only if all steps succeed does the transaction commit. If anything fails — for example stock is insufficient — the entire transaction rolls back. No partial changes are saved.
+**Key point**: The AI can **never invent business numbers** because it only receives actual database aggregations. If the snapshot doesn't contain the answer, the AI says so.
 
-### Why atomic transactions matter
-If the server crashes after deducting stock for one product but before deducting for the next, you would have corrupted inventory data. Transactions prevent this.
+### Q: How is profit calculated?
 
-### What to say out loud
-"This is the Order Flow Sequence Diagram. It has two phases. Phase 1 creates a draft order — this is safe and reversible. Phase 2 is the critical confirmation step. When the Manager confirms the order, our system uses a database transaction to atomically deduct stock for every item in the order. Atomic means all-or-nothing — either every stock deduction succeeds and the order is confirmed, or if anything fails the entire operation is rolled back and no data is changed. Every stock change is logged in the inventory_movements table for auditing. This is how professional inventory management systems work."
+Profit = Total Sales Revenue − Cost of Goods Sold (COGS) − Total Expenses
 
----
+- **Revenue**: Sum of `orders.total_amount` for non-cancelled orders
+- **COGS**: Sum of `(order_items.quantity × products.cost_price)` for non-cancelled orders
+- **Expenses**: Sum of `expenses.amount` across all expense records
 
-## DIAGRAM 7 — Sequence Diagram — Generate Invoice and Record Payment
+This is calculated in `report_service.get_dashboard_metrics()`.
 
-### What this diagram shows
-How an invoice is created from a confirmed order and how payments are recorded against it.
+### Q: What happens when an order is confirmed?
 
-### Phase 1 — Generate Invoice
-The system checks that the order status is confirmed before allowing an invoice. It also checks that no invoice already exists for this order — the system enforces a strict one-invoice-per-order rule using a UNIQUE constraint on order_id in the invoices table.
+When an order status changes from `pending` → `confirmed`:
+1. `order_service.update_order_status()` loops through every order item
+2. For each item, it calls `product_service.update_stock(product_id, -quantity, commit=False)`
+3. `update_stock()` checks if the resulting stock would be negative — if so, it raises `ValueError`
+4. If any item has insufficient stock, the entire transaction is **rolled back** (no partial deductions)
+5. If all deductions succeed, `inventory_movements` records are created for each item, and the transaction is committed
+6. When a confirmed/shipped order is **cancelled**, the reverse happens — stock is **added back** via `update_stock(product_id, +quantity)`
 
-### Phase 2 — Record Payment
-The Accountant enters the payment amount. The system adds it to any existing paid_amount. If the total paid equals or exceeds the invoice amount, the status becomes paid. If it is a partial payment, the status becomes sent. This supports installment payments.
+### Q: What design patterns are used?
 
-### What to say out loud
-"This is the Invoice Sequence Diagram. Invoices in BizAI can only be created from a confirmed order — you cannot invoice a pending or cancelled order. We enforce a one-to-one relationship in the database using a UNIQUE constraint on the order_id column in the invoices table. The payment recording system supports both full payment and installment payments. The system automatically updates the invoice status based on how much has been paid."
+| Pattern | Where | Sommerville Reference |
+|---------|-------|-----------------------|
+| **Layered architecture** | Overall system structure | SE10 §6.3 |
+| **Repository pattern** | Service modules abstract database queries from routers | SE10 §6.4 |
+| **Dependency injection** | FastAPI `Depends()` for db sessions, auth, role checks | SE10 §6.4 |
+| **Observer pattern** (conceptual) | Stock changes trigger inventory movement records | SE10 §7.3 |
+| **Strategy pattern** | AI provider is configurable — Groq or fallback | SE10 §7.3 |
+| **Facade pattern** | `build_business_snapshot()` provides a single interface to multiple data sources | SE10 §7.3 |
 
----
+### Q: What software process model did you follow?
 
-## DIAGRAM 8 — Sequence Diagram — AI Business Question
+**Incremental development** (Sommerville SE10, Chapter 2, §2.1.2). The system was built in 8 weekly increments:
 
-### What this diagram shows
-How BizAI's AI assistant answers a business question without hallucinating or inventing numbers — by always querying the real database first.
+1. Planning and database design
+2. Authentication and frontend/backend integration
+3. Customer and product modules
+4. Inventory and order management
+5. Invoice generation (core workflow complete)
+6. Dashboard, reports, and charts
+7. AI assistant and UI polish
+8. Testing, bug fixing, and deployment
 
-### How it works step by step
-1. Manager types a question like "What are this month's sales?"
-2. The system calls build_business_snapshot(db) which runs several specific SQL queries on live data
-3. The snapshot contains real numbers — actual totals, counts, product rankings, low-stock items
-4. If a Groq API key is configured, this structured JSON is sent to the Groq LLM which formats it into a readable sentence
-5. If no API key, a fallback function uses keyword matching to compose an answer from the snapshot data
-6. The question and answer are saved to the ai_queries table
-7. The frontend shows the answer with a notice that it is based on live data
+Each increment produced a working system that could be demonstrated to the client. This aligns with Sommerville's observation that incremental development "reduces the cost of accommodating changing customer requirements" because the amount of rework is limited to the current increment.
 
-### What makes this different from ChatGPT
-ChatGPT would have to be told the business data in the prompt — and it might still make up numbers. BizAI's AI runs real SQL queries and only shows numbers that actually exist in the database. It cannot hallucinate because it only formats data that was just retrieved.
+### Q: What are the non-functional requirements?
 
-### What to say out loud
-"This is the AI Query Sequence Diagram. Our AI assistant is what we call data-grounded. When you ask a business question, the system does not guess — it runs actual SQL queries against the live database to get exact figures, and then formats those figures into a readable answer. The language model only receives structured JSON — it does not have a connection to the database. This architecture is called RAG-lite — Retrieval-Augmented Generation. The retrieval step happens first and grounds every answer in real data. Every AI interaction is also logged in the ai_queries table so users can review their query history."
-
----
-
-## DIAGRAM 9 — Sequence Diagram — Manual Stock Adjustment
-
-### What this diagram shows
-How an Admin or Manager manually adjusts the stock quantity of a product — for example when new stock arrives or when stock is damaged.
-
-### What happens
-1. Manager enters the product, the quantity change (positive to add, negative to remove), and a reason
-2. The system checks the product exists and is active
-3. It calculates the new stock: current stock plus the change
-4. If the result would be negative, the request is rejected
-5. If valid, it updates the product's stock_qty and logs an inventory_movement record
-6. The frontend shows the updated stock level, highlighted in red if it is below the minimum stock level
-
-### What to say out loud
-"This is the Manual Stock Adjustment Sequence Diagram. In a real business, stock changes happen for many reasons — new deliveries, damaged goods, theft, or corrections. This diagram shows how managers can manually adjust stock levels. Every manual adjustment is logged in the inventory_movements table with a reason and the user who made the change, creating a full audit trail. The system prevents stock from going below zero, and it automatically alerts the user if the new stock level is at or below the configured minimum."
+| NFR | How addressed |
+|-----|--------------|
+| **Performance** | FastAPI async, SQLAlchemy query optimization, index on frequently queried columns (email, order_number, sku) |
+| **Security** | bcrypt password hashing, JWT with expiry, RBAC enforced in backend, CORS whitelisting, environment variables for secrets |
+| **Reliability** | Database transactions with rollback on failure, validation at schema and service layers |
+| **Usability** | Modern SPA interface, responsive layout, loading/error/empty states |
+| **Maintainability** | Layered architecture, separated concerns, modular service files |
+| **Portability** | SQLite ↔ PostgreSQL via single environment variable, no platform-specific code |
 
 ---
 
-## DIAGRAM 10 — ER Diagram (Entity-Relationship)
-
-### What this diagram shows
-All 11 database tables, every column with its data type and constraint, and the relationships between tables with their cardinality.
-
-### The 11 tables and what they hold
-| Table | Purpose |
-|---|---|
-| roles | Defines the four user types: admin, manager, employee, accountant |
-| users | All system users with hashed passwords and role assignment |
-| customers | Business customers with contact details and outstanding balance |
-| categories | Product groupings like Electronics, Clothing, Food |
-| products | All products with selling price, cost price, stock quantity, and minimum level |
-| orders | Order headers with customer, status, and total amount |
-| order_items | Individual line items — one row per product in each order |
-| invoices | Invoice linked to one confirmed order — tracks payment status |
-| expenses | Business expenses like rent, utilities, supplies |
-| inventory_movements | Every stock change event with reason and user who made it |
-| ai_queries | Full history of every AI question and its answer |
-
-### What the ER symbols mean
-- `||--o{` — One to Many. One customer places many orders.
-- `||--|{` — One to Many mandatory. One order must contain at least one order item.
-- `||--o|` — One to One optional. One order generates at most one invoice.
-
-### What to say out loud
-"This is our Entity-Relationship Diagram. It shows all 11 tables in our database. I will walk through the main relationships. The roles table assigns a role to each user — one role to many users. Customers place orders — one customer to many orders. Each order contains at least one order item — a mandatory one-to-many relationship. Each order item references a product, creating a many-to-many relationship between orders and products through the order_items junction table. A confirmed order generates exactly one invoice — a one-to-one relationship enforced by a UNIQUE constraint on the order_id column. The inventory_movements table tracks every stock change, and the ai_queries table stores every AI question for audit purposes."
+## DIAGRAM-BY-DIAGRAM EXPLANATION
 
 ---
 
-## DIAGRAM 11 — RDBMS Schema Table (Physical Design)
+### DIAGRAM 1 — System Architecture (Component/Deployment View)
 
-### What this diagram shows
-The exact column-by-column definition of every table as it exists in the database — column names, data types, and constraints. This is the physical database design.
+**File**: `01-system-architecture.mmd`
+**UML diagram type**: Component diagram with deployment aspects
+**Sommerville reference**: SE10 Chapter 6, §6.3 (Architectural patterns — layered architecture)
 
-### Key constraints to explain
-| Constraint | Example | What it enforces |
-|---|---|---|
-| PRIMARY KEY | orders.id | Every row has a unique identifier |
-| UNIQUE | users.email | No two users can share the same email |
-| NOT NULL | orders.customer_id | A column that cannot be left empty |
-| FOREIGN KEY | orders.customer_id → customers.id | Referential integrity — orders must point to a real customer |
-| DEFAULT | products.stock_qty DEFAULT 0 | The value if nothing is specified |
-| CASCADE DELETE | order_items.order_id | When an order is deleted, all its items are deleted automatically |
+**What it shows**: The physical and logical structure of the BizAI system.
 
-### What to say out loud
-"This is the RDBMS Schema Table. It shows the physical design of every table — the exact column names, data types, and constraints as they are implemented in our SQLAlchemy models. Key constraints include UNIQUE on email fields to prevent duplicate accounts, NOT NULL on required fields like customer_id in orders, and a UNIQUE constraint on order_id in the invoices table which enforces our one-invoice-per-order rule at the database level, not just in application code. CASCADE DELETE on order_items means if an order is deleted, all its line items are automatically removed to prevent orphaned data."
+**Components**:
+- **Staff user**: The human actor who interacts with the system through a web browser
+- **Web browser (React + Vite SPA)**: The presentation layer. React renders the UI as a Single Page Application bundled by Vite. All page transitions happen client-side without full page reloads
+- **BizAI FastAPI application (subgraph)**: The server-side application boundary containing:
+  - **API routers**: FastAPI route handlers that define HTTP endpoints (e.g., `POST /api/orders`). There are 11 router modules: auth, users, customers, products, orders, invoices, expenses, reports, ai, demo, notifications
+  - **JWT authentication and role permissions**: FastAPI dependency functions that validate the Bearer token and check the user's role before allowing access to protected endpoints. This is NOT a middleware class — it's implemented via `Depends(get_current_active_user)` and `Depends(RoleChecker(...))`
+  - **Business modules**: Service-layer Python modules (e.g., `order_service.py`, `product_service.py`) that contain all business logic. Routers are thin — they call service functions and return responses
+  - **SQLAlchemy ORM models**: Python classes that map to database tables. Each model defines columns, relationships, and constraints using SQLAlchemy's declarative syntax
+- **Relational database (SQLite by default)**: The persistent data store. Uses SQLite for development; can switch to PostgreSQL by changing one environment variable
+- **Data-grounded AI assistant**: An external AI provider (currently Groq with LLaMA 3.1 8B) selected through configuration. The dashed connection from business modules means the AI is **optional** — the system works without it by falling back to deterministic keyword-based answers
 
----
+**Data flow**: User → Browser → (REST JSON + Bearer JWT) → API routers → Auth check → Business logic → ORM → Database. For AI queries, business logic also calls the AI provider with a structured data snapshot.
 
-## DIAGRAM 12 — Normal Form Evidence Table
-
-### What this diagram shows
-Proof that the BizAI database design meets the first three normal forms (1NF, 2NF, 3NF).
-
-### Quick definitions
-| Normal Form | The Rule |
-|---|---|
-| 1NF | Every column holds one atomic (single, indivisible) value. No repeating groups or arrays inside a column. |
-| 2NF | Every non-key column must depend on the WHOLE primary key — not just part of it. Eliminates partial dependencies. |
-| 3NF | No non-key column should depend on another non-key column. Eliminates transitive dependencies. |
-
-### Most important examples to explain
-**orders table — 3NF violation avoided:**
-We do NOT store the customer's name inside the orders table. Even though every order belongs to a customer, storing the name would create a transitive dependency: order → customer_name → customer_id. Instead we store only customer_id (FK) and join the customers table when we need the name.
-
-**order_items table — 2NF:**
-The primary key of order_items is the combination of order_id and product_id. The quantity and unit_price both depend on this full combination — not just on order_id alone or product_id alone. This satisfies 2NF.
-
-**Justified denormalisation:**
-total_amount in orders and invoices is a calculated value stored as a column. This is technically a controlled denormalisation. We justify it because: (1) product prices can change after an order is placed, but the invoice must show the original price — so the amount must be frozen at order time; (2) summing order_items on every report query would be slow. The value is always recalculated from order_items on insert and update, so it is never stale.
-
-### What to say out loud
-"This table proves our database meets the first three normal forms. For 1NF, every column stores a single value — we separate order line items into their own order_items table instead of storing a list inside the orders table. For 2NF, there are no partial dependencies — in order_items, every field depends on the full combination of order_id and product_id. For 3NF, we have eliminated transitive dependencies — the customer name is not stored in orders; the category name is not stored in products. All related information is referenced through foreign keys. We do have one justified denormalization — total_amount is stored — and we can explain exactly why this engineering decision was made."
+**Why this architecture?** The layered approach means:
+- Frontend developers can work independently from backend developers
+- Business logic can be unit-tested without HTTP
+- The database can be changed without modifying business logic
+- The AI provider can be swapped without touching any other layer
 
 ---
 
-## DIAGRAM 13 — UML Class Diagram — Data Model Classes
+### DIAGRAM 2 — Use-Case Diagram
 
-### What this diagram shows
-All 11 Python classes that represent database tables (SQLAlchemy ORM models), their exact attributes with data types, their methods, and the object relationships between them.
+**File**: `02-use-cases.mmd`
+**UML diagram type**: Use-case diagram
+**Sommerville reference**: SE10 Chapter 5, §5.2 (Use-case modelling)
 
-### Two types of things shown
-1. **Attributes** — the data fields, matching directly to database columns
-2. **Methods** — Python functions defined inside the class. For example, Product has `is_low_stock()` which returns True if stock_qty is at or below min_stock_level. Invoice has `balance_due()` which returns total_amount minus paid_amount.
+**What it shows**: The functional scope of the system from the perspective of its four actor roles.
 
-### What the relationship notations mean
-| Notation | Meaning | Example |
-|---|---|---|
-| `-->` association | One class references another | User creates Orders |
-| `*--` composition | Strong ownership — child is deleted with parent | Order contains OrderItems — delete Order, Items are gone |
-| `"1" --> "0..*"` | Cardinality | One User creates zero or more Orders |
+**Actors** (external entities that interact with the system):
 
-### What to say out loud
-"This is our UML Class Diagram for the data model layer. Every class here maps directly to a database table. The attributes correspond to columns. Some classes also have computed methods — for example, Invoice has balance_due() which calculates the remaining amount to be paid, and Product has is_low_stock() which checks if current stock is at or below the minimum level. The composition relationship between Order and OrderItem is important — this means an OrderItem cannot exist without its parent Order. If the Order is deleted, its Items are deleted with it through the CASCADE DELETE database constraint."
+| Actor | Role in the system | Allowed use cases |
+|-------|-------------------|-------------------|
+| **Admin** | Full system access, user management | All 13 use cases |
+| **Manager** | Operational management | All except user management |
+| **Employee** | Customer-facing operations | Sign in, manage customers, create orders, view dashboard/reports, ask AI |
+| **Accountant** | Financial operations | Sign in, invoices, expenses, reports, AI, PDF download |
 
----
+**Use cases** (inside the system boundary):
+1. **Sign in** — OAuth2 form-based login returning a JWT
+2. **Manage users** — CRUD operations on user accounts (Admin only)
+3. **Manage customers** — Add, edit, view, search customer records
+4. **Manage products and categories** — Product CRUD with category classification
+5. **Adjust stock** — Manual stock adjustments with reason/notes tracking
+6. **Create order** — Select customer, add products, save as pending
+7. **Change order status** — Transition orders through pending → confirmed → shipped → delivered (or cancelled)
+8. **Generate invoice from order** — Create a `sent` invoice with 15-day due date
+9. **Update invoice / record payment** — Update paid amount, mark as paid
+10. **Download invoice PDF** — Server-generated PDF download
+11. **Manage expenses** — Record business expenses with categories
+12. **View dashboard and reports** — Real-time metrics, charts, sales analysis
+13. **Ask AI assistant** — Natural-language questions answered from live data
 
-## DIAGRAM 14 — UML Class Diagram — Service Layer
+**`«include»` relationships** (UML mandatory reused behaviour):
+- **Adjust stock** `«include»` → **Record inventory movement**: Every stock adjustment automatically creates an `inventory_movements` record. This is mandatory — you cannot adjust stock without recording the movement.
+- **Change order status** `«include»` → **Record inventory movement**: When an order is confirmed, stock is deducted and movements are recorded. When cancelled from confirmed/shipped, stock is restored. The guard (confirmation or cancellation only) determines when this inclusion is triggered.
+- **Ask AI assistant** `«include»` → **Build business snapshot**: Every AI query first builds a structured snapshot of current business data from the database. The AI cannot answer without this snapshot.
 
-### What this diagram shows
-The eight service classes that contain all the business logic, their public and private methods with parameter types and return types, and which model classes each service depends on.
-
-### Key services and their responsibilities
-| Service | Core responsibility |
-|---|---|
-| AuthService | Verifies passwords with bcrypt, creates and decodes JWT tokens |
-| CustomerService | Full CRUD for customers with search and pagination |
-| ProductService | Full CRUD for products plus the update_stock() method that also logs an inventory_movement |
-| OrderService | Creates orders, validates stock exists, runs the atomic confirmation transaction |
-| InvoiceService | Creates invoices from confirmed orders, records payments, generates PDF |
-| ReportService | Aggregates data for dashboards and reports; also builds the AI snapshot |
-| AIService | Classifies intent, calls ReportService for data, optionally calls Groq, logs the query |
-
-### Private vs public methods
-- Public methods (marked with +) are called from routers (API endpoints)
-- Private methods (marked with -) are internal helpers. For example, AIService._fallback_answer() is only called internally when no Groq API key is available.
-
-### The most important dependency chain
-AIService calls ReportService.build_business_snapshot(). ReportService queries Order, OrderItem, Invoice, Product, and Expense. This is why the AI can answer questions about any part of the business — it uses the same data layer as the reports.
-
-### What to say out loud
-"This is our Service Layer Class Diagram. The service classes contain all the business logic — they are the brain of the application. The router layer just receives the HTTP request and calls the appropriate service. This separation of concerns is a core principle of good software design. The most interesting dependency chain here is: AIService depends on ReportService, which aggregates data from five different model classes. This is why our AI assistant can answer questions about sales, products, stock, and revenue — it builds a snapshot from all of them before answering. The private methods in AIService — _fallback_answer and _ask_model — are internal helpers that handle the two possible paths: using Groq if configured, or pattern-matching the snapshot data if not."
+**Notation rules applied**:
+- Actors are connected to individual use cases with **solid, undirected association lines** (not to the system boundary or to groups)
+- `«include»` uses **dashed arrows with guillemet stereotypes** pointing from the including use case to the included use case
+- Guard conditions are documented separately from the stereotype label (per UML 2.5 §18.2)
 
 ---
 
-## Quick Q&A — Questions Sir Is Likely to Ask
+### DIAGRAM 3 — DFD Level 0 (Context Diagram)
 
-**Q: Why did you choose FastAPI over Django or Flask?**
-A: FastAPI is built specifically for REST APIs. It is faster than both Django and Flask, automatically generates Swagger documentation, and uses Python type hints for request validation with no extra code. Django is designed for server-rendered full-stack apps which is not what we built.
+**File**: `03-dfd-level0.mmd`
+**Diagram type**: Data Flow Diagram (DFD) — NOT UML (this is Yourdon/DeMarco notation)
+**Sommerville reference**: SE10 Chapter 5, §5.2 (Context models)
 
-**Q: What is the difference between Level 0 and Level 1 DFD?**
-A: Level 0 treats the entire system as one black box and only shows external actors and data flows crossing the system boundary. Level 1 opens that black box and shows the internal processes and data stores. They represent the same system at different levels of detail.
+**What it shows**: BizAI as a single process with all external entities and data flows crossing the system boundary.
 
-**Q: Your database diagram shows SQLite but the architecture diagram shows PostgreSQL — which do you use?**
-A: SQLite is used during development because it needs no server to run. PostgreSQL is the production database. SQLAlchemy ORM abstracts the database engine — we switch between them by changing a single DATABASE_URL environment variable. The code, queries, and models are identical.
+**External entities** (rectangles):
+- **Administrator**: Sends configuration data and user credentials; receives user-management results and system status
+- **Manager**: Sends operational requests and business queries; receives AI insights and aggregated reports
+- **Employee**: Sends customer and order details; receives customer and order results
+- **Accountant**: Sends payment entries and expense records; receives financial summaries and invoices
+- **AI Provider Service**: Receives business context and natural-language queries; returns AI-generated responses
 
-**Q: Is your database fully normalised?**
-A: Yes, all tables satisfy 1NF, 2NF, and 3NF. We have one deliberate and justified denormalisation — the total_amount column in orders and invoices — which we can explain. It is recalculated on every write, so it is always consistent, and it is necessary for invoice document stability and fast report queries.
+**Key DFD rules followed**:
+1. **Only one process** at Level 0 — BizAI is treated as a black box
+2. **No data stores** at Level 0 — data stores only appear at Level 1 and below
+3. **Data flows are labelled with data names** (e.g., "Configuration Data", "Financial Summaries"), not with UI actions ("click button") or screen names
+4. **No entity-to-entity arrows** — all flows pass through the central process
+5. **Bidirectional flows** are shown as separate arrows in each direction
 
-**Q: How does the AI know about our business data?**
-A: It does not use training data for business facts. When a question is asked, our system runs specific SQL queries on the live database — for example, SELECT SUM(total_amount) FROM orders WHERE status = delivered AND this month. These results are passed as structured JSON to the language model which formats them into a readable sentence. The LLM cannot invent numbers because it only receives data that was just retrieved from the real database.
-
-**Q: How does RBAC work in your system?**
-A: Every API endpoint has a required role. When a request arrives, the JWT middleware decodes the token and extracts the user's role. If the role does not match what the endpoint requires, the request is rejected with 403 Forbidden before reaching the service layer. For example, the DELETE /users endpoint requires role = admin. A Manager's token would be rejected at the middleware level.
-
-**Q: What is the difference between composition and association in your class diagram?**
-A: Association (arrow) means one class uses or references another, but they can exist independently. Composition (filled diamond arrow) means the child cannot exist without the parent. Order and OrderItem are a composition — an OrderItem has no meaning without its Order. If the Order is deleted, all its Items are deleted too through CASCADE DELETE. User and Order are an association — the User still exists even if all their Orders are deleted.
-
-**Q: How does the atomic transaction in order confirmation prevent data corruption?**
-A: When the Manager confirms an order, the system calls BEGIN TRANSACTION. Inside the transaction it deducts stock for each product and logs each inventory movement. Only if all deductions succeed does it update the order status to confirmed and call COMMIT. If any deduction fails — for example a product has insufficient stock — the system calls ROLLBACK, which undoes all changes made inside the transaction. No partial stock deductions are ever saved to the database.
+**Why a DFD and not just UML?** Sommerville SE10 discusses DFDs as effective for modelling data processing systems where the focus is on how data flows through the system. The BizAI system is fundamentally a data-processing application (business records in, reports/insights out), making DFDs particularly appropriate.
 
 ---
 
-*BizAI — Team YATRI | Presentation Guide 2026*
-*One section per team member — assign sections before the presentation day.*
+### DIAGRAM 4 — DFD Level 1
+
+**File**: `04-dfd-level1.mmd`
+**Diagram type**: Data Flow Diagram Level 1 (decomposition of Level 0)
+**Sommerville reference**: SE10 Chapter 5, §5.2
+
+**What it shows**: The BizAI system process decomposed into six sub-processes, with data stores.
+
+**Processes** (circles, numbered):
+| Process | Name | What it does in the code |
+|---------|------|--------------------------|
+| 1.0 | Authenticate User | `auth.py` router + `security.py` — validates credentials, creates JWT |
+| 2.0 | Manage Customers and Catalog | `customer_service.py` + `product_service.py` — CRUD for customers, products, categories |
+| 3.0 | Process Orders | `order_service.py` — creates orders, manages status transitions, triggers stock updates |
+| 4.0 | Manage Invoices and Expenses | `invoice_service.py` + `expense_service.py` — generates invoices from orders, records expenses |
+| 5.0 | Generate Reports | `report_service.py` — aggregates data from multiple stores for dashboard metrics |
+| 6.0 | Process AI Queries | `ai_service.py` — builds business snapshot, calls AI provider or fallback, logs query |
+
+**Data stores** (cylinders):
+| Store | Contains | Maps to database tables |
+|-------|----------|------------------------|
+| D1 | roles and users | `roles`, `users` |
+| D2 | Customers and Catalog DB | `customers`, `categories`, `products` |
+| D3 | orders and order_items | `orders`, `order_items` |
+| D4 | Finance DB | `invoices`, `expenses` |
+| D5 | ai_queries | `ai_queries` |
+
+**Balancing check** (Level 1 must balance Level 0):
+- Every external entity from Level 0 appears in Level 1
+- Every data flow crossing the Level 0 boundary has a corresponding flow in Level 1
+- The AI Provider Service external entity is preserved
+- No new external entities are introduced
+
+---
+
+### DIAGRAM 5 — Login Sequence Diagram
+
+**File**: `05-sequence-login.mmd`
+**UML diagram type**: Sequence diagram
+**Sommerville reference**: SE10 Chapter 5, §5.3 (Interaction models)
+**Implements**: `routers/auth.py`, `utils/security.py`, `utils/deps.py`
+
+**Lifelines** (participants):
+1. **Staff user** (actor) — the human
+2. **React Login page** — the frontend login component
+3. **FastAPI /api/auth** — the authentication router
+4. **SQLAlchemy database** — the persistence layer
+
+**Flow step by step**:
+
+1. User enters email and password in the login form
+2. React sends `POST /api/auth/login` as an **OAuth2 password form** (not JSON — FastAPI uses `OAuth2PasswordRequestForm` which expects form-encoded `username` and `password` fields)
+3. FastAPI queries the database: `db.query(User).filter(User.email == form_data.username).first()`
+4. Database returns the User record or None
+
+**Alt fragment** (alternative scenarios):
+- **No user, invalid password, or inactive user**:
+  - If no user found or password hash doesn't match: returns `401 Unauthorized`
+  - If user exists but `is_active == False`: returns `400 Inactive user`
+  - React displays the authentication error to the user
+- **Authenticated**:
+  - API verifies the password hash using bcrypt (`verify_password()`) and creates a signed JWT containing the user's email as the subject (`sub`) and an expiry time
+  - Returns `200 {access_token, token_type: "bearer"}`
+  - React stores the token in `localStorage`
+  - React immediately calls `GET /api/auth/me` with `Authorization: Bearer <token>` to retrieve the full user profile
+  - API validates the JWT signature, checks the user is still active, and returns `UserResponse` (id, email, full_name, role)
+  - React navigates to the dashboard
+
+**Why two API calls?** The login endpoint returns only a token (OAuth2 convention). The `/me` endpoint retrieves the user's profile and role information needed to render the correct UI (e.g., hiding admin-only menu items).
+
+---
+
+### DIAGRAM 6 — Order Flow Sequence Diagram
+
+**File**: `06-sequence-order-flow.mmd`
+**UML diagram type**: Sequence diagram with combined fragments (alt, loop)
+**Sommerville reference**: SE10 Chapter 5, §5.3
+**Implements**: `routers/orders.py`, `services/order_service.py`, `services/product_service.py`
+
+This is the most complex sequence diagram because it covers the complete order lifecycle.
+
+**Part 1 — Create a pending order**:
+1. Staff user selects a customer and products in the React UI
+2. React sends `POST /api/orders` with `customer_id` and `items[]` array
+3. Router calls `order_service.create_order(db, order, current_user.id)`
+4. Service first verifies the customer exists — if not, returns `404 Customer not found`
+5. For **each order item** (loop fragment):
+   - Finds the product by ID
+   - Validates the product is active (`is_active == True`)
+   - Reads the current selling price (`product.price`)
+   - If product not found or inactive, returns an error
+6. Creates the `Order` record with status `pending` and all `OrderItem` records
+7. Calculates `total_amount` as the sum of all `unit_price × quantity`
+8. Commits the transaction and returns the created order
+
+**Important**: Stock is NOT deducted when an order is created. Stock is only deducted when the order is **confirmed**. This prevents stock from being locked by draft/pending orders.
+
+**Part 2 — Change order status** (Admin or Manager only):
+- **Order not found**: Returns `404`
+- **Pending → Confirmed**:
+  - For each order item, calls `product_service.update_stock(product_id, -quantity, commit=False)`
+  - `update_stock()` checks if `current_stock + quantity_change >= 0`
+  - If **insufficient stock** for any item: raises `ValueError`, triggers `db.rollback()`, returns `400`
+  - If **stock available**: updates `products.stock_qty` and creates an `inventory_movements` record
+  - After all items succeed: commits the entire transaction atomically
+- **Cancelled from confirmed or shipped** (NEW — added in this review):
+  - For each order item, calls `update_stock(product_id, +quantity, commit=False)` — **restoring** the stock
+  - Creates `inventory_movements` with reason `order_cancelled`
+  - Commits and returns the cancelled order
+- **Other permitted status change** (e.g., confirmed → shipped, shipped → delivered):
+  - Simply updates the status and commits
+
+**Why is this diagram important?** It demonstrates:
+- **Transaction management** — all-or-nothing stock deductions
+- **Referential integrity** — customer and product existence validation
+- **Business rules** — only managers/admins can change status, stock cannot go negative
+- **Rollback behaviour** — if any item fails, no items are deducted
+
+---
+
+### DIAGRAM 7 — Invoice Sequence Diagram
+
+**File**: `07-sequence-invoice.mmd`
+**UML diagram type**: Sequence diagram with alt and opt fragments
+**Sommerville reference**: SE10 Chapter 5, §5.3
+**Implements**: `routers/invoices.py`, `services/invoice_service.py`
+
+**Flow**:
+1. Authorised user requests `POST /api/invoices/from-order/{order_id}`
+2. Service calls `generate_invoice_from_order(db, order_id)`
+3. Looks up the order — if not found, returns `None` (router returns `404`)
+4. Checks if an invoice already exists for this order (`invoices.order_id` has a **unique constraint**)
+
+**Alt fragment**:
+- **Order does not exist**: Returns `404 Order not found`
+- **Invoice already exists**: Returns the existing invoice (idempotent — calling the endpoint multiple times is safe)
+- **No invoice exists**: Creates a new invoice with:
+  - Auto-generated invoice number (`INV-{8-char hex}`)
+  - Status: `sent` (not `draft` — this is a design decision; invoices are generated when ready to send)
+  - `total_amount` copied from `order.total_amount`
+  - `due_date` = today + 15 days (configurable, defaults to 15)
+
+**Opt fragment** (optional behaviour):
+- An accountant, admin, or manager can update the invoice via `PATCH /api/invoices/{invoice_id}/status`
+- Can update `paid_amount`, `status`, `due_date`
+- When `paid_amount >= total_amount` (i.e., `balance_due <= 0`), the status is automatically set to `paid` and the customer's `outstanding_balance` is reduced
+
+**Important**: The current code does **not** require a confirmed order to generate an invoice. Any existing order can have an invoice generated. The unique constraint on `invoices.order_id` ensures at most one invoice per order.
+
+---
+
+### DIAGRAM 8 — AI Query Sequence Diagram
+
+**File**: `08-sequence-ai-query.mmd`
+**UML diagram type**: Sequence diagram with alt fragment
+**Sommerville reference**: SE10 Chapter 5, §5.3
+**Implements**: `routers/ai.py`, `services/ai_service.py`, `services/report_service.py`
+
+**Lifelines**: Staff user → React AI page → FastAPI /api/ai → ai_service.py → report_service.py → SQLAlchemy database → Configured AI provider
+
+**Flow**:
+1. User enters a business question (e.g., "What are our best-selling products?")
+2. React sends `POST /api/ai/chat` with the query text
+3. Router calls `ai_service.answer_query(db, current_user, query)`
+4. `answer_query()` calls `report_service.build_business_snapshot(db)` which:
+   - Runs `get_dashboard_metrics(db)` — aggregates sales, revenue, profit, inventory, top/bottom products, recent orders
+   - Queries low-stock products (stock ≤ min_stock_level)
+   - Queries total outstanding customer balance
+   - Returns a structured dictionary with all this data
+
+5. **Alt fragment**:
+   - **AI provider configured and responds**: Sends the snapshot JSON (truncated to 8000 chars) + user question to Groq's LLaMA 3.1 8B with a system prompt: *"Answer only from the JSON snapshot. Never invent numbers."* Temperature is set to 0.2 (low creativity, high factual accuracy).
+   - **Provider unavailable or not configured**: Uses `_fallback_answer()` which:
+     - Checks for keywords: "low"/"stock"/"restock" → returns low-stock products
+     - "best"/"fastest"/"selling" → returns top products by revenue
+     - "least"/"worst"/"slowest" → returns bottom products
+     - "compared"/"last month"/"this month" → calculates month-over-month change percentage
+     - "summary"/"performance" → returns a comprehensive business summary
+     - Default → returns total orders, sales, profit, and low-stock count
+
+6. Saves the question and answer in the `ai_queries` table with `intent: "business_data"`
+7. Returns the response to the frontend
+
+**Why this design?** The AI is **grounded** — it cannot hallucinate business numbers because it only sees actual database aggregations. The fallback ensures the feature works even without an API key, which is important for:
+- Demo presentations where network access may be unreliable
+- Development environments without API keys
+- Cost control (no API calls for simple questions)
+
+---
+
+### DIAGRAM 9 — Stock Adjustment Sequence Diagram
+
+**File**: `09-sequence-stock-adjust.mmd`
+**UML diagram type**: Sequence diagram with alt fragment
+**Sommerville reference**: SE10 Chapter 5, §5.3
+**Implements**: `routers/products.py` (line 115: `POST /{product_id}/stock`), `services/product_service.py`
+
+**Flow**:
+1. Admin or Manager enters quantity change, reason, and notes
+2. React sends `POST /api/products/{product_id}/stock` with `StockAdjust` JSON body
+3. Router calls `product_service.update_stock(db, product_id, quantity_change, reason, notes, user_id)`
+4. Service queries the product by ID
+
+**Alt fragment** (three outcomes):
+- **Product missing**: Returns `None`, router returns `404`
+- **Negative resulting stock**: `new_qty = current_stock + quantity_change` — if `new_qty < 0`, raises `ValueError("Insufficient stock")`, router returns `400`
+- **Valid change**:
+  - Updates `products.stock_qty` to `new_qty`
+  - Creates an `inventory_movements` record with `product_id`, `quantity_change`, `reason`, `notes`, `created_by` (user_id), and `created_at` (auto-set)
+  - Commits and returns the updated product
+
+**Why track inventory movements?** Every stock change — whether from a manual adjustment, order confirmation, or order cancellation — creates an `inventory_movements` record. This provides a complete **audit trail** of how stock levels changed over time. The `reason` field distinguishes between `adjustment`, `order_confirmed`, and `order_cancelled`.
+
+---
+
+### DIAGRAM 10 — ER Diagram (Physical)
+
+**File**: `10-er-diagram.mmd`
+**Diagram type**: Entity-Relationship Diagram using crow's-foot notation
+**Sommerville reference**: SE10 Chapter 5, §5.4 (Structural models)
+**Implements**: All files in `backend/models/`
+
+**11 tables** mapped from SQLAlchemy ORM models:
+
+| Table | PK | Key relationships | Notes |
+|-------|----|--------------------|-------|
+| `roles` | id | 1 → many `users` | Four roles: admin, manager, employee, accountant |
+| `users` | id | FK to `roles.id` (mandatory); 1 → many orders, expenses, ai_queries | `email` is unique; `password_hash` stores bcrypt hash |
+| `customers` | id | 1 → many `orders` | `email` is unique but **nullable** — a customer can exist without email |
+| `categories` | id | 0..1 → many `products` | Optional product classification |
+| `products` | id | FK to `categories.id` (nullable); 1 → many order_items, inventory_movements | `sku` is unique; `is_low_stock` is a computed property |
+| `orders` | id | FK to `customers.id` (mandatory), FK to `users.id` (mandatory); 1 → 1..* order_items, 1 → 0..1 invoices | `order_number` auto-generated as `ORD-{hex}` |
+| `order_items` | id | FK to `orders.id` (cascade delete), FK to `products.id` | Associative entity between orders and products |
+| `invoices` | id | FK to `orders.id` (**unique** — at most one invoice per order) | `invoice_number` auto-generated as `INV-{hex}` |
+| `expenses` | id | FK to `users.id` (mandatory) | Independent financial records not tied to orders |
+| `inventory_movements` | id | FK to `products.id` (mandatory), FK to `users.id` (**nullable**) | Audit trail for all stock changes; `created_by` is nullable because system-generated movements may not have a user |
+| `ai_queries` | id | FK to `users.id` (mandatory) | Stores question, response, and classified intent |
+
+**Key cardinalities**:
+- `roles ∥--o{ users` → one role has zero or many users (mandatory role assignment)
+- `orders ∥--|{ order_items` → one order has one or many items (an order must have at least one item — enforced in code)
+- `orders ∥--o| invoices` → one order has zero or one invoice (unique FK enforces this)
+- `categories o|--o{ products` → zero-or-one category classifies zero or many products (nullable FK)
+- `users o|--o{ inventory_movements` → zero-or-one user performs zero or many movements (nullable FK)
+
+**Normalization**: The database is in **Third Normal Form (3NF)**:
+- 1NF: All columns contain atomic values
+- 2NF: No partial dependencies (all non-key attributes depend on the entire primary key)
+- 3NF: No transitive dependencies (e.g., `order_items.total_price` could be argued as derivable from `quantity × unit_price`, but it's stored for performance and to preserve historical prices)
+
+---
+
+### DIAGRAM 11 — Domain Model Class Diagram
+
+**File**: `11-class-diagram-models.mmd`
+**UML diagram type**: Class diagram (domain model)
+**Sommerville reference**: SE10 Chapter 5, §5.4 (Structural models — class diagrams)
+**Implements**: All files in `backend/models/`
+
+This diagram maps directly to the SQLAlchemy ORM classes.
+
+**Key UML notation**:
+- **Visibility markers**: `+` = public, `-` = private
+  - `password_hash` is marked **private** (`-`) because it should never be exposed in API responses
+- **Computed properties**: `is_low_stock: bool` on Product (returns `stock_qty <= min_stock_level`), `balance_due: float` on Invoice (returns `total_amount - paid_amount`), `issue_date: DateTime` on Invoice (returns `created_at`)
+- **Composition** (filled diamond ◆): `Order "1" *-- "1..*" OrderItem` — OrderItems cannot exist without their parent Order. Deleting an order cascades to delete all items (`cascade="all, delete-orphan"` in SQLAlchemy)
+- **Association** (directed arrows): All other relationships are associations with navigability (e.g., `User "1" --> "0..*" Order`)
+
+**Difference from ERD**: The ER diagram (file 10) shows the physical database structure with crow's-foot cardinality. The class diagram shows the **object-oriented domain model** with UML multiplicities and navigability. Both diagrams document the same system but from different perspectives (Sommerville SE10 §5.4).
+
+**Audit timestamps note**: `created_at` and `updated_at` columns exist on all entities but are omitted from the class diagram for readability. They are shown in the ER diagram.
+
+---
+
+### DIAGRAM 12 — Module Dependency Diagram
+
+**File**: `12-class-diagram-services.mmd`
+**UML diagram type**: Package/Component dependency diagram (NOT a class diagram)
+**Sommerville reference**: SE10 Chapter 6, §6.4 (Component-level design)
+**Implements**: Entire `backend/` directory structure
+
+**Why this is NOT a class diagram**: The Python implementation uses **modules with functions** (e.g., `order_service.update_order_status()`), not service classes (e.g., `OrderService.update_order_status()`). Drawing invented `AuthService` or `InvoiceService` classes would misrepresent the code. This diagram uses UML **package/component dependency** notation instead.
+
+**Packages/Components**:
+| Package | Contents | Maps to |
+|---------|----------|---------|
+| **routers** | auth, users, customers, products, orders, invoices, expenses, reports, ai, demo, notifications | `backend/routers/*.py` |
+| **dependencies** | get_db, get_current_active_user, RoleChecker | `database.py`, `utils/deps.py`, `utils/permissions.py` |
+| **service modules** | user_service, customer_service, product_service, order_service, invoice_service, expense_service, report_service, ai_service | `backend/services/*.py` |
+| **models** | Role, User, Customer, Category, Product, Order, OrderItem, Invoice, Expense, InventoryMovement, AIQuery | `backend/models/*.py` |
+| **schemas** | Pydantic request/response models | `backend/schemas/*.py` |
+| **PDF builder** | Invoice PDF generation | `utils/pdf.py` |
+| **Optional configured AI provider** | Groq API client | Imported conditionally in `ai_service.py` |
+
+**Key cross-module dependencies**:
+- `order_service.update_order_status` → `product_service.update_stock` (stock deduction on confirmation)
+- `ai_service.answer_query` → `report_service.build_business_snapshot` (data grounding for AI)
+
+---
+
+## SOMMERVILLE SE10 MAPPING
+
+| Sommerville Topic | Chapter | How BizAI addresses it |
+|-------------------|---------|------------------------|
+| Software process models | Ch. 2 | Incremental development in 8 weekly sprints |
+| Requirements engineering | Ch. 4 | Use cases, user stories, functional/non-functional requirements in project documentation |
+| System modelling | Ch. 5 | Use-case, sequence, class, ER, DFD, and component diagrams |
+| Architectural design | Ch. 6 | Layered architecture, component decomposition, client-server pattern |
+| Design and implementation | Ch. 7 | Design patterns (strategy, facade, repository, DI), implementation in Python/React |
+| Software testing | Ch. 8 | API endpoint testing, integration testing with demo data simulator |
+| Software evolution | Ch. 9 | Configurable database (SQLite → PostgreSQL), pluggable AI provider |
+
+---
+
+## COMPLETE API ENDPOINT REFERENCE
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/auth/login` | None | OAuth2 form login, returns JWT |
+| GET | `/api/auth/me` | Bearer JWT | Returns current user profile |
+| GET | `/api/users` | Admin | List all users |
+| POST | `/api/users` | Admin | Create a new user |
+| GET/PUT/DELETE | `/api/users/{id}` | Admin | User CRUD |
+| GET | `/api/customers` | Staff | List customers (paginated, searchable) |
+| POST | `/api/customers` | Employee+ | Create customer |
+| GET/PUT/DELETE | `/api/customers/{id}` | Employee+ | Customer CRUD |
+| GET | `/api/products` | Staff | List products (filterable by category, searchable) |
+| POST | `/api/products` | Manager+ | Create product |
+| GET/PUT | `/api/products/{id}` | Staff/Manager+ | Read/update product |
+| POST | `/api/products/{id}/stock` | Manager+ | Manual stock adjustment |
+| GET | `/api/products/low-stock` | Staff | Low-stock products |
+| GET | `/api/products/categories` | Staff | List categories |
+| POST | `/api/products/categories` | Manager+ | Create category |
+| GET | `/api/products/history` | Staff | Inventory movement history |
+| GET | `/api/orders` | Staff | List orders (filterable by status, customer) |
+| POST | `/api/orders` | Employee+ | Create a new order |
+| GET | `/api/orders/{id}` | Staff | Read order with items and customer |
+| PATCH | `/api/orders/{id}/status` | Manager+ | Change order status |
+| GET | `/api/invoices` | Staff | List invoices (filterable by status) |
+| POST | `/api/invoices/from-order/{order_id}` | Staff | Generate invoice from order |
+| GET | `/api/invoices/{id}` | Staff | Read invoice with order details |
+| PATCH | `/api/invoices/{id}/status` | Accountant+ | Update invoice (payment, status) |
+| GET | `/api/invoices/{id}/pdf` | Staff | Download invoice PDF |
+| GET | `/api/expenses` | Staff | List expenses |
+| POST | `/api/expenses` | Accountant+ | Create expense |
+| GET/PUT/DELETE | `/api/expenses/{id}` | Accountant+ | Expense CRUD |
+| GET | `/api/reports/dashboard` | Staff | Dashboard metrics |
+| GET | `/api/reports/sales-series` | Staff | Daily sales time series |
+| GET | `/api/reports/top-products` | Staff | Top products by revenue |
+| GET | `/api/reports/customer-activity` | Staff | Customer activity ranking |
+| GET | `/api/reports/expense-summary` | Staff | Expense breakdown by category |
+| POST | `/api/ai/chat` | Staff | Ask AI a business question |
+| GET | `/api/ai/summary` | Staff | AI-generated business summary |
+| POST | `/api/demo/generate` | Admin | Generate demo data |
+| DELETE | `/api/demo/clear` | Admin | Remove demo data |
+| GET | `/api/notifications` | Staff | Get notifications |
+| GET | `/api/health` | None | Health check |
+
+---
+
+## DEMONSTRATION FLOW
+
+The recommended presentation demo follows this end-to-end scenario:
+
+1. **Sign in** as admin → show dashboard with real metrics
+2. **Create a customer** → show it appears in the customer list
+3. **Create a product** with stock quantity → show inventory
+4. **Create an order** → select the customer, add the product, save as pending
+5. **Confirm the order** → stock automatically decreases → show inventory movement record
+6. **Generate an invoice** → show the invoice with due date and balance
+7. **Download invoice PDF** → show the generated PDF
+8. **Record a payment** → mark invoice as paid → customer outstanding balance updated
+9. **View dashboard** → show updated sales, revenue, profit charts
+10. **Ask AI** "What are our best-selling products?" → AI answers using real database data
+11. **Ask AI** "Give me a summary of this month's performance" → AI provides grounded summary
+12. **Show role-based access** → sign in as Employee, show restricted menus and 403 when trying admin actions
+
+This flow demonstrates the complete business workflow and all major system capabilities in a single coherent scenario.

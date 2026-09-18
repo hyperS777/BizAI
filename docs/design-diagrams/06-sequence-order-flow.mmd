@@ -1,52 +1,65 @@
-%%{init: {'theme': 'base', 'sequence': {'actorMargin': 150, 'messageMargin': 60}}}%%
 sequenceDiagram
     autonumber
-    actor U as Employee
-    participant FE as React Client
-    participant API as FastAPI Gateway
-    participant ORD as Order Service
-    participant INV as Inventory Service
-    participant DB as PostgreSQL Database
+    actor U as Staff user
+    participant FE as React Orders page
+    participant API as FastAPI /api/orders
+    participant OS as order_service.py
+    participant PS as product_service.py
+    participant DB as SQLAlchemy database
 
-    Note over U,DB: PHASE 1: Order Creation
-    U->>+FE: createOrder(customerId, items)
-    FE->>+API: POST /api/orders
-    API->>+ORD: process_new_order(customerId, items)
-    ORD->>+DB: SELECT * FROM customers WHERE id = :customerId
-    DB-->>-ORD: Customer Record
-    ORD->>+DB: INSERT INTO orders, order_items
-    DB-->>-ORD: Order Created ID
-    ORD-->>-API: return Order(Pending)
-    API-->>-FE: 201 Created (Order)
-    FE-->>-U: showOrderSummary()
-
-    Note over U,DB: PHASE 2: Order Confirmation & Stock Deduction
-    U->>+FE: confirmOrder(orderId)
-    FE->>+API: PATCH /api/orders/{id}/status (Confirmed)
-    API->>+ORD: confirm_order(orderId)
-    
-    ORD->>+DB: BEGIN TRANSACTION
-    loop For each OrderItem
-        ORD->>+INV: check_stock_availability(productId, qty)
-        INV->>+DB: SELECT stock_qty FROM products
-        DB-->>-INV: Current Stock
-        alt Insufficient Stock
-            INV-->>ORD: throw InsufficientStockError()
-            ORD->>DB: ROLLBACK TRANSACTION
-            ORD-->>API: throw BadRequest("Stock not available")
-            API-->>FE: 400 Bad Request
-            FE-->>U: showError("Insufficient Stock")
-        else Stock OK
-            INV->>+DB: UPDATE products SET stock_qty = stock_qty - qty
-            DB-->>-INV: Rows Affected
-            INV->>+DB: INSERT INTO inventory_movements
-            DB-->>-INV: Rows Affected
-            INV-->>-ORD: return True
+    Note over U,DB: Create a pending order
+    U->>FE: select customer and products
+    FE->>API: POST /api/orders with customer_id and items
+    API->>OS: create_order(db, order, current_user.id)
+    OS->>DB: find customer
+    DB-->>OS: customer or not found
+    alt customer missing
+        OS-->>API: 404 Customer not found
+        API-->>FE: 404 error
+    else customer found
+        loop each order item
+            OS->>DB: find active product and read price
+            DB-->>OS: product or validation error
         end
+        OS->>DB: INSERT order and order_items with status pending
+        OS->>DB: COMMIT
+        OS-->>API: OrderResponse
+        API-->>FE: 200 created order
+        FE-->>U: show pending order
     end
-    ORD->>+DB: UPDATE orders SET status = 'Confirmed'
-    DB-->>-ORD: Rows Affected
-    ORD->>DB: COMMIT TRANSACTION
-    ORD-->>-API: return Order(Confirmed)
-    API-->>-FE: 200 OK
-    FE-->>-U: updateDashboard()
+
+    Note over U,DB: Only Admin or Manager may change order status
+    U->>FE: select a new status
+    FE->>API: PATCH /api/orders/{order_id}/status
+    API->>OS: update_order_status(db, order_id, status)
+    alt order not found
+        OS-->>API: None
+        API-->>FE: 404 Order not found
+    else pending to confirmed
+        loop each order item
+            OS->>PS: update_stock(product_id, -quantity, commit=false)
+            PS->>DB: check stock and update product
+            alt insufficient stock
+                PS-->>OS: ValueError
+                OS->>DB: ROLLBACK
+                API-->>FE: 400 insufficient stock
+            else stock available
+                PS->>DB: INSERT inventory_movement
+            end
+        end
+        OS->>DB: UPDATE order status and COMMIT
+        API-->>FE: 200 confirmed order
+        FE-->>U: show confirmed status
+    else cancelled from confirmed or shipped
+        loop each order item
+            OS->>PS: update_stock(product_id, +quantity, commit=false)
+            PS->>DB: restore stock and INSERT inventory_movement
+        end
+        OS->>DB: UPDATE order status and COMMIT
+        API-->>FE: 200 cancelled order
+        FE-->>U: show cancelled status
+    else other permitted status change
+        OS->>DB: UPDATE order status and COMMIT
+        API-->>FE: 200 updated order
+        FE-->>U: show updated status
+    end

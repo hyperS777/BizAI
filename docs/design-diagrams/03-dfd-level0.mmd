@@ -10,20 +10,20 @@ flowchart LR
     SYS(("BizAI\nInformation\nSystem"))
 
     %% External Systems (Rectangles)
-    GROQ["Groq LLM Service"]
+    AI_PROVIDER["AI Provider Service"]
 
     %% Data Flows
     ADMIN -- "Configuration Data,\nUser Credentials" --> SYS
-    SYS -- "System Status,\nAudit Logs" --> ADMIN
+    SYS -- "User-Management Results,\nSystem Status" --> ADMIN
 
-    MGR -- "Business Queries,\nStrategic Decisions" --> SYS
+    MGR -- "Operational Requests,\nBusiness Queries" --> SYS
     SYS -- "AI Insights,\nAggregated Reports" --> MGR
 
-    EMP -- "Order Details,\nInventory Adjustments" --> SYS
-    SYS -- "Order Confirmations,\nStock Alerts" --> EMP
+    EMP -- "Customer and\nOrder Details" --> SYS
+    SYS -- "Customer and\nOrder Results" --> EMP
 
     ACC -- "Payment Entries,\nExpense Records" --> SYS
     SYS -- "Financial Summaries,\nInvoices" --> ACC
 
-    SYS -- "Anonymized Business Context,\nNatural Language Query" --> GROQ
-    GROQ -- "AI Generated Response" --> SYS
+    SYS -- "Business Context,\nNatural Language Query" --> AI_PROVIDER
+    AI_PROVIDER -- "AI Generated Response" --> SYS

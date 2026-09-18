@@ -7,7 +7,7 @@
   4. Login Sequence Diagram
   5. ER Diagram
 - Use an editable tool such as Mermaid, diagrams.net, or Eraser instead of heavy Visio-only workflows.
-- Ensure each diagram matches the implemented BizAI code and PostgreSQL schema.
+- Ensure each diagram matches the implemented BizAI code and the SQLAlchemy schema. SQLite is the default database; another relational database can be configured through `DATABASE_URL`.
 - Export the final versions as PNG/SVG or PDF for presentation and keep the editable source files with them.
 - All team members should be present and each person explains one diagram.
 - Present the flow as:

@@ -1,30 +1,30 @@
-%%{init: {'theme': 'base', 'sequence': {'actorMargin': 150, 'messageMargin': 60}}}%%
 sequenceDiagram
     autonumber
-    actor U as Manager
-    participant FE as React Client
-    participant API as FastAPI Gateway
-    participant AI as AI Service
-    participant DB as PostgreSQL Database
-    participant GROQ as Groq LLM API
+    actor U as Staff user
+    participant FE as React AI page
+    participant API as FastAPI /api/ai
+    participant AS as ai_service.py
+    participant RS as report_service.py
+    participant DB as SQLAlchemy database
+    participant PROVIDER as Configured AI provider
 
-    U->>+FE: submitQuery("How are sales this month?")
-    FE->>+API: POST /api/ai/chat
-    API->>+AI: process_natural_language_query(queryText)
-    
-    AI->>+DB: SELECT aggregated_sales, profit, stock FROM business_metrics
-    DB-->>-AI: return BusinessSnapshot(JSON)
-    
-    alt Groq API Available
-        AI->>+GROQ: POST /v1/chat/completions (Context + Query)
-        GROQ-->>-AI: return ChatCompletion(Answer)
-    else Fallback Mode (Offline/Error)
-        AI->>AI: execute_keyword_match_fallback(Snapshot, queryText)
+    U->>FE: enter a business question
+    FE->>API: POST /api/ai/chat with query
+    API->>AS: answer_query(db, current_user, query)
+    AS->>RS: build_business_snapshot(db)
+    RS->>DB: read orders, products, customers and expenses
+    DB-->>RS: current business records
+    RS-->>AS: structured business snapshot
+
+    alt AI provider is configured and responds
+        AS->>PROVIDER: send question and structured snapshot
+        PROVIDER-->>AS: grounded language answer
+    else provider unavailable or not configured
+        AS->>AS: use keyword-based fallback answer
     end
-    
-    AI->>+DB: INSERT INTO ai_queries (query_text, response)
-    DB-->>-AI: Log Saved
-    
-    AI-->>-API: return QueryResponse(Answer)
-    API-->>-FE: 200 OK
-    FE-->>-U: displayAnswer()
+
+    AS->>DB: INSERT ai_queries with question and answer
+    AS->>DB: COMMIT
+    AS-->>API: AIQueryResponse
+    API-->>FE: 200 answer
+    FE-->>U: display answer

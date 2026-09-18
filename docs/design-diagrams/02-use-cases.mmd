@@ -1,66 +1,31 @@
-%%{init: {'flowchart': {'nodeSpacing': 80, 'rankSpacing': 150}}}%%
+%% UML use-case model: associations connect actors to individual use cases, never to packages.
 flowchart LR
-    %% Define Actors
-    ADMIN(["Admin"])
-    MANAGER(["Manager"])
-    EMPLOYEE(["Employee"])
-    ACCOUNTANT(["Accountant"])
-
-    %% System Boundary
-    subgraph BIZAI ["BizAI Platform System Boundary"]
-        direction TB
-        
-        subgraph Admin_Grp ["Administration"]
-            direction TB
-            UC11(("Settings"))
-            UC2(("Manage Users"))
-        end
-
-        subgraph Mgmt_Grp ["Management"]
-            direction TB
-            UC10(("AI Assistant"))
-            UC8(("Expenses"))
-        end
-
-        subgraph Ops_Grp ["Operations"]
-            direction TB
-            UC4(("Manage Products"))
-            UC5(("Manage Inventory"))
-            UC6(("Manage Orders"))
-        end
-        
-        subgraph Shared_Grp ["General"]
-            direction TB
-            UC1(("Login / Logout"))
-            UC3(("Manage Customers"))
-            UC9(("View Dashboard"))
-        end
-
-        subgraph Fin_Grp ["Finance"]
-            direction TB
-            UC7(("Invoicing & Payments"))
-        end
-    end
-
-    %% Includes & Extends Stereotypes for SE-10
-    UC6 -. "<<include>>" .-> UC5
-    UC10 -. "<<extend>>" .-> UC9
-    UC7 -. "<<include>>" .-> UC6
-
-    %% Actor to Use Case Associations
-    ADMIN --- Admin_Grp
-    ADMIN --- Mgmt_Grp
-    ADMIN --- Ops_Grp
-    ADMIN --- Shared_Grp
-    ADMIN --- Fin_Grp
-
-    MANAGER --- Mgmt_Grp
-    MANAGER --- Ops_Grp
-    MANAGER --- Shared_Grp
-    MANAGER --- Fin_Grp
-
-    EMPLOYEE --- Ops_Grp
-    EMPLOYEE --- Shared_Grp
-
-    ACCOUNTANT --- Shared_Grp
-    ACCOUNTANT --- Fin_Grp
+  A["Admin"]
+  M["Manager"]
+  E["Employee"]
+  AC["Accountant"]
+  subgraph S["BizAI system boundary"]
+    L(["Sign in"])
+    CU(["Manage users"])
+    CC(["Manage customers"])
+    CP(["Manage products and categories"])
+    AS(["Adjust stock"])
+    CO(["Create order"])
+    US(["Change order status"])
+    GI(["Generate invoice from order"])
+    UI(["Update invoice / record payment"])
+    PDF(["Download invoice PDF"])
+    EX(["Manage expenses"])
+    R(["View dashboard and reports"])
+    AI(["Ask AI assistant"])
+    LOG(["Record inventory movement"])
+    SNAP(["Build business snapshot"])
+  end
+  A --- L & CU & CC & CP & AS & CO & US & GI & UI & PDF & EX & R & AI
+  M --- L & CC & CP & AS & CO & US & GI & UI & PDF & EX & R & AI
+  E --- L & CC & CO & R & AI
+  AC --- L & GI & UI & PDF & EX & R & AI
+  AS -. "«include»" .-> LOG
+  US -. "«include»" .-> LOG
+  AI -. "«include»" .-> SNAP
+  %% Guard: US includes LOG only on confirmation or cancellation status changes

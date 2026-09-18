@@ -1,107 +1,116 @@
-%%{init: {'theme': 'base', 'er': {'layoutDirection': 'LR', 'minEntityWidth': 150, 'minEntityHeight': 150}}}%%
+%% Physical ERD: attributes are source-derived; FK cardinalities use crow's-foot notation.
 erDiagram
-    roles ||--o{ users : "has"
-    users ||--o{ orders : "creates"
-    users ||--o{ expenses : "records"
-    users ||--o{ ai_queries : "asks"
-    users ||--o{ inventory_movements : "performs"
-    customers ||--o{ orders : "places"
-    categories ||--o{ products : "groups"
-    orders ||--|{ order_items : "contains"
-    products ||--o{ order_items : "in"
-    orders ||--o| invoices : "generates"
-    products ||--o{ inventory_movements : "tracks"
-
+    roles ||--o{ users : assigns
+    users ||--o{ orders : creates
+    users ||--o{ expenses : records
+    users ||--o{ ai_queries : asks
+    users o|--o{ inventory_movements : performs
+    customers ||--o{ orders : places
+    categories o|--o{ products : classifies
+    orders ||--|{ order_items : contains
+    products ||--o{ order_items : ordered_as
+    orders ||--o| invoices : invoiced_by
+    products ||--o{ inventory_movements : has
     roles {
-        int id PK
-        string name
-        string description
+      int id PK
+      string name UK
+      string description
     }
-
     users {
-        int id PK
-        string email
-        string password_hash
-        string full_name
-        int role_id FK
-        bool is_active
+      int id PK
+      string email UK
+      string password_hash
+      string full_name
+      int role_id FK
+      boolean is_active
+      datetime created_at
+      datetime updated_at
     }
-
     customers {
-        int id PK
-        string name
-        string email
-        string phone
-        string company
-        float outstanding_balance
+      int id PK
+      string name
+      string email UK "nullable"
+      string phone
+      text address
+      string company
+      string gstin
+      float outstanding_balance
+      datetime created_at
+      datetime updated_at
     }
-
     categories {
-        int id PK
-        string name
+      int id PK
+      string name UK
+      string description
     }
-
     products {
-        int id PK
-        string name
-        string sku
-        float price
-        float cost_price
-        int stock_qty
-        int min_stock_level
-        int category_id FK
-        bool is_active
+      int id PK
+      string name
+      string sku UK
+      text description
+      float price
+      float cost_price
+      int stock_qty
+      int min_stock_level
+      int category_id FK
+      boolean is_active
+      datetime created_at
+      datetime updated_at
     }
-
     orders {
-        int id PK
-        string order_number
-        int customer_id FK
-        int created_by FK
-        string status
-        float total_amount
+      int id PK
+      string order_number UK
+      int customer_id FK
+      string status
+      float total_amount
+      text notes
+      int created_by FK
+      datetime created_at
+      datetime updated_at
     }
-
     order_items {
-        int id PK
-        int order_id FK
-        int product_id FK
-        int quantity
-        float unit_price
-        float total_price
+      int id PK
+      int order_id FK
+      int product_id FK
+      int quantity
+      float unit_price
+      float total_price
     }
-
     invoices {
-        int id PK
-        string invoice_number
-        int order_id FK
-        string status
-        float total_amount
-        float paid_amount
-        date due_date
+      int id PK
+      string invoice_number UK
+      int order_id FK
+      string status
+      float total_amount
+      float paid_amount
+      date due_date
+      datetime created_at
+      datetime updated_at
     }
-
     expenses {
-        int id PK
-        string description
-        float amount
-        string category
-        date date
-        int created_by FK
+      int id PK
+      string description
+      float amount
+      string category
+      date date
+      text notes
+      int created_by FK
+      datetime created_at
     }
-
     inventory_movements {
-        int id PK
-        int product_id FK
-        int quantity_change
-        string reason
-        int created_by FK
+      int id PK
+      int product_id FK
+      int quantity_change
+      string reason
+      text notes
+      int created_by FK
+      datetime created_at
     }
-
     ai_queries {
-        int id PK
-        int user_id FK
-        text query_text
-        text response_text
-        string intent
+      int id PK
+      int user_id FK
+      text query_text
+      text response_text
+      string intent
+      datetime created_at
     }

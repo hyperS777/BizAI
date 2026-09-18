@@ -1,37 +1,17 @@
-%%{init: {'flowchart': {'nodeSpacing': 80, 'rankSpacing': 150}}}%%
+%% UML component/deployment view of the BizAI system
+
 flowchart LR
-    subgraph CLIENT["Client Layer — Browser (Presentation)"]
+    U["Staff user"] --> WEB["Web browser\nReact + Vite SPA"]
+
+    subgraph APP["BizAI FastAPI application"]
         direction TB
-        UI["React + Vite SPA"]
-        AXIOS["Axios HTTP Client + JWT"]
+        ROUTES["API routers"]
+        AUTH["JWT authentication\nand role permissions"]
+        LOGIC["Business modules\ncustomers, products, orders, invoices\nexpenses, reports and AI"]
+        DATA["SQLAlchemy ORM models"]
+        ROUTES --> AUTH --> LOGIC --> DATA
     end
 
-    subgraph SERVER["Server Layer — FastAPI (Business Logic)"]
-        direction TB
-        MW["JWT Auth + CORS Middleware"]
-        ROUTER["API Routers"]
-        SVC["Service Layer"]
-        ORM["SQLAlchemy ORM (Unit of Work)"]
-    end
-
-    subgraph DB["Database Layer — PostgreSQL (Data)"]
-        direction TB
-        TABLES["11 Tables: roles, users, customers,\ncategories, products, orders, order_items,\ninvoices, expenses, inventory_movements, ai_queries"]
-    end
-
-    subgraph AI["AI Subsystem — Groq API"]
-        direction TB
-        SNAP["Business Snapshot Builder"]
-        LLM["Groq Llama-3.1 LLM"]
-    end
-
-    UI -->|"User Action"| AXIOS
-    AXIOS -->|"REST / JSON"| MW
-    MW --> ROUTER
-    ROUTER --> SVC
-    SVC --> ORM
-    ORM <-->|"SQL / Results"| DB
-    SVC -->|"Anonymized Context"| SNAP
-    SNAP <-->|"Prompt / Answer"| LLM
-    SNAP -->|"Query Metrics"| DB
-    LLM -.->|"AI Answer"| SVC
+    WEB -->|"REST JSON + Bearer JWT"| ROUTES
+    DATA --> DB[("Relational database\nSQLite by default")]
+    LOGIC --> AI["Data-grounded AI assistant\nprovider selected by configuration"]

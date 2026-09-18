@@ -1,33 +1,22 @@
-%%{init: {'theme': 'base', 'sequence': {'actorMargin': 150, 'messageMargin': 60}}}%%
 sequenceDiagram
     autonumber
-    actor U as User
-    participant FE as React Client (SPA)
-    participant API as FastAPI Gateway
-    participant AUTH as Auth Service
-    participant DB as PostgreSQL Database
-
-    U->>+FE: enterCredentials(email, password)
-    FE->>+API: POST /api/auth/login
-    API->>+AUTH: authenticate_user(email, password)
-    AUTH->>+DB: SELECT * FROM users WHERE email = :email
-    DB-->>-AUTH: return User Record
-    
-    alt User Not Found or Invalid Password
-        AUTH-->>API: throw UnauthorizedError()
-        API-->>FE: 401 Unauthorized
-        FE-->>U: displayError("Invalid credentials")
-    else Valid Credentials
-        AUTH->>AUTH: verify_password(plain, hash)
-        AUTH->>AUTH: create_access_token(email)
-        AUTH-->>-API: return Token(access_token)
-        API-->>-FE: 200 OK (access_token)
-        
-        FE->>+API: GET /api/auth/me (Bearer Token)
-        API->>+AUTH: get_current_user(token)
-        AUTH->>+DB: SELECT user, role WHERE email = token.sub
-        DB-->>-AUTH: return User & Role Profile
-        AUTH-->>-API: return UserProfile
-        API-->>-FE: 200 OK (UserProfile)
-        FE-->>-U: redirect(Dashboard)
+    actor U as Staff user
+    participant FE as React Login page
+    participant API as FastAPI /api/auth
+    participant DB as SQLAlchemy database
+    U->>FE: enter email and password
+    FE->>API: POST /api/auth/login (OAuth2 form: username, password)
+    API->>DB: find User by email
+    DB-->>API: User record or none
+    alt no user, invalid password, or inactive user
+        API-->>FE: 401 Unauthorized or 400 Inactive user
+        FE-->>U: show authentication error
+    else authenticated
+        API->>API: verify password and create signed JWT
+        API-->>FE: 200 {access_token, token_type}
+        FE->>FE: store token in localStorage
+        FE->>API: GET /api/auth/me (Authorization: Bearer JWT)
+        API->>API: validate JWT and active user dependency
+        API-->>FE: 200 UserResponse
+        FE-->>U: navigate to dashboard
     end

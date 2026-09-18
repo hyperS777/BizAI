@@ -1,46 +1,30 @@
-%%{init: {'theme': 'base', 'sequence': {'actorMargin': 150, 'messageMargin': 60}}}%%
 sequenceDiagram
     autonumber
-    actor U as Accountant
-    participant FE as React Client
-    participant API as FastAPI Gateway
-    participant INV as Invoice Service
-    participant DB as PostgreSQL Database
-
-    Note over U,DB: PHASE 1: Generate Invoice
-    U->>+FE: generateInvoice(orderId)
-    FE->>+API: POST /api/invoices
-    API->>+INV: create_invoice_from_order(orderId)
-    INV->>+DB: SELECT * FROM orders WHERE id = :orderId
-    DB-->>-INV: Order Record
-    alt Order Not Confirmed or Invoice Exists
-        INV-->>API: throw ValidationError()
-        API-->>FE: 400 Bad Request
-        FE-->>U: showError("Cannot generate invoice")
-    else Valid for Invoicing
-        INV->>+DB: INSERT INTO invoices (status='Draft')
-        DB-->>-INV: Invoice Created ID
-        INV-->>-API: return Invoice(Draft)
-        API-->>-FE: 201 Created
-        FE-->>-U: showInvoicePreview()
+    actor U as Authorised staff user
+    participant FE as React Invoices page
+    participant API as FastAPI /api/invoices
+    participant IS as invoice_service.py
+    participant DB as SQLAlchemy database
+    U->>FE: generate invoice for order
+    FE->>API: POST /api/invoices/from-order/{order_id}
+    API->>IS: generate_invoice_from_order(db, order_id)
+    IS->>DB: SELECT order and invoice by order_id
+    alt order does not exist
+        IS-->>API: None
+        API-->>FE: 404 Order not found
+    else invoice already exists
+        IS-->>API: existing invoice
+        API-->>FE: 200 invoice response
+    else no invoice exists
+        IS->>DB: INSERT invoice (status=sent, due_date=+15 days)
+        DB-->>IS: saved invoice
+        IS-->>API: invoice
+        API-->>FE: 200 invoice response
     end
-
-    Note over U,DB: PHASE 2: Record Payment
-    U->>+FE: recordPayment(invoiceId, amount)
-    FE->>+API: PATCH /api/invoices/{id}/payment
-    API->>+INV: process_payment(invoiceId, amount)
-    INV->>+DB: SELECT total_amount, paid_amount FROM invoices
-    DB-->>-INV: Invoice Financials
-    
-    INV->>INV: calculate_new_balance(amount)
-    
-    alt Fully Paid
-        INV->>+DB: UPDATE invoices SET status = 'Paid'
-        DB-->>-INV: Rows Affected
-    else Partial Payment
-        INV->>+DB: UPDATE invoices SET paid_amount = new_amount, status = 'Sent'
-        DB-->>-INV: Rows Affected
+    opt accountant/admin/manager updates amount or status
+        U->>FE: update invoice
+        FE->>API: PATCH /api/invoices/{invoice_id}/status (InvoiceUpdate JSON)
+        API->>IS: update_invoice(db, invoice_id, payload)
+        IS->>DB: UPDATE invoice and commit
+        API-->>FE: 200 updated invoice
     end
-    INV-->>-API: return Invoice(Updated)
-    API-->>-FE: 200 OK
-    FE-->>-U: showUpdatedStatus()

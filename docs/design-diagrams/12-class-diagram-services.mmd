@@ -1,63 +1,18 @@
-%%{init: {'theme': 'base', 'class': {'rankSpacing': 150, 'nodeSpacing': 80}}}%%
-classDiagram
-    direction LR
-
-    class AuthService {
-        +verify_password(plain, hash) bool
-        +create_access_token(email) str
-        +get_current_user(token, db) User
-    }
-
-    class UserService {
-        +get_users(db) List~User~
-        +create_user(db, data) User
-        +update_user(db, id, data) User
-    }
-
-    class CustomerService {
-        +get_customers(db, search) List~Customer~
-        +create_customer(db, data) Customer
-        +update_customer(db, id, data) Customer
-    }
-
-    class ProductService {
-        +get_products(db) List~Product~
-        +create_product(db, data) Product
-        +update_stock(db, id, qty, reason) Product
-    }
-
-    class OrderService {
-        +get_orders(db) List~Order~
-        +create_order(db, data, user_id) Order
-        +update_order_status(db, id, status) Order
-    }
-
-    class InvoiceService {
-        +create_invoice(db, order_id) Invoice
-        +record_payment(db, id, amount) Invoice
-        +generate_pdf(id) bytes
-    }
-
-    class ReportService {
-        +build_business_snapshot(db) dict
-        +get_sales_summary(db) dict
-    }
-
-    class AIService {
-        +answer_query(db, user, query) AIQuery
-        -_fallback_answer(query, snapshot) str
-        -_ask_model(query, snapshot) str
-    }
-
-    AuthService --> User
-    UserService --> User
-    CustomerService --> Customer
-    ProductService --> Product
-    ProductService --> InventoryMovement
-    OrderService --> Order
-    OrderService --> ProductService : update_stock()
-    InvoiceService --> Invoice
-    ReportService --> Order
-    ReportService --> Product
-    AIService --> ReportService : snapshot()
-    AIService --> AIQuery
+%% This is a UML package/component dependency diagram, not a class diagram:
+%% the implementation exposes module-level functions rather than service classes.
+flowchart LR
+  R["routers\nauth, users, customers, products, orders\ninvoices, expenses, reports, ai, demo, notifications"]
+  D["dependencies\nget_db, get_current_active_user, RoleChecker"]
+  S["service modules\nuser_service, customer_service, product_service\norder_service, invoice_service, expense_service\nreport_service, ai_service"]
+  M["models\nRole, User, Customer, Category, Product\nOrder, OrderItem, Invoice, Expense\nInventoryMovement, AIQuery"]
+  X["schemas\nPydantic request/response models"]
+  P["PDF builder"]
+  G["Optional configured AI provider"]
+  R --> D
+  R --> X
+  R --> S
+  S --> M
+  R --> P
+  S --> G
+  O["order_service.update_order_status"] --> PS["product_service.update_stock"]
+  A["ai_service.answer_query"] --> RS["report_service.build_business_snapshot"]

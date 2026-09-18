@@ -21,7 +21,7 @@ Sir specifically mentioned Microsoft Visio. Below are all your options — compl
 
 ### mermaid.live
 - **URL:** https://mermaid.live
-- **Why use it:** Paste the Mermaid code from ALL-DIAGRAMS.md and instantly get a rendered diagram. Export as PNG or SVG for the presentation.
+- **Why use it:** Paste any numbered `.mmd` source from this directory and instantly get a rendered diagram. Export as PNG or SVG for the presentation.
 - **Best for:** Quick rendering and export of the diagrams already written in this project.
 
 ### Eraser.io
@@ -90,7 +90,7 @@ Since you asked specifically, here is the honest information. Do this at your ow
 Given the time constraint and that you need to present to Sir, here is what you should actually do:
 
 **Step 1 — Render diagrams today:**
-Go to https://mermaid.live, paste each diagram from ALL-DIAGRAMS.md one by one, download PNG screenshots of each. Takes about 20 minutes.
+Go to https://mermaid.live, paste each numbered `.mmd` file one by one, and download PNG/SVG screenshots for the presentation.
 
 **Step 2 — Polish in draw.io:**
 Import the PNGs or Mermaid code into draw.io at https://app.diagrams.net, apply consistent colors and fonts, export final versions as PNG and PDF.
