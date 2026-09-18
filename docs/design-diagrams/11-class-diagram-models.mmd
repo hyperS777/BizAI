@@ -1,5 +1,6 @@
+%%{init: {'theme': 'base', 'class': {'rankSpacing': 150, 'nodeSpacing': 80}}}%%
 classDiagram
-    direction TB
+    direction LR
 
     class Role {
         +int id
@@ -10,10 +11,11 @@ classDiagram
     class User {
         +int id
         +str email
-        +str password_hash
+        -str password_hash
         +str full_name
         +int role_id
         +bool is_active
+        +verify_password(plain_pwd: str) bool
     }
 
     class Customer {
@@ -23,6 +25,7 @@ classDiagram
         +str phone
         +str company
         +float outstanding_balance
+        +add_balance(amount: float) float
     }
 
     class Category {
@@ -40,6 +43,7 @@ classDiagram
         +int min_stock_level
         +bool is_active
         +is_low_stock() bool
+        +adjust_stock(qty: int) bool
     }
 
     class Order {
@@ -49,6 +53,7 @@ classDiagram
         +int created_by
         +str status
         +float total_amount
+        +calculate_total() float
     }
 
     class OrderItem {

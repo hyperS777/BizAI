@@ -1,36 +1,52 @@
+%%{init: {'theme': 'base', 'sequence': {'actorMargin': 150, 'messageMargin': 60}}}%%
 sequenceDiagram
-    actor U as User
-    participant FE as React App
-    participant API as FastAPI
-    participant DB as Database
+    autonumber
+    actor U as Employee
+    participant FE as React Client
+    participant API as FastAPI Gateway
+    participant ORD as Order Service
+    participant INV as Inventory Service
+    participant DB as PostgreSQL Database
 
-    Note over U,DB: PHASE 1 - Create Order
-    U->>FE: select customer + products
-    FE->>API: POST /api/orders
-    API->>DB: validate customer exists
-    API->>DB: fetch product prices
-    API->>DB: INSERT order (status=pending)
-    API->>DB: INSERT order_items
-    API-->>FE: 201 Order created
-    FE-->>U: show order summary
+    Note over U,DB: PHASE 1: Order Creation
+    U->>+FE: createOrder(customerId, items)
+    FE->>+API: POST /api/orders
+    API->>+ORD: process_new_order(customerId, items)
+    ORD->>+DB: SELECT * FROM customers WHERE id = :customerId
+    DB-->>-ORD: Customer Record
+    ORD->>+DB: INSERT INTO orders, order_items
+    DB-->>-ORD: Order Created ID
+    ORD-->>-API: return Order(Pending)
+    API-->>-FE: 201 Created (Order)
+    FE-->>-U: showOrderSummary()
 
-    Note over U,DB: PHASE 2 - Confirm + Deduct Stock
-    U->>FE: click Confirm Order
-    FE->>API: PATCH /api/orders/id/status
-    API->>DB: BEGIN TRANSACTION
-
-    loop each order item
-        API->>DB: check stock >= quantity
-        alt insufficient stock
-            API->>DB: ROLLBACK
-            API-->>FE: 400 Insufficient stock
-        else OK
-            API->>DB: UPDATE product stock
-            API->>DB: INSERT inventory_movement
+    Note over U,DB: PHASE 2: Order Confirmation & Stock Deduction
+    U->>+FE: confirmOrder(orderId)
+    FE->>+API: PATCH /api/orders/{id}/status (Confirmed)
+    API->>+ORD: confirm_order(orderId)
+    
+    ORD->>+DB: BEGIN TRANSACTION
+    loop For each OrderItem
+        ORD->>+INV: check_stock_availability(productId, qty)
+        INV->>+DB: SELECT stock_qty FROM products
+        DB-->>-INV: Current Stock
+        alt Insufficient Stock
+            INV-->>ORD: throw InsufficientStockError()
+            ORD->>DB: ROLLBACK TRANSACTION
+            ORD-->>API: throw BadRequest("Stock not available")
+            API-->>FE: 400 Bad Request
+            FE-->>U: showError("Insufficient Stock")
+        else Stock OK
+            INV->>+DB: UPDATE products SET stock_qty = stock_qty - qty
+            DB-->>-INV: Rows Affected
+            INV->>+DB: INSERT INTO inventory_movements
+            DB-->>-INV: Rows Affected
+            INV-->>-ORD: return True
         end
     end
-
-    API->>DB: UPDATE order status=confirmed
-    API->>DB: COMMIT
-    API-->>FE: 200 Order confirmed
-    FE-->>U: show updated status
+    ORD->>+DB: UPDATE orders SET status = 'Confirmed'
+    DB-->>-ORD: Rows Affected
+    ORD->>DB: COMMIT TRANSACTION
+    ORD-->>-API: return Order(Confirmed)
+    API-->>-FE: 200 OK
+    FE-->>-U: updateDashboard()

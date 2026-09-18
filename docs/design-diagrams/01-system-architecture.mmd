@@ -1,30 +1,37 @@
-flowchart TD
-    subgraph CLIENT["Client Layer — Browser"]
+%%{init: {'flowchart': {'nodeSpacing': 80, 'rankSpacing': 150}}}%%
+flowchart LR
+    subgraph CLIENT["Client Layer — Browser (Presentation)"]
+        direction TB
         UI["React + Vite SPA"]
         AXIOS["Axios HTTP Client + JWT"]
     end
 
-    subgraph SERVER["Server Layer — FastAPI"]
+    subgraph SERVER["Server Layer — FastAPI (Business Logic)"]
+        direction TB
         MW["JWT Auth + CORS Middleware"]
         ROUTER["API Routers"]
         SVC["Service Layer"]
-        ORM["SQLAlchemy ORM"]
+        ORM["SQLAlchemy ORM (Unit of Work)"]
     end
 
-    subgraph AI["AI Layer"]
-        SNAP["Business Snapshot Builder"]
-        LLM["Groq LLM"]
-    end
-
-    subgraph DB["Database — SQLite / PostgreSQL"]
+    subgraph DB["Database Layer — PostgreSQL (Data)"]
+        direction TB
         TABLES["11 Tables: roles, users, customers,\ncategories, products, orders, order_items,\ninvoices, expenses, inventory_movements, ai_queries"]
     end
 
-    UI --> AXIOS
-    AXIOS -->|"REST JSON"| MW
-    MW --> ROUTER --> SVC --> ORM
-    ORM -->|"SQL"| DB
-    DB -->|"results"| ORM
-    SVC --> SNAP --> LLM
-    LLM -.->|"answer"| SVC
-    SNAP -->|"queries"| DB
+    subgraph AI["AI Subsystem — Groq API"]
+        direction TB
+        SNAP["Business Snapshot Builder"]
+        LLM["Groq Llama-3.1 LLM"]
+    end
+
+    UI -->|"User Action"| AXIOS
+    AXIOS -->|"REST / JSON"| MW
+    MW --> ROUTER
+    ROUTER --> SVC
+    SVC --> ORM
+    ORM <-->|"SQL / Results"| DB
+    SVC -->|"Anonymized Context"| SNAP
+    SNAP <-->|"Prompt / Answer"| LLM
+    SNAP -->|"Query Metrics"| DB
+    LLM -.->|"AI Answer"| SVC

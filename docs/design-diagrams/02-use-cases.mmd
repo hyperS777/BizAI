@@ -1,47 +1,66 @@
+%%{init: {'flowchart': {'nodeSpacing': 80, 'rankSpacing': 150}}}%%
 flowchart LR
-    %% Actors ordered by access level
+    %% Define Actors
     ADMIN(["Admin"])
     MANAGER(["Manager"])
     EMPLOYEE(["Employee"])
     ACCOUNTANT(["Accountant"])
 
-    %% Use Cases Grouped by Functional Area to improve readability
-    subgraph BIZAI["BizAI Platform"]
+    %% System Boundary
+    subgraph BIZAI ["BizAI Platform System Boundary"]
+        direction TB
         
-        subgraph Admin_Grp ["Administration (Admin Only)"]
+        subgraph Admin_Grp ["Administration"]
             direction TB
             UC11(("Settings"))
-            UC2(("Manage\nUsers"))
+            UC2(("Manage Users"))
         end
-        
-        subgraph Mgmt_Grp ["Management (Admin, Manager)"]
+
+        subgraph Mgmt_Grp ["Management"]
             direction TB
-            UC10(("AI Business\nAssistant"))
+            UC10(("AI Assistant"))
             UC8(("Expenses"))
         end
-        
-        subgraph Ops_Grp ["Operations (Admin, Manager, Employee)"]
+
+        subgraph Ops_Grp ["Operations"]
             direction TB
-            UC4(("Manage\nProducts"))
-            UC5(("Inventory\nManagement"))
-            UC6(("Create and\nManage Orders"))
+            UC4(("Manage Products"))
+            UC5(("Manage Inventory"))
+            UC6(("Manage Orders"))
         end
         
-        subgraph Shared_Grp ["General (All Roles)"]
+        subgraph Shared_Grp ["General"]
             direction TB
-            UC1(("Login\nLogout"))
-            UC3(("Manage\nCustomers"))
-            UC9(("Reports and\nDashboard"))
+            UC1(("Login / Logout"))
+            UC3(("Manage Customers"))
+            UC9(("View Dashboard"))
         end
-        
-        subgraph Fin_Grp ["Finance (Admin, Manager, Accountant)"]
+
+        subgraph Fin_Grp ["Finance"]
             direction TB
-            UC7(("Invoicing\nand Payments"))
+            UC7(("Invoicing & Payments"))
         end
     end
 
-    %% Connections
-    ADMIN --> UC11 & UC2 & UC10 & UC8 & UC4 & UC5 & UC6 & UC1 & UC3 & UC9 & UC7
-    MANAGER --> UC10 & UC8 & UC4 & UC5 & UC6 & UC1 & UC3 & UC9 & UC7
-    EMPLOYEE --> UC4 & UC5 & UC6 & UC1 & UC3 & UC9
-    ACCOUNTANT --> UC1 & UC3 & UC9 & UC7
+    %% Includes & Extends Stereotypes for SE-10
+    UC6 -. "<<include>>" .-> UC5
+    UC10 -. "<<extend>>" .-> UC9
+    UC7 -. "<<include>>" .-> UC6
+
+    %% Actor to Use Case Associations
+    ADMIN --- Admin_Grp
+    ADMIN --- Mgmt_Grp
+    ADMIN --- Ops_Grp
+    ADMIN --- Shared_Grp
+    ADMIN --- Fin_Grp
+
+    MANAGER --- Mgmt_Grp
+    MANAGER --- Ops_Grp
+    MANAGER --- Shared_Grp
+    MANAGER --- Fin_Grp
+
+    EMPLOYEE --- Ops_Grp
+    EMPLOYEE --- Shared_Grp
+
+    ACCOUNTANT --- Shared_Grp
+    ACCOUNTANT --- Fin_Grp

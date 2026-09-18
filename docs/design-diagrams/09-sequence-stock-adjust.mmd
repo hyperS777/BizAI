@@ -1,20 +1,33 @@
+%%{init: {'theme': 'base', 'sequence': {'actorMargin': 150, 'messageMargin': 60}}}%%
 sequenceDiagram
-    actor U as User
-    participant FE as React App
-    participant API as FastAPI
-    participant DB as Database
+    autonumber
+    actor U as Employee
+    participant FE as React Client
+    participant API as FastAPI Gateway
+    participant INV as Inventory Service
+    participant DB as PostgreSQL Database
 
-    U->>FE: select product, enter qty change + reason
-    FE->>API: PUT /api/products/id/stock
-
-    API->>DB: get product stock_qty
-    alt product not found
+    U->>+FE: adjustStock(productId, qtyChange, reason)
+    FE->>+API: PUT /api/products/{id}/stock
+    API->>+INV: adjust_product_stock(productId, qtyChange, reason)
+    
+    INV->>+DB: SELECT stock_qty FROM products WHERE id = :productId
+    DB-->>-INV: return Product(stock_qty)
+    
+    alt Product Not Found
+        INV-->>API: throw NotFoundError()
         API-->>FE: 404 Not Found
-    else would go negative
-        API-->>FE: 400 Invalid adjustment
-    else valid
-        API->>DB: UPDATE product stock_qty
-        API->>DB: INSERT inventory_movement
-        API-->>FE: 200 Stock updated
-        FE-->>U: show new stock level
+        FE-->>U: showError("Product not found")
+    else Invalid Adjustment (Would go negative)
+        INV-->>API: throw ValidationError()
+        API-->>FE: 400 Bad Request
+        FE-->>U: showError("Stock cannot be negative")
+    else Valid Adjustment
+        INV->>+DB: UPDATE products SET stock_qty = new_qty
+        DB-->>-INV: Rows Affected
+        INV->>+DB: INSERT INTO inventory_movements (reason)
+        DB-->>-INV: Log Created
+        INV-->>-API: return Product(Updated)
+        API-->>-FE: 200 OK
+        FE-->>-U: showNewStockLevel()
     end

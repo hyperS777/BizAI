@@ -70,7 +70,7 @@ Since you asked specifically, here is the honest information. Do this at your ow
 ### Option B — Use Microsoft Activation Scripts (MAS) with trial version
 - Download the official Visio trial from Microsoft
 - Use MAS (Microsoft Activation Scripts) from GitHub: search "massgravel/Microsoft-Activation-Scripts" on GitHub
-- This is an open-source tool that is widely used for activating Microsoft products
+- This is an open-source tool that is widely used for activating Microsoft pr oducts
 - Run the script as Administrator, choose Visio, activate
 
 ### Option C — KMS activation

@@ -1,0 +1,5 @@
+see the whole code and make sure the current diagrams are good enough by
+following the exact way of Software Engineering 10,
+Ian Sommerville and uml and also make changes in html also 
+make the diagrams spread out 
+dont make it too skinny 

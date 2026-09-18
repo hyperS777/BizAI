@@ -1,28 +1,46 @@
+%%{init: {'theme': 'base', 'sequence': {'actorMargin': 150, 'messageMargin': 60}}}%%
 sequenceDiagram
-    actor U as User
-    participant FE as React App
-    participant API as FastAPI
-    participant DB as Database
+    autonumber
+    actor U as Accountant
+    participant FE as React Client
+    participant API as FastAPI Gateway
+    participant INV as Invoice Service
+    participant DB as PostgreSQL Database
 
-    Note over U,DB: PHASE 1 - Generate Invoice
-    U->>FE: click Generate Invoice on confirmed order
-    FE->>API: POST /api/invoices (order_id)
-    API->>DB: check order status = confirmed
-    API->>DB: check no existing invoice for order
-    API->>DB: INSERT invoice (status=draft)
-    API-->>FE: 201 Invoice created
-    FE-->>U: show invoice preview
-
-    Note over U,DB: PHASE 2 - Record Payment
-    U->>FE: enter payment amount
-    FE->>API: PATCH /api/invoices/id/payment
-    API->>DB: get invoice total and paid_amount
-
-    alt fully paid
-        API->>DB: UPDATE status=paid
-    else partial payment
-        API->>DB: UPDATE paid_amount, status=sent
+    Note over U,DB: PHASE 1: Generate Invoice
+    U->>+FE: generateInvoice(orderId)
+    FE->>+API: POST /api/invoices
+    API->>+INV: create_invoice_from_order(orderId)
+    INV->>+DB: SELECT * FROM orders WHERE id = :orderId
+    DB-->>-INV: Order Record
+    alt Order Not Confirmed or Invoice Exists
+        INV-->>API: throw ValidationError()
+        API-->>FE: 400 Bad Request
+        FE-->>U: showError("Cannot generate invoice")
+    else Valid for Invoicing
+        INV->>+DB: INSERT INTO invoices (status='Draft')
+        DB-->>-INV: Invoice Created ID
+        INV-->>-API: return Invoice(Draft)
+        API-->>-FE: 201 Created
+        FE-->>-U: showInvoicePreview()
     end
 
-    API-->>FE: 200 Payment recorded
-    FE-->>U: show updated status
+    Note over U,DB: PHASE 2: Record Payment
+    U->>+FE: recordPayment(invoiceId, amount)
+    FE->>+API: PATCH /api/invoices/{id}/payment
+    API->>+INV: process_payment(invoiceId, amount)
+    INV->>+DB: SELECT total_amount, paid_amount FROM invoices
+    DB-->>-INV: Invoice Financials
+    
+    INV->>INV: calculate_new_balance(amount)
+    
+    alt Fully Paid
+        INV->>+DB: UPDATE invoices SET status = 'Paid'
+        DB-->>-INV: Rows Affected
+    else Partial Payment
+        INV->>+DB: UPDATE invoices SET paid_amount = new_amount, status = 'Sent'
+        DB-->>-INV: Rows Affected
+    end
+    INV-->>-API: return Invoice(Updated)
+    API-->>-FE: 200 OK
+    FE-->>-U: showUpdatedStatus()

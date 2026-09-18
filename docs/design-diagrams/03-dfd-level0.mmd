@@ -1,24 +1,29 @@
+%%{init: {'flowchart': {'nodeSpacing': 100, 'rankSpacing': 200}}}%%
 flowchart LR
-    A1["Admin"]
-    A2["Manager"]
-    A3["Employee"]
-    A4["Accountant"]
-    GROQ["Groq LLM"]
+    %% External Entities (Rectangles)
+    ADMIN["Administrator"]
+    MGR["Manager"]
+    EMP["Employee"]
+    ACC["Accountant"]
 
-    P(("BizAI\nPlatform"))
+    %% System Process (Circle)
+    SYS(("BizAI\nInformation\nSystem"))
 
-    DB[("Database")]
+    %% External Systems (Rectangles)
+    GROQ["Groq LLM Service"]
 
-    A1 -->|"all operations"| P
-    A2 -->|"operations + AI"| P
-    A3 -->|"orders + products"| P
-    A4 -->|"invoices + reports"| P
+    %% Data Flows
+    ADMIN -- "Configuration Data,\nUser Credentials" --> SYS
+    SYS -- "System Status,\nAudit Logs" --> ADMIN
 
-    P -->|"dashboards, PDFs,\nAI answers"| A1
-    P -->|"dashboards,\nAI answers"| A2
-    P -->|"order status,\nalerts"| A3
-    P -->|"invoices,\nreports"| A4
+    MGR -- "Business Queries,\nStrategic Decisions" --> SYS
+    SYS -- "AI Insights,\nAggregated Reports" --> MGR
 
-    P <-->|"read/write"| DB
-    P -->|"JSON context"| GROQ
-    GROQ -->|"answer"| P
+    EMP -- "Order Details,\nInventory Adjustments" --> SYS
+    SYS -- "Order Confirmations,\nStock Alerts" --> EMP
+
+    ACC -- "Payment Entries,\nExpense Records" --> SYS
+    SYS -- "Financial Summaries,\nInvoices" --> ACC
+
+    SYS -- "Anonymized Business Context,\nNatural Language Query" --> GROQ
+    GROQ -- "AI Generated Response" --> SYS

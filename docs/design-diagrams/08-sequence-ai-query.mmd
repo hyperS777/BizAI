@@ -1,22 +1,30 @@
+%%{init: {'theme': 'base', 'sequence': {'actorMargin': 150, 'messageMargin': 60}}}%%
 sequenceDiagram
-    actor U as User
-    participant FE as React App
-    participant API as FastAPI
-    participant DB as Database
-    participant GROQ as Groq LLM
+    autonumber
+    actor U as Manager
+    participant FE as React Client
+    participant API as FastAPI Gateway
+    participant AI as AI Service
+    participant DB as PostgreSQL Database
+    participant GROQ as Groq LLM API
 
-    U->>FE: type business question
-    FE->>API: POST /api/ai/chat
-    API->>DB: query sales, profit, stock data
-    DB-->>API: business snapshot
-
-    alt Groq API key configured
-        API->>GROQ: send snapshot + question
-        GROQ-->>API: natural language answer
-    else fallback mode
-        API->>API: keyword match on snapshot
+    U->>+FE: submitQuery("How are sales this month?")
+    FE->>+API: POST /api/ai/chat
+    API->>+AI: process_natural_language_query(queryText)
+    
+    AI->>+DB: SELECT aggregated_sales, profit, stock FROM business_metrics
+    DB-->>-AI: return BusinessSnapshot(JSON)
+    
+    alt Groq API Available
+        AI->>+GROQ: POST /v1/chat/completions (Context + Query)
+        GROQ-->>-AI: return ChatCompletion(Answer)
+    else Fallback Mode (Offline/Error)
+        AI->>AI: execute_keyword_match_fallback(Snapshot, queryText)
     end
-
-    API->>DB: INSERT ai_queries log
-    API-->>FE: 200 response
-    FE-->>U: display answer
+    
+    AI->>+DB: INSERT INTO ai_queries (query_text, response)
+    DB-->>-AI: Log Saved
+    
+    AI-->>-API: return QueryResponse(Answer)
+    API-->>-FE: 200 OK
+    FE-->>-U: displayAnswer()
