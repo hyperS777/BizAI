@@ -1,4 +1,7 @@
-%%{init: {'flowchart': {'nodeSpacing': 80, 'rankSpacing': 150}}}%%
+---
+title: Data Flow Diagram (Level 1) - BizAI
+---
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#ffffff', 'primaryBorderColor': '#1155cc', 'lineColor': '#1155cc', 'textColor': '#000000', 'fontFamily': 'sans-serif'}}}%%
 flowchart LR
     %% External Entities
     CLIENT["Authenticated Users"]
@@ -12,12 +15,12 @@ flowchart LR
     D5[("D5: ai_queries")]
 
     %% Processes (Circles)
-    P1(("1.0\nAuthenticate\nUser"))
-    P2(("2.0\nManage Customers\nand Catalog"))
-    P3(("3.0\nProcess\nOrders"))
-    P4(("4.0\nManage Invoices\nand Expenses"))
-    P5(("5.0\nGenerate\nReports"))
-    P6(("6.0\nProcess AI\nQueries"))
+    P1("1.0\nAuthenticate\nUser")
+    P2("2.0\nManage Customers\nand Catalog")
+    P3("3.0\nProcess\nOrders")
+    P4("4.0\nManage Invoices\nand Expenses")
+    P5("5.0\nGenerate\nReports")
+    P6("6.0\nProcess AI\nQueries")
 
     %% Flows
     CLIENT -- "Credentials" --> P1
@@ -56,3 +59,12 @@ flowchart LR
     AI_PROVIDER -- "Generated Answer" --> P6
     P6 -- "Query Log" --> D5
     P6 -- "AI Response" --> CLIENT
+
+    %% Styling
+    classDef entityBox fill:#ffffff,stroke:#1155cc,stroke-width:2px,color:#000,;
+    classDef processNode fill:#e8f4f8,stroke:#1155cc,stroke-width:2px,color:#000,rx:15,ry:15;
+    classDef dataStore fill:#ffffff,stroke:#1155cc,stroke-width:2px,color:#000;
+    
+    class CLIENT,AI_PROVIDER entityBox;
+    class P1,P2,P3,P4,P5,P6 processNode;
+    class D1,D2,D3,D4,D5 dataStore;

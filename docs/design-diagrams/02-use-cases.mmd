@@ -1,10 +1,16 @@
+---
+title: Use Case Diagram - BizAI
+---
 %% UML use-case model: associations connect actors to individual use cases, never to packages.
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#ffffff', 'primaryBorderColor': '#1155cc', 'lineColor': '#1155cc', 'textColor': '#000000', 'fontFamily': 'sans-serif'}}}%%
 flowchart LR
   A["Admin"]
   M["Manager"]
   E["Employee"]
   AC["Accountant"]
+  
   subgraph S["BizAI system boundary"]
+    direction TB
     L(["Sign in"])
     CU(["Manage users"])
     CC(["Manage customers"])
@@ -21,6 +27,7 @@ flowchart LR
     LOG(["Record inventory movement"])
     SNAP(["Build business snapshot"])
   end
+
   A --- L & CU & CC & CP & AS & CO & US & GI & UI & PDF & EX & R & AI
   M --- L & CC & CP & AS & CO & US & GI & UI & PDF & EX & R & AI
   E --- L & CC & CO & R & AI
@@ -29,3 +36,12 @@ flowchart LR
   US -. "«include»" .-> LOG
   AI -. "«include»" .-> SNAP
   %% Guard: US includes LOG only on confirmation or cancellation status changes
+
+  %% Styling
+  classDef actor fill:#ffffff,stroke:#1155cc,stroke-width:2px,color:#000;
+  classDef useCase fill:#e8f4f8,stroke:#1155cc,stroke-width:2px,color:#000;
+  classDef boundary fill:#f9f9f9,stroke:#666,stroke-width:2px,stroke-dasharray: 5 5;
+  
+  class A,M,E,AC actor;
+  class L,CU,CC,CP,AS,CO,US,GI,UI,PDF,EX,R,AI,LOG,SNAP useCase;
+  class S boundary;

@@ -1,17 +1,41 @@
+---
+title: System Architecture Diagram
+---
+
 %% UML component/deployment view of the BizAI system
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#ffffff', 'primaryBorderColor': '#2b78e4', 'lineColor': '#2b78e4', 'textColor': '#333333', 'fontFamily': 'sans-serif'}}}%%
 
-flowchart LR
-    U["Staff user"] --> WEB["Web browser\nReact + Vite SPA"]
-
-    subgraph APP["BizAI FastAPI application"]
+flowchart TD
+    subgraph Presentation_Layer ["Presentation Layer"]
         direction TB
-        ROUTES["API routers"]
-        AUTH["JWT authentication\nand role permissions"]
-        LOGIC["Business modules\ncustomers, products, orders, invoices\nexpenses, reports and AI"]
-        DATA["SQLAlchemy ORM models"]
+        WEB["React JS + Vite UI\n(Web browser SPA)"]
+    end
+
+    subgraph Application_Layer ["Application Layer"]
+        direction LR
+        ROUTES["API Routers\n(FastAPI)"]
+        AUTH["Authentication &\nAuthorization (JWT)"]
+        LOGIC["Business Logic\n(Customers, Orders,\nInvoices, Reports)"]
+        DATA["SQLAlchemy ORM\nModels"]
         ROUTES --> AUTH --> LOGIC --> DATA
     end
 
+    subgraph Persistence_Layer ["Persistence Layer"]
+        direction TB
+        DB[("Relational Database\n(SQLite / PostgreSQL)")]
+    end
+
+    subgraph External_Layer ["External Layer"]
+        direction TB
+        AI["AI Provider Service\n(Data-grounded AI assistant)"]
+    end
+
+    U["Staff User"] --> WEB
     WEB -->|"REST JSON + Bearer JWT"| ROUTES
-    DATA --> DB[("Relational database\nSQLite by default")]
-    LOGIC --> AI["Data-grounded AI assistant\nprovider selected by configuration"]
+    DATA --> DB
+    LOGIC --> AI
+    
+    classDef layerBox fill:#f0f8ff,stroke:#2b78e4,stroke-width:2px,color:#333;
+    classDef standardBox fill:#ffffff,stroke:#2b78e4,stroke-width:1px;
+    class Presentation_Layer,Application_Layer,Persistence_Layer,External_Layer layerBox;
+    class WEB,ROUTES,AUTH,LOGIC,DATA,DB,AI standardBox;

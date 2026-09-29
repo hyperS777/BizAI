@@ -1,4 +1,7 @@
-%%{init: {'flowchart': {'nodeSpacing': 100, 'rankSpacing': 200}}}%%
+---
+title: Context Data Flow Diagram (Level 0) - BizAI
+---
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#ffffff', 'primaryBorderColor': '#1155cc', 'lineColor': '#1155cc', 'textColor': '#000000', 'fontFamily': 'sans-serif'}}}%%
 flowchart LR
     %% External Entities (Rectangles)
     ADMIN["Administrator"]
@@ -6,8 +9,8 @@ flowchart LR
     EMP["Employee"]
     ACC["Accountant"]
 
-    %% System Process (Circle)
-    SYS(("BizAI\nInformation\nSystem"))
+    %% System Process (Rounded Rectangle to match reference)
+    SYS("0.0\nBizAI\nInformation\nSystem")
 
     %% External Systems (Rectangles)
     AI_PROVIDER["AI Provider Service"]
@@ -27,3 +30,10 @@ flowchart LR
 
     SYS -- "Business Context,\nNatural Language Query" --> AI_PROVIDER
     AI_PROVIDER -- "AI Generated Response" --> SYS
+
+    %% Styling
+    classDef entityBox fill:#ffffff,stroke:#1155cc,stroke-width:2px,color:#000;
+    classDef processNode fill:#e8f4f8,stroke:#1155cc,stroke-width:2px,color:#000,rx:15,ry:15;
+    
+    class ADMIN,MGR,EMP,ACC,AI_PROVIDER entityBox;
+    class SYS processNode;
