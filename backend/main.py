@@ -31,10 +31,38 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "https://biz-ai-sooty.vercel.app",
     ],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+API_ROUTE_PREFIXES = (
+    "/auth",
+    "/users",
+    "/customers",
+    "/products",
+    "/orders",
+    "/invoices",
+    "/reports",
+    "/ai",
+    "/expenses",
+    "/demo",
+    "/notifications",
+    "/health",
+)
+
+
+@app.middleware("http")
+async def fallback_api_prefix(request: Request, call_next):
+    """Automatically map requests missing /api prefix (e.g. /auth/login -> /api/auth/login)."""
+    path = request.scope.get("path", "")
+    if not path.startswith("/api/"):
+        for prefix in API_ROUTE_PREFIXES:
+            if path == prefix or path.startswith(f"{prefix}/"):
+                request.scope["path"] = f"/api{path}"
+                break
+    return await call_next(request)
 
 
 @app.middleware("http")
