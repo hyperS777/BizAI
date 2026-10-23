@@ -20,13 +20,31 @@ def _fallback_answer(query: str, snapshot: dict) -> str:
     top = metrics["top_products"]
     low = snapshot["low_stock"]
     q = query.lower()
+    words = set(q.replace("?", "").replace("!", "").replace(",", "").split())
 
+    # 1. Greetings & conversational introductions
+    if (
+        any(g in q for g in ["good morning", "good afternoon", "good evening", "how are you", "who are you", "what can you do"])
+        or any(w in words for w in ["hello", "hi", "hey", "hola", "help"])
+    ):
+        return (
+            "Hello! I am BizAI, your business assistant for Reihh. "
+            "I can help you monitor sales trends, low stock alerts, orders, and profit metrics. "
+            "How can I help you today?"
+        )
+
+    # 2. Courtesy / Closings
+    if any(w in words for w in ["thanks", "thank", "bye", "goodbye"]) or "thank you" in q:
+        return "You're very welcome! Feel free to ask anytime if you need insights on your sales, inventory, or orders."
+
+    # 3. Low stock and restocking questions
     if any(word in q for word in ["low", "stock", "restock"]):
         if not low:
             return "No products are currently at or below their minimum stock level."
         lines = ", ".join(f"{item['name']} ({item['stock_qty']} left, min {item['min_stock_level']})" for item in low)
         return f"{inventory['low_stock_products']} products need attention: {lines}."
 
+    # 4. Product rankings
     if "least" in q or "worst" in q or "slowest" in q:
         bottom = metrics.get("bottom_products", [])
         if not bottom:
@@ -40,11 +58,28 @@ def _fallback_answer(query: str, snapshot: dict) -> str:
         lines = ", ".join(f"{item['name']} (₹{item['total_revenue']:.0f})" for item in top[:3])
         return f"Best-selling products by revenue: {lines}."
 
+    # 5. Orders and revenue inquiries
+    if any(phrase in q for phrase in ["how many orders", "total orders", "order count", "orders summary"]):
+        return f"You currently have {sales['total_orders']} total orders recorded, with {sales['monthly_orders']} placed this month totaling ₹{sales['monthly_sales']:.0f}."
+
+    if any(phrase in q for phrase in ["total sales", "total revenue", "how much sales", "how much revenue", "sales to date"]):
+        return f"Total sales to date stand at ₹{sales['total_sales']:.0f} across {sales['total_orders']} orders, generating approximately ₹{profit['profit']:.0f} in gross profit."
+
+    if any(w in words for w in ["profit", "margin", "earnings"]):
+        return f"Your estimated gross profit is ₹{profit['profit']:.0f}, calculated from ₹{sales['total_sales']:.0f} in revenue minus cost of goods sold and recorded expenses."
+
+    if any(w in words for w in ["customer", "customers", "clients"]):
+        return f"We are tracking {metrics.get('customers_count', 'all active')} registered customers. You can check customer-specific order history in the Customers tab."
+
+    if "expense" in q:
+        return f"Total business expenses recorded stand at ₹{metrics.get('total_expenses', 0):.0f}."
+
+    # 6. Monthly comparison
     if "compared" in q or "last month" in q or "this month" in q:
         current = sales["monthly_sales"]
         previous = sales["previous_month_sales"]
         if previous <= 0:
-            return f"This month has ₹{current:.0f} in sales across {sales['monthly_orders']} orders. There is no previous-month baseline yet."
+            return f"This month has recorded ₹{current:.0f} in sales across {sales['monthly_orders']} orders. There is no previous-month baseline yet."
         change = ((current - previous) / previous) * 100
         direction = "increased" if change >= 0 else "decreased"
         return (
@@ -58,7 +93,7 @@ def _fallback_answer(query: str, snapshot: dict) -> str:
     return (
         f"From current records: {sales['total_orders']} orders, ₹{sales['total_sales']:.0f} in sales, "
         f"₹{profit['profit']:.0f} estimated profit, and {inventory['low_stock_products']} low-stock products. "
-        "I only use figures stored in the database."
+        "Ask me about your top-selling products, low inventory, orders, or monthly comparisons!"
     )
 
 
@@ -96,10 +131,11 @@ def _ask_model(query: str, snapshot: dict) -> Optional[str]:
                 {
                     "role": "system",
                     "content": (
-                        "You are BizAI, a business assistant for Reihh. "
-                        "Answer only from the JSON snapshot. Never invent numbers. "
-                        "If the snapshot does not contain the answer, say so. "
-                        "Keep replies concise and practical for a small business owner."
+                        "You are BizAI, a friendly and intelligent business assistant for Reihh. "
+                        "If the user greets you (e.g. 'hello', 'hi', 'hey'), greet them back warmly and explain what you can help with. "
+                        "For business queries, answer strictly using the provided JSON snapshot. Never invent numbers. "
+                        "If the snapshot does not contain the answer, say so politely. "
+                        "Keep replies concise, clear, and practical for a small business owner."
                     ),
                 },
                 {
