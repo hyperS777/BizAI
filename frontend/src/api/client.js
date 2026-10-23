@@ -18,7 +18,11 @@ client.interceptors.request.use((config) => {
 client.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && window.location.pathname !== '/login') {
+    const isAuthError =
+      error.response?.status === 401 ||
+      (error.response?.status === 403 &&
+        String(error.response?.data?.detail).toLowerCase().includes('credential'));
+    if (isAuthError && window.location.pathname !== '/login') {
       localStorage.removeItem('token');
       window.location.href = '/login';
     }
