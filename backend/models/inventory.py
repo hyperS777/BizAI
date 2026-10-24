@@ -13,6 +13,7 @@ class InventoryMovement(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    variant_id = Column(Integer, ForeignKey("product_variants.id"), nullable=True)
     quantity_change = Column(Integer, nullable=False)
     reason = Column(String(100), nullable=True)
     notes = Column(Text, nullable=True)
@@ -20,3 +21,4 @@ class InventoryMovement(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     product = relationship("Product", back_populates="movements")
+    variant = relationship("ProductVariant", back_populates="movements")

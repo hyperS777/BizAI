@@ -1,4 +1,14 @@
-# React + Vite
+# BizAI Frontend
+
+## Vercel deployment
+
+Deploy this directory as the Vercel project root. The existing `vercel.json` rewrite keeps React Router routes working on refresh.
+
+Set the Vercel project environment variable `VITE_API_URL` to the public FastAPI base URL, including `/api`, for example `https://your-api.example.com/api`. Do not leave it as `/api` in production unless Vercel is also configured to proxy that path to the backend. Redeploy after changing the variable.
+
+On the FastAPI host, set `CORS_ORIGINS` to the exact Vercel origin (for example `https://your-project.vercel.app`). Include the production and preview origins if both are used.
+
+For local development, `VITE_API_URL=/api` uses the Vite proxy configured in `vite.config.js`.
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 

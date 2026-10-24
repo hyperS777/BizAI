@@ -10,6 +10,9 @@ class CustomerBase(BaseModel):
     address: Optional[str] = None
     company: Optional[str] = None
     gstin: Optional[str] = None
+    tags: Optional[str] = None
+    notes: Optional[str] = None
+    accepts_marketing: Optional[bool] = False
 
 
 class CustomerCreate(CustomerBase):
@@ -23,6 +26,9 @@ class CustomerUpdate(BaseModel):
     address: Optional[str] = None
     company: Optional[str] = None
     gstin: Optional[str] = None
+    tags: Optional[str] = None
+    notes: Optional[str] = None
+    accepts_marketing: Optional[bool] = None
 
 
 class CustomerResponse(CustomerBase):

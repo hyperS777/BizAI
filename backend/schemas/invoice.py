@@ -1,9 +1,9 @@
 """Invoice schemas."""
 
 from datetime import date, datetime
-from typing import Optional
+from typing import List, Optional
 
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel, computed_field, Field
 
 from models.invoice import InvoiceStatus
 from schemas.order import OrderResponse
@@ -21,6 +21,21 @@ class InvoiceCreate(InvoiceBase):
 class InvoiceUpdate(BaseModel):
     status: Optional[InvoiceStatus] = None
     paid_amount: Optional[float] = None
+    payment_amount: Optional[float] = None
+    method: Optional[str] = "manual"
+    notes: Optional[str] = None
+
+
+class PaymentResponse(BaseModel):
+    id: int
+    invoice_id: int
+    amount: float
+    method: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class InvoiceResponse(InvoiceBase):
@@ -32,6 +47,7 @@ class InvoiceResponse(InvoiceBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     order: Optional[OrderResponse] = None
+    payments: List[PaymentResponse] = Field(default_factory=list)
 
     class Config:
         from_attributes = True

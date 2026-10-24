@@ -14,6 +14,12 @@ import Reports from './pages/Reports';
 import AIAssistant from './pages/AIAssistant';
 import UsersPage from './pages/Users';
 import { Profile, Settings } from './pages/Settings';
+import Integrations from './pages/Integrations';
+
+function RequireRoles({ roles, children }) {
+  const { role } = useAuth();
+  return roles.includes(role) ? children : <Navigate to="/" replace />;
+}
 
 function ProtectedLayout() {
   const { user, loading } = useAuth();
@@ -34,11 +40,12 @@ export default function App() {
           <Route path="/products" element={<Products />} />
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/orders" element={<Orders />} />
-          <Route path="/invoices" element={<Invoices />} />
-          <Route path="/expenses" element={<Expenses />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/ai" element={<AIAssistant />} />
-          <Route path="/users" element={<UsersPage />} />
+          <Route path="/invoices" element={<RequireRoles roles={['admin', 'manager', 'accountant']}><Invoices /></RequireRoles>} />
+          <Route path="/expenses" element={<RequireRoles roles={['admin', 'manager', 'accountant']}><Expenses /></RequireRoles>} />
+          <Route path="/reports" element={<RequireRoles roles={['admin', 'manager', 'accountant']}><Reports /></RequireRoles>} />
+          <Route path="/ai" element={<RequireRoles roles={['admin', 'manager', 'accountant']}><AIAssistant /></RequireRoles>} />
+          <Route path="/users" element={<RequireRoles roles={['admin']}><UsersPage /></RequireRoles>} />
+          <Route path="/integrations" element={<RequireRoles roles={['admin', 'manager']}><Integrations /></RequireRoles>} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/profile" element={<Profile />} />
         </Route>

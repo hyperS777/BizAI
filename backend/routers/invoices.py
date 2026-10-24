@@ -7,7 +7,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models.invoice import InvoiceStatus
+from models.invoice import Invoice, InvoiceStatus
 from models.user import User
 from schemas.invoice import InvoiceUpdate, InvoiceResponse
 from services.invoice_service import get_invoices, get_invoice, generate_invoice_from_order, update_invoice
@@ -23,16 +23,34 @@ def read_invoices(
     limit: int = 100,
     status: Optional[InvoiceStatus] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_staff),
+    current_user: User = Depends(require_accountant),
 ):
     return get_invoices(db, skip=skip, limit=limit, status=status)
+
+
+@router.get("/public/{token}/pdf")
+def download_customer_invoice(token: str, db: Session = Depends(get_db)):
+    invoice = db.query(Invoice).filter_by(public_token=token).first()
+    if invoice is None or invoice.status == InvoiceStatus.CANCELLED.value:
+        raise HTTPException(status_code=404, detail="Invoice link is invalid or unavailable")
+    db_invoice = get_invoice(db, invoice.id)
+    data = build_invoice_pdf(db_invoice)
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{db_invoice.invoice_number}.pdf"',
+            "Cache-Control": "private, no-store",
+            "X-Robots-Tag": "noindex, nofollow",
+        },
+    )
 
 
 @router.post("/from-order/{order_id}", response_model=InvoiceResponse)
 def create_invoice(
     order_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_staff),
+    current_user: User = Depends(require_accountant),
 ):
     db_invoice = generate_invoice_from_order(db, order_id)
     if db_invoice is None:
@@ -44,7 +62,7 @@ def create_invoice(
 def read_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_staff),
+    current_user: User = Depends(require_accountant),
 ):
     db_invoice = get_invoice(db, invoice_id)
     if db_invoice is None:
@@ -56,7 +74,7 @@ def read_invoice(
 def download_invoice_pdf(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_staff),
+    current_user: User = Depends(require_accountant),
 ):
     db_invoice = get_invoice(db, invoice_id)
     if db_invoice is None:

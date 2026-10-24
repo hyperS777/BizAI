@@ -17,7 +17,7 @@ from services.customer_service import (
     delete_customer,
     get_customer_orders,
 )
-from utils.permissions import require_staff, require_employee
+from utils.permissions import require_staff, require_employee, require_manager
 
 router = APIRouter(prefix="/api/customers", tags=["customers"])
 
@@ -82,7 +82,7 @@ def update_existing_customer(
 def remove_customer(
     customer_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_employee),
+    current_user: User = Depends(require_manager),
 ):
     result = delete_customer(db, customer_id)
     if result == "missing":

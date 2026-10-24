@@ -16,7 +16,7 @@ from services.report_service import (
     get_customer_activity,
     get_expense_summary,
 )
-from utils.permissions import require_staff
+from utils.permissions import require_finance
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/reports", tags=["reports"])
 @router.get("/dashboard", response_model=DashboardMetrics)
 def dashboard_metrics(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_staff),
+    current_user: User = Depends(require_finance),
 ):
     return get_dashboard_metrics(db)
 
@@ -33,7 +33,7 @@ def dashboard_metrics(
 def sales_report(
     days: int = Query(30, ge=7, le=90),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_staff),
+    current_user: User = Depends(require_finance),
 ):
     return {"points": get_sales_series(db, days=days)}
 
@@ -42,7 +42,7 @@ def sales_report(
 def top_products_report(
     limit: int = Query(10, ge=1, le=50),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_staff),
+    current_user: User = Depends(require_finance),
 ):
     return get_top_products(db, limit=limit)
 
@@ -51,7 +51,7 @@ def top_products_report(
 def customer_activity_report(
     limit: int = Query(10, ge=1, le=50),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_staff),
+    current_user: User = Depends(require_finance),
 ):
     return get_customer_activity(db, limit=limit)
 
@@ -61,6 +61,6 @@ def expenses_summary_report(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_staff),
+    current_user: User = Depends(require_finance),
 ):
     return get_expense_summary(db, start_date=start_date, end_date=end_date)

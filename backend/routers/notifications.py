@@ -9,6 +9,7 @@ from database import get_db
 from models.invoice import Invoice, InvoiceStatus
 from models.product import Product
 from models.user import User
+from services.invoice_service import scan_overdue_invoices
 from utils.permissions import require_staff
 from datetime import date
 
@@ -40,25 +41,26 @@ def get_notifications(
             "severity": "warning",
         })
 
-    # Overdue invoices
-    today = date.today()
-    overdue = (
-        db.query(Invoice)
-        .filter(
-            Invoice.status == InvoiceStatus.SENT.value,
-            Invoice.due_date < today,
+    if current_user.role and current_user.role.name in {"admin", "manager", "accountant"}:
+        scan_overdue_invoices(db)
+        today = date.today()
+        overdue = (
+            db.query(Invoice)
+            .filter(
+                Invoice.status == InvoiceStatus.OVERDUE.value,
+                Invoice.due_date < today,
+            )
+            .limit(10)
+            .all()
         )
-        .limit(10)
-        .all()
-    )
-    for inv in overdue:
-        notifications.append({
-            "id": f"invoice-{inv.id}",
-            "type": "overdue_invoice",
-            "title": f"Overdue invoice #{inv.invoice_number}",
-            "message": f"Due on {inv.due_date}. Amount: ₹{inv.total_amount:.0f}.",
-            "link": "/invoices",
-            "severity": "error",
-        })
+        for inv in overdue:
+            notifications.append({
+                "id": f"invoice-{inv.id}",
+                "type": "overdue_invoice",
+                "title": f"Overdue invoice #{inv.invoice_number}",
+                "message": f"Due on {inv.due_date}. Amount: ₹{inv.total_amount:.0f}.",
+                "link": "/invoices",
+                "severity": "error",
+            })
 
     return {"count": len(notifications), "items": notifications}

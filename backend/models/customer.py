@@ -2,7 +2,7 @@
 Customer model.
 """
 
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text
+from sqlalchemy import Boolean, Column, Integer, String, Float, DateTime, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -14,10 +14,14 @@ class Customer(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(150), nullable=False)
     email = Column(String(255), unique=True, nullable=True)
+    shopify_customer_id = Column(String(80), unique=True, nullable=True, index=True)
     phone = Column(String(20), nullable=True)
     address = Column(Text, nullable=True)
     company = Column(String(200), nullable=True)
     gstin = Column(String(20), nullable=True)
+    tags = Column(String(255), nullable=True)
+    notes = Column(Text, nullable=True)
+    accepts_marketing = Column(Boolean, default=False)
     outstanding_balance = Column(Float, default=0.0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

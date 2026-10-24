@@ -13,7 +13,7 @@ import { formatDate, money } from '../utils/format';
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
 export default function Dashboard() {
-  const { user } = useContext(AuthContext);
+  const { user, role } = useContext(AuthContext);
   const navigate = useNavigate();
   const [metrics, setMetrics] = useState(null);
   const [series, setSeries] = useState([]);
@@ -22,6 +22,12 @@ export default function Dashboard() {
   const [lowStock, setLowStock] = useState([]);
 
   useEffect(() => {
+    if (role === 'employee') {
+      client.get('/products/low-stock')
+        .then((stock) => setLowStock(stock.data || []))
+        .catch((err) => setError(err.response?.data?.detail || 'Could not load inventory alerts.'));
+      return;
+    }
     Promise.all([
       client.get('/reports/dashboard'),
       client.get('/reports/sales?days=30'),
@@ -35,7 +41,7 @@ export default function Dashboard() {
         setLowStock(stock.data || []);
       })
       .catch((err) => setError(err.response?.data?.detail || 'Could not load live business data.'));
-  }, []);
+  }, [role]);
 
   const sales = metrics?.sales_summary || {};
   const profit = metrics?.revenue_profit || {};
@@ -56,28 +62,28 @@ export default function Dashboard() {
       <PageHeader
         eyebrow={new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         title={`Good morning, ${user?.full_name?.split(' ')[0] || 'there'}.`}
-        subtitle="Live pulse of customers, stock, orders and profit."
+        subtitle={role === 'employee' ? 'Live pulse of customers, stock and orders.' : 'Live pulse of customers, stock, orders and profit.'}
       >
-        <button className="outline-btn" onClick={() => navigate('/reports')}><Search size={16} /> View reports</button>
+        {role !== 'employee' && <button className="outline-btn" onClick={() => navigate('/reports')}><Search size={16} /> View reports</button>}
       </PageHeader>
 
       {error && <div className="notice error">{error}</div>}
 
-      <section className="metric-grid">
+      {role !== 'employee' && <section className="metric-grid">
         <article className="metric teal"><span>Total sales</span><strong>{money(sales.total_sales)}</strong><small>{sales.total_orders || 0} orders</small></article>
         <article className="metric blue"><span>Revenue</span><strong>{money(profit.revenue)}</strong><small>{sales.total_customers || 0} customers</small></article>
         <article className="metric yellow"><span>Net profit</span><strong>{money(profit.profit)}</strong><small>After expenses {money(profit.expenses)}</small></article>
         <article className="metric coral"><span>Low-stock items</span><strong>{inventory.low_stock_products || 0}</strong><small>{inventory.total_products || 0} products tracked</small></article>
-      </section>
+      </section>}
 
-      <section className="command-strip">
+      {role !== 'accountant' && <section className="command-strip">
         <div className="command-intro"><span className="command-kicker">Workspace shortcuts</span><strong>Keep today moving</strong></div>
         <button type="button" onClick={() => navigate('/orders')}><span className="command-icon teal-bg"><ClipboardList size={16} /></span><span><strong>New order</strong><small>Record a sale</small></span><ChevronRight size={15} /></button>
         <button type="button" onClick={() => navigate('/customers')}><span className="command-icon blue-bg"><UserPlus size={16} /></span><span><strong>Add customer</strong><small>Grow your CRM</small></span><ChevronRight size={15} /></button>
-      </section>
+      </section>}
 
       <div className="dashboard-grid">
-        <section className="panel chart-panel">
+        {role !== 'employee' && <section className="panel chart-panel">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Performance</p>
@@ -91,7 +97,8 @@ export default function Dashboard() {
           ) : (
             <EmptyState icon={CircleDollarSign} text="No sales data yet — orders will appear here automatically." />
           )}
-        </section>
+        </section>}
+        {role !== 'employee' && (
         <section className="panel assistant-card">
           <div className="assistant-icon"><Sparkles size={20} /></div>
           <p className="eyebrow">Business assistant</p>
@@ -99,10 +106,11 @@ export default function Dashboard() {
           <p>{summary || 'Loading your grounded business summary…'}</p>
           <button className="text-btn" onClick={() => navigate('/ai')}>Ask AI assistant <ChevronRight size={16} /></button>
         </section>
+        )}
       </div>
 
       <div className="dashboard-grid lower-grid">
-        <section className="panel">
+        {role !== 'employee' && <section className="panel">
           <div className="panel-heading">
             <div><p className="eyebrow">Operations</p><h2>Recent orders</h2></div>
             <button className="text-btn" onClick={() => navigate('/orders')}>See all</button>
@@ -121,7 +129,7 @@ export default function Dashboard() {
               ))}
             </div>
           ) : <EmptyState icon={ClipboardList} text="No orders yet" />}
-        </section>
+        </section>}
         <section className="panel">
           <div className="panel-heading">
             <div><p className="eyebrow">Inventory pulse</p><h2>Low stock items</h2></div>

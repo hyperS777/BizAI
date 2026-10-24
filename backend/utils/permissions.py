@@ -25,9 +25,14 @@ class RoleChecker:
 require_staff = RoleChecker(["admin", "manager", "employee", "accountant"])
 # Mutations that frontline staff perform (customers, orders).
 require_employee = RoleChecker(["admin", "manager", "employee"])
-# Billing and financial records.
+# Billing, accounting, and financial reporting.
 require_accountant = RoleChecker(["admin", "manager", "accountant"])
-# Inventory, products, reports, AI.
+# Finance dashboards are available to managers and accountants, not employees.
+require_finance = RoleChecker(["admin", "manager", "accountant"])
+# Inventory, products, fulfillment, and operational AI.
 require_manager = RoleChecker(["admin", "manager"])
 # User administration.
 require_admin = RoleChecker(["admin"])
+# Integration configuration is visible to managers, but only admins can change it.
+require_integration_reader = RoleChecker(["admin", "manager"])
+require_integration_admin = RoleChecker(["admin"])

@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     AI_PROVIDER: str = "groq"
     GROQ_API_KEY: str = ""
 
+    # Shopify Admin API and webhook signing
+    SHOPIFY_STORE_DOMAIN: str = ""
+    SHOPIFY_ADMIN_ACCESS_TOKEN: str = ""
+    SHOPIFY_API_VERSION: str = "2026-07"
+    SHOPIFY_WEBHOOK_SECRET: str = ""
+    DELIVERY_WEBHOOK_SECRET: str = ""
+    PUBLIC_API_BASE_URL: str = ""
+
     @property
     def cors_origins_list(self) -> List[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]

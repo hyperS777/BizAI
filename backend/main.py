@@ -5,17 +5,25 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
-from database import engine, Base
+from database import engine, Base, ensure_schema, SessionLocal
 import models  # noqa: F401
-from routers import auth, users, customers, products, orders, invoices, reports, ai, demo, expenses, notifications
+from routers import auth, users, customers, products, orders, invoices, reports, ai, demo, expenses, notifications, integrations
 
 logging.basicConfig(level=logging.INFO if settings.DEBUG else logging.WARNING)
 logger = logging.getLogger("bizai")
 
 Base.metadata.create_all(bind=engine)
+ensure_schema()
 
 from scripts.seed import seed_data
 seed_data()
+
+from services.integration_service import ensure_default_settings
+db = SessionLocal()
+try:
+    ensure_default_settings(db)
+finally:
+    db.close()
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -49,6 +57,7 @@ API_ROUTE_PREFIXES = (
     "/expenses",
     "/demo",
     "/notifications",
+    "/integrations",
     "/health",
 )
 
@@ -83,6 +92,7 @@ app.include_router(ai.router)
 app.include_router(expenses.router)
 app.include_router(demo.router)
 app.include_router(notifications.router)
+app.include_router(integrations.router)
 
 
 @app.get("/")
