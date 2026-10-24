@@ -11,7 +11,7 @@ from models.invoice import Invoice, Payment
 from models.expense import Expense
 from models.ai_query import AIQuery
 from models.inventory import InventoryMovement
-from models.integration import IntegrationEvent, WebhookEndpoint, AppSetting, DiscountCode, ShopifyWebhookReceipt
+from models.integration import IntegrationEvent, WebhookEndpoint, AppSetting, DiscountCode, ShopifyWebhookReceipt, StorefrontSimulation
 
 __all__ = [
     "Role",
@@ -32,4 +32,5 @@ __all__ = [
     "AppSetting",
     "DiscountCode",
     "ShopifyWebhookReceipt",
+    "StorefrontSimulation",
 ]

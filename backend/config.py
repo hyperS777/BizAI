@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     SHOPIFY_WEBHOOK_SECRET: str = ""
     DELIVERY_WEBHOOK_SECRET: str = ""
     PUBLIC_API_BASE_URL: str = ""
+    STOREFRONT_SIMULATION_ENABLED: bool = True
 
     @property
     def cors_origins_list(self) -> List[str]:

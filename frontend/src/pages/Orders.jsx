@@ -33,7 +33,9 @@ export default function Orders() {
   const canCreate = can(['admin', 'manager', 'employee']);
   const canStatus = can(['admin', 'manager']);
   const canInvoice = can(['admin', 'manager', 'accountant']);
+  const canSeeSimulations = can(['admin', 'manager']);
   const [orders, setOrders] = useState([]);
+  const [simulations, setSimulations] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
   const [status, setStatus] = useState('all');
@@ -53,6 +55,10 @@ export default function Orders() {
     client.get('/products').then((res) => setProducts(res.data || []));
   }, []);
 
+  useEffect(() => {
+    if (canSeeSimulations) client.get('/storefront/simulations').then((res) => setSimulations(res.data || [])).catch(() => {});
+  }, [canSeeSimulations]);
+
   useEffect(() => { load(); }, []);
   useEffect(() => {
     if (view !== 'map') return undefined;
@@ -65,6 +71,7 @@ export default function Orders() {
     counts.all += 1;
     return counts;
   }, { all: 0 }), [orders]);
+  const tabs = canSeeSimulations ? [...statusTabs, { id: 'simulations', label: 'Simulations' }] : statusTabs;
   const visibleOrders = useMemo(() => status === 'all' ? orders : orders.filter((order) => order.status === status), [orders, status]);
   const mappedOrders = useMemo(() => visibleOrders.filter((order) => (
     order.status !== 'cancelled'
@@ -120,19 +127,33 @@ export default function Orders() {
       </PageHeader>
       <div className="orders-toolbar">
         <div className="order-status-tabs" role="tablist" aria-label="Filter orders by status">
-          {statusTabs.map((tab) => (
-            <button key={tab.id} type="button" role="tab" aria-selected={status === tab.id} className={status === tab.id ? 'order-tab active' : 'order-tab'} onClick={() => setStatus(tab.id)}>
-              {tab.label}<span>{statusCounts[tab.id] || 0}</span>
+          {tabs.map((tab) => (
+            <button key={tab.id} type="button" role="tab" aria-selected={status === tab.id} className={status === tab.id ? 'order-tab active' : 'order-tab'} onClick={() => { setStatus(tab.id); if (tab.id === 'simulations') setView('orders'); }}>
+              {tab.label}<span>{tab.id === 'simulations' ? simulations.length : statusCounts[tab.id] || 0}</span>
             </button>
           ))}
         </div>
         <div className="order-view-toggle" role="group" aria-label="Order view">
           <button type="button" className={view === 'orders' ? 'active' : ''} aria-label="Orders list" title="Orders list" onClick={() => setView('orders')}><List size={17} /></button>
-          <button type="button" className={view === 'map' ? 'active' : ''} aria-label="Delivery map" title="Delivery map" onClick={() => setView('map')}><MapPinned size={17} /></button>
+          <button type="button" disabled={status === 'simulations'} className={view === 'map' ? 'active' : ''} aria-label="Delivery map" title="Delivery map" onClick={() => setView('map')}><MapPinned size={17} /></button>
         </div>
       </div>
       {error && <div className="notice error">{error}</div>}
-      {view === 'map' ? (
+      {status === 'simulations' ? simulations.length ? (
+        <section className="panel table-panel order-table-panel simulation-table-panel">
+          <table className="data-table">
+            <thead><tr><th>Simulation</th><th>Customer</th><th>Items</th><th>Total</th><th>Created</th><th>Payment</th></tr></thead>
+            <tbody>{simulations.map((simulation) => <tr key={simulation.id}>
+              <td><strong>{simulation.reference}</strong></td>
+              <td>{simulation.customer_name}<small>{simulation.customer_email}</small></td>
+              <td>{simulation.items.map((item) => `${item.title} · ${item.variant_title} × ${item.quantity}`).join(', ')}</td>
+              <td>{money(simulation.total_amount)}</td>
+              <td>{formatDate(simulation.created_at)}</td>
+              <td><span className="status-pill simulation-only">No payment</span></td>
+            </tr>)}</tbody>
+          </table>
+        </section>
+      ) : <EmptyState icon={ClipboardList} text="No customer simulations recorded yet." /> : view === 'map' ? (
         <section className="delivery-map-panel panel">
           <div className="delivery-map-heading">
             <div><p className="eyebrow">Live fulfillment</p><h2>Delivery map</h2><p className="muted">Carrier positions refresh every 30 seconds when a tracking feed is connected.</p></div>

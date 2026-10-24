@@ -15,6 +15,7 @@ import AIAssistant from './pages/AIAssistant';
 import UsersPage from './pages/Users';
 import { Profile, Settings } from './pages/Settings';
 import Integrations from './pages/Integrations';
+import Storefront from './pages/Storefront';
 
 function RequireRoles({ roles, children }) {
   const { role } = useAuth();
@@ -32,6 +33,8 @@ export default function App() {
   return (
     <AuthProvider>
       <Routes>
+        <Route path="/store" element={<Storefront />} />
+        <Route path="/store/demo" element={<Storefront />} />
         <Route path="/login" element={<Login />} />
         <Route element={<ProtectedLayout />}>
           <Route path="/" element={<Dashboard />} />

@@ -58,6 +58,7 @@ export default function Login() {
           <button className="primary-btn" disabled={busy}>
             {busy ? 'Signing in…' : 'Sign in'} <ChevronRight size={17} />
           </button>
+          <a href="/store" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: 3, color: 'var(--ink)', fontSize: 12, textDecoration: 'none' }}>Shop the REIHH collection <ChevronRight size={14} /></a>
           <p className="secure-note"><Check size={14} /> Protected workspace access</p>
         </form>
       </section>

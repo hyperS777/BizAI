@@ -39,6 +39,14 @@ def get_db():
         db.close()
 
 
+def _migration_column_type(type_name: str, dialect_name: str) -> str:
+    if type_name == "DATETIME" and dialect_name == "postgresql":
+        return "TIMESTAMP WITH TIME ZONE"
+    if type_name == "BOOLEAN DEFAULT 0" and dialect_name == "postgresql":
+        return "BOOLEAN DEFAULT FALSE"
+    return type_name
+
+
 _EXTRA_COLUMNS = {
     "products": [
         ("compare_at_price", "FLOAT"),
@@ -103,7 +111,8 @@ def ensure_schema():
             for name, typedef in columns:
                 if name in present:
                     continue
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {typedef}"))
+                column_type = _migration_column_type(typedef, engine.dialect.name)
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {column_type}"))
 
         unique_indexes = (
             ("customers", "shopify_customer_id", "ux_customers_shopify_customer_id"),

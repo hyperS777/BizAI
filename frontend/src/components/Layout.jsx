@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, Bell, Box, Check, CircleDollarSign, ClipboardList, FileBarChart,
   LayoutDashboard, LogOut, Menu, Moon, Package, Receipt, Search, Settings,
-  Sparkles, Sun, UserRound, Users, Warehouse, X,
+  ShoppingBag, Sparkles, Sun, UserRound, Users, Warehouse, X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import client from '../api/client';
@@ -14,6 +14,7 @@ const navItems = [
   { label: 'Products', to: '/products', icon: Package },
   { label: 'Inventory', to: '/inventory', icon: Warehouse },
   { label: 'Orders', to: '/orders', icon: ClipboardList },
+  { label: 'Customer preview', to: '/store', icon: ShoppingBag },
   { label: 'Invoices', to: '/invoices', icon: CircleDollarSign, roles: ['admin', 'manager', 'accountant'] },
   { label: 'Expenses', to: '/expenses', icon: Receipt, roles: ['admin', 'manager', 'accountant'] },
   { label: 'Reports', to: '/reports', icon: FileBarChart, roles: ['admin', 'manager', 'accountant'] },

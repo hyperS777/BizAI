@@ -30,6 +30,19 @@ class ShopifyWebhookReceipt(Base):
     processed_at = Column(DateTime(timezone=True), nullable=True)
 
 
+class StorefrontSimulation(Base):
+    __tablename__ = "storefront_simulations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    reference = Column(String(40), unique=True, nullable=False, index=True)
+    customer_name = Column(String(150), nullable=False)
+    customer_email = Column(String(255), nullable=False)
+    items = Column(Text, nullable=False)
+    total_amount = Column(Float, nullable=False)
+    currency = Column(String(3), default="INR", nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class WebhookEndpoint(Base):
     __tablename__ = "webhook_endpoints"
 

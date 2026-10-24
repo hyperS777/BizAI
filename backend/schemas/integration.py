@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 
 
 class IntegrationEventResponse(BaseModel):
@@ -74,3 +74,28 @@ class IntegrationDashboard(BaseModel):
     webhooks: List[WebhookResponse]
     discounts: List[DiscountResponse]
     store: Dict[str, Any]
+
+
+class StorefrontSimulationItem(BaseModel):
+    variant_id: str
+    quantity: int = Field(ge=1, le=10)
+
+
+class StorefrontSimulationCreate(BaseModel):
+    customer_name: str = Field(min_length=2, max_length=150)
+    customer_email: EmailStr
+    items: List[StorefrontSimulationItem] = Field(min_length=1, max_length=30)
+
+
+class StorefrontSimulationResponse(BaseModel):
+    id: int
+    reference: str
+    customer_name: str
+    customer_email: str
+    items: List[Dict[str, Any]]
+    total_amount: float
+    currency: str
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

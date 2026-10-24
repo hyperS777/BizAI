@@ -1,5 +1,17 @@
 # REIHH Shopify Order and Invoice Setup
 
+## Customer storefront and demo
+
+- `/store` is a customer-facing catalog sourced live from REIHH's public Shopify collection JSON. Its cart sends real selected Shopify variant IDs to `https://reihh.com/cart/...`; Shopify validates final availability, collects payment, and creates the authoritative order.
+- `/store/demo` uses the same real catalog but never redirects to Shopify or takes payment. It creates a separate `SIM-*` simulation record using server-side prices. Admins and Managers review those records in Orders → Simulations; they do not affect inventory, revenue, invoices, or Shopify orders.
+- Set `STOREFRONT_SIMULATION_ENABLED=false` on the API host to disable demo submissions in production if they are not needed.
+
+The public catalog endpoint reads REIHH's published collection JSON and caches results for five minutes. If REIHH is temporarily unavailable, the last successful catalog is served for the lifetime of the API process.
+
+## Render database migration
+
+Startup applies additive schema migrations to existing databases. Legacy timestamp and boolean column types are translated for PostgreSQL. The database deploy must complete successfully before the service starts; retain a database backup before production upgrades.
+
 ## Required environment
 
 Set these variables on the FastAPI host:
