@@ -5,72 +5,68 @@
 
 ---
 
-## 🎯 1. 30-Second Elevator Pitch (Start Your Presentation Like This)
+## 🎯 1. 30-Second Elevator Pitch (Opening Statement)
 
-> *"Good morning Sir. BizAI is an integrated cloud-based Business Management & ERP platform tailored for small and medium enterprises. It combines six core business functions—**Customer CRM, Live Inventory Management, Order Processing, Automated Invoicing with PDF Export, Expense Tracking, and Business Intelligence Reporting**—and connects them with a **Grounded AI Business Assistant** that analyzes live financial and inventory records to deliver actionable insights in natural language."*
+> *"Good morning, Sir. Today we are presenting **BizAI**, an integrated cloud ERP and business management platform built for retail and wholesale SMEs (modeled after our client case study: **Reihh / Amber Abbas** in Mohali).*
+>
+> *BizAI consolidates six core business operations into a single platform: **Customer CRM, Live Inventory Management, Order Processing, Automated Invoicing with PDF Export, Expense Tracking, and Business Intelligence Analytics**—all unified by a **Grounded AI Business Assistant** that queries live SQL records directly rather than generating generic or ungrounded statistics."*
 
 ---
 
 ## 💻 2. Tech Stack, Frameworks & Languages (Why We Chose Them)
 
-| Layer | Technology | Why Chosen? (Viva Defense Answer) |
+| Layer | Technology | Architectural Justification |
 | :--- | :--- | :--- |
-| **Frontend Framework** | **React 18** (SPA) with **Vite** | Component-driven, virtual DOM for high responsiveness, fast build times, and zero-page-reload user experience. |
-| **Frontend Styling** | **Vanilla CSS** (Custom Design Tokens) | No bulky UI libraries or CSS bloat; lightweight, full control over themes (Dark/Light mode) and micro-animations. |
-| **Routing & HTTP** | **React Router v6** + **Axios** | Declarative client-side routing with route guards, plus centralized Axios interceptors for automatic JWT token injection and error handling. |
-| **Backend Framework** | **Python 3.12+** with **FastAPI** | Modern ASGI framework. Asynchronous, high throughput, native type hinting, and auto-generates interactive OpenAPI documentation (`/docs`). |
-| **Backend Server** | **Uvicorn** (ASGI Server) | Lightning-fast event-loop server built on `uvloop` and `httptools`. |
-| **Data Validation** | **Pydantic v2** | Strict schema validation on request payloads and response serialization, catching type mismatches before touching the database. |
-| **ORM** | **SQLAlchemy 2.0** | Industry-standard Python ORM. Eliminates raw SQL injection vulnerabilities, manages connection pooling, and handles complex joins elegantly. |
-| **Database (Prod)** | **PostgreSQL** (Managed Cloud) | Enterprise-grade Relational DBMS with strict ACID guarantees, JSON support, and rock-solid concurrent transactions. |
-| **Database (Dev)** | **SQLite** (`bizai.db`) | Zero-configuration file database for local development and rapid prototyping. |
-| **AI Engine** | **Groq API (`llama-3.1-8b-instant`)** | Sub-second ultra-fast inference with deterministic system prompts grounded on live SQL database snapshots, with local heuristic fallback. |
-| **PDF Engine** | **ReportLab** | Programmatic generation of professional GST-ready invoices in vector PDF format. |
-| **Cloud Hosting** | **Vercel** (Frontend) + **Render** (Backend API & PostgreSQL) | Global CDN edge caching for UI and managed containerized cloud server for the API. |
+| **Frontend Framework** | **React 18** (SPA) with **Vite** | Component-driven architecture using the Virtual DOM for instant reactivity. Vite provides 10x faster hot-module replacement and smaller optimized production bundles compared to Webpack/CRA. |
+| **Frontend Styling** | **Vanilla CSS** (Custom Design Tokens) | Zero third-party CSS overhead. Pure CSS custom variables allow complete control over themes (Dark/Light mode) and micro-interactions without performance bottlenecks. |
+| **Routing & HTTP** | **React Router v6** + **Axios** | Declarative client-side routing with route guards. Axios interceptors automatically inject JWT bearer tokens into requests and handle session expiration globally. |
+| **Backend Framework** | **Python 3.12+** with **FastAPI** | Modern asynchronous ASGI framework. Delivers high throughput, strict native type safety, automated request validation, and self-documenting OpenAPI endpoints (`/docs`). |
+| **Backend Server** | **Uvicorn** (ASGI Server) | Lightning-fast event-loop server built on `uvloop` and `httptools` capable of handling high concurrent workloads. |
+| **Data Validation** | **Pydantic v2** | Enforces strict schema contracts on request bodies and serializes responses, blocking malformed data before database execution. |
+| **ORM** | **SQLAlchemy 2.0** | Industry-standard Python Object-Relational Mapper. Eliminates raw SQL injection, manages connection pooling, and handles complex multi-table joins cleanly. |
+| **Database (Prod)** | **PostgreSQL** (Managed Cloud) | Enterprise-grade Relational DBMS providing strict ACID guarantees, JSON support, and robust transactional concurrency. |
+| **Database (Dev)** | **SQLite** (`bizai.db`) | Zero-configuration file database for local testing and rapid prototyping. |
+| **AI Engine** | **Groq API (`llama-3.1-8b-instant`)** | Low-latency inference using deterministic system prompts grounded on live SQL database snapshots, with an internal heuristic fallback. |
+| **PDF Engine** | **ReportLab** | Dynamically compiles GST-compliant vector invoice PDFs in memory on demand. |
+| **Cloud Hosting** | **Vercel** (Frontend) + **Render** (Backend API & PostgreSQL) | Global edge CDN caching for the React client with a containerized cloud host for the Python API. |
 
 ---
 
-## 🗄️ 3. Why SQL / Relational Database? (Crucial Viva Question)
+## 🗄️ 3. Why a SQL / Relational Database? (Crucial Viva Question)
 
-**Question:** *"Database SQL kyu use kiya? NoSQL (MongoDB etc.) kyu nahi kiya? SQL ke pros kya hain?"*
+**Question:** *"Why did you use a SQL database instead of NoSQL (like MongoDB)? What are the distinct advantages of SQL for this project?"*
 
-### 🎙️ How to Answer Confidently:
-> *"Sir, BizAI is a financial and transactional ERP system dealing with inventory, customer ledgers, and money. For transactional systems, a **Relational SQL Database (PostgreSQL)** is the industry standard for four fundamental reasons:"*
+### 🎙️ The Answer:
+> *"Sir, BizAI is a financial and transactional ERP platform managing stock counts, customer billing ledgers, and money. For transactional business systems, a **Relational SQL Database (PostgreSQL)** is the standard engineering choice for four primary reasons:"*
 
-1. **ACID Compliance (Atomicity, Consistency, Isolation, Durability)**:
-   * **Real Example in our Code:** When an order is confirmed, we must update the order status in `orders` table AND simultaneously deduct items from the `products` inventory table.
-   * In SQL, this is wrapped in a single database transaction (`db.commit()`). If stock is insufficient or a crash occurs, the transaction rolls back (`db.rollback()`), preventing partial updates or phantom inventory.
-   * NoSQL databases generally operate on "eventual consistency", which risks double-spending or negative stock.
-
+1. **ACID Transactions (Atomicity, Consistency, Isolation, Durability)**:
+   * **Real Code Implementation:** When an order transitions to confirmed, two operations must execute as a single atomic unit:
+     1. The order status in the `orders` table updates to `CONFIRMED`.
+     2. Product stock quantities in the `products` table are decremented.
+   * In SQL, both operations are bound to a single transaction (`db.commit()`). If stock is insufficient or a crash occurs mid-execution, the entire transaction rolls back (`db.rollback()`), preventing negative inventory or phantom stock records. NoSQL databases prioritize "eventual consistency", which introduces race-condition risks during concurrent transactions.
 2. **Strict Referential Integrity & Foreign Keys**:
-   * Our business model has strict real-world relationships:
-     * A Customer has multiple Orders (`customer_id` FK).
-     * An Order has multiple Order Items (`order_id` FK) linked to Products (`product_id` FK).
-     * An Invoice must map to a valid Order (`order_id` FK).
-   * PostgreSQL automatically enforces foreign key constraints at the database engine level, making it impossible to have orphaned invoices or corrupted records.
-
-3. **Complex Joins & Aggregations (Reporting & BI)**:
-   * Our executive dashboard calculates Monthly Sales, Cost of Goods Sold (COGS), Gross Profit, and Top Selling Products using SQL `SUM()`, `AVG()`, `GROUP BY`, and `JOIN`.
-   * SQL engines are heavily indexed and optimized for multi-table joins. In NoSQL document stores (like MongoDB), performing cross-collection joins is slow, complex, and unoptimized.
-
-4. **Schema Enforcement & Zero Redundancy (Normalization)**:
-   * Financial software cannot afford polymorphic or inconsistent field types. SQL enforces strict types (`DECIMAL` for prices, `INTEGER` for stock, `VARCHAR` for emails).
-   * Product prices and customer addresses are stored in exactly one normalized place (3NF), preventing update anomalies.
+   * Business domain entities have immutable relationships:
+     * A Customer has multiple Orders (`customer_id` Foreign Key).
+     * An Order has multiple Order Items (`order_id` Foreign Key) linked to Products (`product_id` Foreign Key).
+     * An Invoice maps directly to an Order (`order_id` Foreign Key).
+   * PostgreSQL enforces foreign keys at the engine level, making it impossible to produce orphaned invoice records or link items to deleted products.
+3. **Optimized Aggregations & Joins for Analytics (BI Reports)**:
+   * Our executive dashboard calculates monthly sales, cost of goods sold (COGS), gross margins, and product sales rankings using SQL `SUM()`, `AVG()`, `GROUP BY`, and multi-table `JOIN` statements. Relational engines utilize database indices optimized for join operations, whereas NoSQL requires slow, memory-intensive application-level aggregation pipelines.
+4. **Strict Schema Normalization (3NF)**:
+   * Accounting and billing records cannot tolerate loose or inconsistent data schemas. SQL guarantees strict typing (`DECIMAL` for monetary values, `INTEGER` for stock counts). Product details and customer metadata reside in normalized tables, preventing data duplication and update anomalies.
 
 ---
 
-## 🔌 4. Codebase me Database Connect Kaha Aur Kaise Ho Raha Hai?
+## 🔌 4. Where and How Does the Database Connect in the Codebase?
 
-**Question:** *"Database connect kis file aur code se ho raha hai? Dikhaiye."*
+**Question:** *"Show the database connection file and explain the code line by line."*
 
 ### 📁 Exact File: [`backend/database.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/database.py)
-
-### 🔍 Code Walkthrough (Line-by-Line):
 
 ```python
 # File: backend/database.py (Lines 12 - 40)
 
-# 1. URL Resolution (Reads from config.py / .env or Render Cloud)
+# 1. URL Normalization (Reads from config.py / .env or Render Cloud)
 database_url = settings.DATABASE_URL
 if database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql+psycopg2://", 1)
@@ -87,7 +83,7 @@ engine = create_engine(
 # 3. Session Factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# 4. Declarative Base Model
+# 4. Declarative Base Class
 Base = declarative_base()
 
 # 5. Dependency Injection per HTTP Request
@@ -99,174 +95,153 @@ def get_db():
         db.close()
 ```
 
-### 🗣️ What to Explain:
-1. **Line 12–16:** Sanitizes the connection string for SQLAlchemy 2.0 to explicitly use the `psycopg2` driver (`postgresql+psycopg2://`).
-2. **Line 22–26 (`create_engine`):** Establishes the database engine connection pool.
-3. **Line 28 (`sessionmaker`):** Creates the factory that instantiates isolated database sessions for queries.
-4. **Line 30 (`declarative_base`):** Base class that all 8 ORM models in `backend/models/` inherit from.
-5. **Line 33–39 (`get_db`):** FastAPI dependency injection generator. Each incoming HTTP request receives a dedicated session (`yield db`), and when the request finishes, the `finally: db.close()` block **guarantees** the connection is returned to the pool, preventing memory and connection leaks.
-6. **Table Auto-Creation in [`backend/main.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/main.py#L15):**
+### Key Technical Points to Explain:
+1. **Lines 12–16:** Sanitizes the connection URI for SQLAlchemy 2.0 to explicitly use the `psycopg2` driver (`postgresql+psycopg2://`).
+2. **Lines 22–26 (`create_engine`):** Initializes the database connection pool.
+3. **Line 28 (`sessionmaker`):** Constructs the factory responsible for instantiating isolated database sessions.
+4. **Line 30 (`declarative_base`):** Base declarative class from which all 8 domain models in `backend/models/` inherit.
+5. **Lines 33–39 (`get_db`):** FastAPI dependency injection generator. Each incoming request receives a dedicated session (`yield db`). The `finally: db.close()` block **guarantees** the session closes when the request finishes, preventing database connection pool exhaustion.
+6. **Automatic Table DDL Generation ([`backend/main.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/main.py#L15)):**
    ```python
    Base.metadata.create_all(bind=engine)
    ```
-   On application startup, SQLAlchemy inspects all models and automatically issues `CREATE TABLE IF NOT EXISTS` in PostgreSQL!
+   On application startup, SQLAlchemy inspects registered models and issues `CREATE TABLE IF NOT EXISTS` commands automatically.
 
 ---
 
 ## 🔄 5. End-to-End Execution & Data Flow
 
-**Question:** *"Execution aur Data Flow batao – frontend se database tak request kaise travel karti hai?"*
+**Question:** *"Explain the complete execution flow from the client trigger to the database and back."*
 
-### 🗺️ Architecture Diagram:
+### 🗺️ Architecture & Flow Diagram:
 
 ```text
-[ Browser / User Action ]
-         │ (Clicks Button / Submits Form)
+[ Browser / React SPA ]
+         │ (1. User Interaction / Form Submission)
          ▼
-[ React 18 Component ] (e.g. Orders.jsx / Login.jsx)
-         │ (State management via hooks)
+[ React Component State ] (e.g. Orders.jsx, Login.jsx)
+         │ (Calls contextual handler)
          ▼
-[ Axios HTTP Client ] (src/api/client.js)
-         │ (Attaches Bearer JWT Header, normalizes /api)
+[ Axios HTTP Client ] (frontend/src/api/client.js)
+         │ (2. Injects 'Authorization: Bearer <JWT>' header, normalizes /api)
          ▼
-[ HTTPS Network / Cloud ]
-         │
-         ▼
-[ Uvicorn ASGI Server ] (Port 8000 / Cloud Host)
-         │
-         ▼
-[ FastAPI Middlewares ]
-  ├── CORS Middleware (Allow origins & Vercel domains)
-  ├── Fallback API Prefix Middleware (Rewrites /auth -> /api/auth)
-  └── Request Logger Middleware (Logs HTTP verb, path, response code)
-         │
-         ▼
-[ API Router Layer ] (e.g. routers/orders.py, routers/auth.py)
-         │ (Validates JWT Token & Role via Depends(require_staff))
-         ▼
-[ Dependency Injection ]
-         │ (FastAPI injects db: Session = Depends(get_db))
-         ▼
-[ Business Service Layer ] (e.g. services/order_service.py)
-         │ (Business rules, stock checks, calculations)
-         ▼
-[ SQLAlchemy 2.0 ORM ] (models/order.py, models/product.py)
-         │ (Converts Python objects into SQL queries: INSERT, UPDATE, JOIN)
-         ▼
-[ PostgreSQL / SQLite Database ]
-         │ (Executes ACID transaction, commits data to disk)
-         ▼
-[ Response Serialization ]
-         │ (Pydantic schemas in schemas/order.py format JSON payload)
-         ▼
-[ HTTP 200/201 JSON Response ]
-         │
-         ▼
-[ React State Update & UI Render ] (User sees new record, chart updates)
+[ Network Layer (HTTPS) ] ──> [ Uvicorn ASGI Server ]
+                                       │
+                                       ▼
+                             [ FastAPI Middlewares ]
+                             ├── CORS Middleware (Cross-origin permissions)
+                             ├── Fallback Prefix Middleware (/auth -> /api/auth)
+                             └── Request Logger (Logs verb, route, response code)
+                                       │
+                                       ▼
+                             [ API Router Layer ] (backend/routers/*.py)
+                             ├── Security Check: Depends(require_staff)
+                             └── DB Injection: db: Session = Depends(get_db)
+                                       │
+                                       ▼
+                             [ Service Layer ] (backend/services/*.py)
+                             └── Domain rules, business logic, calculations
+                                       │
+                                       ▼
+                             [ SQLAlchemy 2.0 ORM ] (backend/models/*.py)
+                             └── Compiles objects to SQL: INSERT, UPDATE, SELECT
+                                       │
+                                       ▼
+                             [ PostgreSQL Database ]
+                             └── Executes ACID transaction & writes to disk
+                                       │
+                                       ▼
+                             [ Pydantic Schemas ] (backend/schemas/*.py)
+                             └── Validates output structure & strips sensitive fields
+                                       │
+                                       ▼
+[ HTTP 200/201 JSON ] ──> [ React State Dispatched ] ──> [ Dynamic DOM Update ]
 ```
 
 ---
 
-### 📌 Concrete Example 1: User Login Flow
-1. **User input:** User types `admin@bizai.com` & `admin123` on [`Login.jsx`](file:///c:/Users/asus/Desktop/code/Git/bizai/frontend/src/pages/Login.jsx).
-2. **Context call:** Triggers `login()` in [`AuthContext.jsx`](file:///c:/Users/asus/Desktop/code/Git/bizai/frontend/src/context/AuthContext.jsx).
-3. **HTTP Dispatch:** Axios sends `POST /api/auth/login` with URL-encoded form data.
-4. **Backend Route:** [`backend/routers/auth.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/routers/auth.py) captures request in `login_for_access_token()`.
-5. **DB Query:** Uses SQLAlchemy `db.query(User).filter(User.email == form_data.username).first()`.
-6. **Password Verification:** [`backend/utils/security.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/utils/security.py) executes `verify_password()` using Passlib Bcrypt salt hashing.
-7. **Token Creation:** `create_access_token()` mints a signed JWT with 30-minute expiration.
-8. **Frontend Storage:** React receives JSON `{ "access_token": "...", "token_type": "bearer" }`, stores it in browser `localStorage`, and updates the user session state.
+### Step-by-Step Viva Scenarios:
 
----
+#### Scenario A: User Authentication & JWT Flow
+1. **User input:** User submits credentials on [`Login.jsx`](file:///c:/Users/asus/Desktop/code/Git/bizai/frontend/src/pages/Login.jsx).
+2. **Context dispatch:** `login()` in [`AuthContext.jsx`](file:///c:/Users/asus/Desktop/code/Git/bizai/frontend/src/context/AuthContext.jsx) triggers Axios.
+3. **HTTP transmission:** Sends `POST /api/auth/login` with URL-encoded form data.
+4. **Route handling:** [`backend/routers/auth.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/routers/auth.py) invokes `login_for_access_token()`.
+5. **Database query:** Retrieves the record via `db.query(User).filter(User.email == username).first()`.
+6. **Password verification:** [`backend/utils/security.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/utils/security.py) executes `verify_password()` using Passlib Bcrypt hashing.
+7. **Token generation:** `create_access_token()` signs a cryptographic HS256 JWT access token.
+8. **Client storage:** React saves the access token into `localStorage` and updates application authentication state.
 
-### 📌 Concrete Example 2: Creating an Order & Stock Deduction
-1. **User action:** Cashier/Manager selects Customer, adds 2 shirts, and clicks "Create Order" on [`Orders.jsx`](file:///c:/Users/asus/Desktop/code/Git/bizai/frontend/src/pages/Orders.jsx).
-2. **Payload validation:** FastAPI validates request against `OrderCreate` schema in [`backend/schemas/order.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/schemas/order.py).
-3. **Execution:** [`backend/services/order_service.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/services/order_service.py) -> `create_order()`:
-   * Generates unique order number: `ORD-XXXXXXXX`.
-   * Inserts row in `orders` table.
-   * Inserts multiple rows in `order_items` table with captured unit price.
-   * Sums line items and updates `total_amount`.
-4. **Stock Update:** When order status moves to `CONFIRMED`:
-   * Calls `update_stock()` in [`backend/services/product_service.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/services/product_service.py).
-   * Checks `product.stock_quantity >= item.quantity`.
-   * Subtracts quantity and writes an audit log in `stock_history` table.
-   * `db.commit()` commits both records atomically!
+#### Scenario B: Order Placement & Inventory Deduction
+1. **User action:** Operator selects a customer, specifies items, and clicks "Create Order" on [`Orders.jsx`](file:///c:/Users/asus/Desktop/code/Git/bizai/frontend/src/pages/Orders.jsx).
+2. **Schema validation:** Request body is parsed and validated by `OrderCreate` in [`backend/schemas/order.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/schemas/order.py).
+3. **Order creation:** [`backend/services/order_service.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/services/order_service.py) generates a unique order reference (`ORD-XXXXXXXX`), persists `Order`, and writes associated `OrderItem` records.
+4. **Stock mutation:** When confirmed, `update_stock()` in [`backend/services/product_service.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/services/product_service.py) verifies available inventory, decrements the physical quantity, and records an entry in `stock_history`.
+5. **Atomic commit:** `db.commit()` finalizes changes in both tables simultaneously.
 
----
-
-### 📌 Concrete Example 3: AI Assistant Query Flow
-1. **User asks:** *"Which products are running low on stock?"* in [`AIAssistant.jsx`](file:///c:/Users/asus/Desktop/code/Git/bizai/frontend/src/pages/AIAssistant.jsx).
-2. **Endpoint:** `POST /api/ai/chat` handled by [`backend/routers/ai.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/routers/ai.py).
-3. **Live Snapshot:** [`backend/services/report_service.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/services/report_service.py) extracts live database statistics (sales summary, profit, low stock count, top products).
-4. **Prompt Injection:** [`backend/services/ai_service.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/services/ai_service.py) constructs a grounded prompt with JSON data and system rule: *"Answer only from the database snapshot. Never invent numbers."*
-5. **LLM Inference:** Calls Groq Cloud running `llama-3.1-8b-instant`.
-6. **Graceful Fallback:** If internet is disconnected or API key is absent, the backend runs `_fallback_answer()`—a deterministic Python rule engine that answers query directly from SQL calculations without failing.
+#### Scenario C: AI Query Processing
+1. **User query:** A user submits an inquiry in [`AIAssistant.jsx`](file:///c:/Users/asus/Desktop/code/Git/bizai/frontend/src/pages/AIAssistant.jsx).
+2. **Endpoint routing:** `POST /api/ai/chat` is received by [`backend/routers/ai.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/routers/ai.py).
+3. **Snapshot generation:** [`backend/services/report_service.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/services/report_service.py) extracts live metrics (revenue, profit, inventory alerts, product velocity) into a consolidated JSON payload.
+4. **Prompt construction:** [`backend/services/ai_service.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/services/ai_service.py) feeds this snapshot into Groq's `llama-3.1-8b-instant` model with a strict system constraint: *"Answer only from the provided database snapshot. Never invent figures."*
+5. **Deterministic fallback:** If the external LLM provider is unreachable or unconfigured, the internal `_fallback_answer()` heuristic engine computes exact calculations directly from the snapshot without system failure.
 
 ---
 
 ## 🗺️ 6. Master "Where is the Code?" Directory Sitemap
 
-If the professor asks: *"Ye wala code dikhao"*, here is your instant cheat-sheet:
-
-| Feature / Question | Exact File Path | Key Functions / Lines |
+| Feature / Domain | File Location | Key Functions / Responsibilities |
 | :--- | :--- | :--- |
-| **Database Connection & Engine** | `backend/database.py` | `create_engine`, `SessionLocal`, `get_db()` |
-| **Application Startup & Tables** | `backend/main.py` | `Base.metadata.create_all`, `seed_data()`, CORS |
-| **Environment & Settings** | `backend/config.py` | `Settings` class, `DATABASE_URL`, `SECRET_KEY` |
-| **Database Models (Tables)** | `backend/models/` | `user.py`, `customer.py`, `product.py`, `order.py`, `invoice.py` |
-| **Pydantic Schemas (Validation)**| `backend/schemas/` | `order.py`, `product.py`, `customer.py`, `invoice.py` |
-| **JWT Creation & Password Hash**| `backend/utils/security.py` | `verify_password()`, `create_access_token()` |
-| **Role-Based Auth Guard** | `backend/utils/permissions.py`| `require_admin`, `require_manager`, `require_staff` |
-| **Order Processing Logic** | `backend/services/order_service.py` | `create_order()`, `update_order_status()` |
-| **Stock & Inventory Deduction** | `backend/services/product_service.py` | `update_stock()`, `get_low_stock_products()` |
-| **Invoice & Due Date Logic** | `backend/services/invoice_service.py` | `generate_invoice_from_order()`, `update_invoice()` |
-| **PDF Invoice Generator** | `backend/utils/pdf.py` | `build_invoice_pdf()` (ReportLab vector PDF) |
-| **Financial Analytics & BI** | `backend/services/report_service.py` | `get_dashboard_metrics()`, `get_sales_analytics()` |
-| **AI Assistant Service** | `backend/services/ai_service.py` | `_ask_model()`, `_fallback_answer()`, `answer_query()` |
-| **Frontend API Base Client** | `frontend/src/api/client.js` | Axios instance, JWT request interceptor, 401 handler |
-| **Frontend Auth State & Token**| `frontend/src/context/AuthContext.jsx`| `login()`, `logout()`, `fetchUser()`, `localStorage` |
-| **Login Page UI** | `frontend/src/pages/Login.jsx` | Login form, state handling, error alerts |
-| **Dashboard Page UI** | `frontend/src/pages/Dashboard.jsx`| Metric cards, Chart.js sales graphs, low stock list |
-| **Order Management UI** | `frontend/src/pages/Orders.jsx` | Order creation modal, status progression badges |
-| **Invoice UI & PDF Download** | `frontend/src/pages/Invoices.jsx` | Invoice table, payment recording, PDF trigger |
-| **AI Chatbot Interface** | `frontend/src/pages/AIAssistant.jsx`| Chat interface, suggested prompt chips |
-| **Navigation & App Shell** | `frontend/src/components/Layout.jsx` | Sidebar navigation, search bar, active route dot |
+| **Database Connection & Session** | [`backend/database.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/database.py) | `create_engine`, `SessionLocal`, `get_db()` |
+| **Application Startup & CORS** | [`backend/main.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/main.py) | `Base.metadata.create_all`, middleware declarations |
+| **Configuration Settings** | [`backend/config.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/config.py) | `Settings` class, token expiry, environment parameters |
+| **Relational Data Models** | [`backend/models/`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/models) | `user.py`, `order.py`, `product.py`, `invoice.py`, `customer.py` |
+| **Pydantic Validation Schemas** | [`backend/schemas/`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/schemas) | Data transfer objects for request validation & serialization |
+| **Cryptographic Utilities** | [`backend/utils/security.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/utils/security.py) | `verify_password()`, `create_access_token()` |
+| **Role-Based Access Control** | [`backend/utils/permissions.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/utils/permissions.py) | `require_admin`, `require_manager`, `require_staff` |
+| **Order Processing Logic** | [`backend/services/order_service.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/services/order_service.py) | `create_order()`, `update_order_status()` |
+| **Inventory & Stock Management** | [`backend/services/product_service.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/services/product_service.py) | `update_stock()`, `get_low_stock_products()` |
+| **Invoicing & Accounts Logic** | [`backend/services/invoice_service.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/services/invoice_service.py) | `generate_invoice_from_order()`, `update_invoice()` |
+| **PDF Invoice Generation** | [`backend/utils/pdf.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/utils/pdf.py) | `build_invoice_pdf()` (ReportLab vector PDF generator) |
+| **Business Analytics & Reporting** | [`backend/services/report_service.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/services/report_service.py) | Aggregates revenue, profit, margins, and sales trends |
+| **AI Assistant & Fallback Engine** | [`backend/services/ai_service.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/services/ai_service.py) | LLM grounding prompt + `_fallback_answer()` rules |
+| **Frontend HTTP Client** | [`frontend/src/api/client.js`](file:///c:/Users/asus/Desktop/code/Git/bizai/frontend/src/api/client.js) | Axios base client, URL normalizer, token interceptor |
+| **Frontend State & Authentication**| [`frontend/src/context/AuthContext.jsx`](file:///c:/Users/asus/Desktop/code/Git/bizai/frontend/src/context/AuthContext.jsx) | `login()`, `logout()`, `localStorage` token management |
+| **Dashboard UI** | [`frontend/src/pages/Dashboard.jsx`](file:///c:/Users/asus/Desktop/code/Git/bizai/frontend/src/pages/Dashboard.jsx) | KPI metric widgets, Chart.js trends, inventory alerts |
+| **Orders UI** | [`frontend/src/pages/Orders.jsx`](file:///c:/Users/asus/Desktop/code/Git/bizai/frontend/src/pages/Orders.jsx) | Interactive order creation and status transition flow |
+| **Invoices UI** | [`frontend/src/pages/Invoices.jsx`](file:///c:/Users/asus/Desktop/code/Git/bizai/frontend/src/pages/Invoices.jsx) | Invoice records, payment capture, dynamic PDF download |
+| **AI Interface** | [`frontend/src/pages/AIAssistant.jsx`](file:///c:/Users/asus/Desktop/code/Git/bizai/frontend/src/pages/AIAssistant.jsx) | Conversational AI workspace with suggested action chips |
 
 ---
 
-## 💡 7. Top 10 Rapid-Fire Viva Questions & Best Answers
+## 💡 7. Top Viva Questions & Clear Technical Answers
 
-#### Q1: "Authentication kaise implement kiya hai?"
-> **Ans:** Stateless JWT (JSON Web Tokens). When the user logs in with email & password, the backend verifies the Bcrypt hash and issues a signed HS256 JWT access token. The frontend stores it in `localStorage` and sends it in the `Authorization: Bearer <token>` header with every Axios request.
+#### Q1: "How is authentication implemented?"
+> **Answer:** We implemented stateless **JWT (JSON Web Tokens)** authentication. When a user submits valid credentials, the server verifies the Bcrypt password hash and issues a cryptographically signed HS256 access token. The React client retains this token in `localStorage` and appends it to the `Authorization: Bearer <token>` header across all subsequent API calls.
 
-#### Q2: "Role-Based Access Control (RBAC) kaise handle ho raha hai?"
-> **Ans:** In the backend, we use FastAPI dependency injection (`Depends(require_manager)` or `Depends(require_admin)`). If a Staff user tries to delete an expense or promote a user, FastAPI rejects the request with HTTP 403 Forbidden before the business logic runs. On frontend, UI actions are conditionally hidden using `can(['admin', 'manager'])`.
+#### Q2: "How does Role-Based Access Control (RBAC) work across the system?"
+> **Answer:** In the backend, we use FastAPI dependency injection (`Depends(require_manager)` or `Depends(require_admin)`). If a staff user attempts an elevated operation (e.g. deleting an expense), FastAPI intercepts the request and returns an **HTTP 403 Forbidden** error before the business service executes. In the frontend, UI actions are conditionally rendered using the `can(['admin', 'manager'])` helper.
 
-#### Q3: "Agar internet disconnect ho jaye to AI assistant chalega?"
-> **Ans:** Yes Sir! In `backend/services/ai_service.py`, we implemented a two-tier hybrid architecture. If the Groq Cloud API is unreachable, it seamlessly activates our local `_fallback_answer()` heuristic engine that computes exact answers directly from the SQL database snapshot without crashing.
+#### Q3: "What happens to the AI Assistant if the internet connection is lost?"
+> **Answer:** We designed a **two-tier hybrid fallback architecture** in [`backend/services/ai_service.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/services/ai_service.py). If the external Groq cloud API cannot be reached, the application seamlessly activates an internal `_fallback_answer()` heuristic engine that computes exact answers directly from the SQL database snapshot without failing or crashing.
 
-#### Q4: "Password plain text me save ho raha hai?"
-> **Ans:** No Sir, absolutely not. Passwords are never stored in plain text. We use Bcrypt via Passlib with automatic salt generation in `backend/utils/security.py`. Even if the database is dumped, passwords cannot be reversed.
+#### Q4: "Are passwords saved in plain text in the database?"
+> **Answer:** No. Passwords are never stored in plain text. We utilize the **Bcrypt** cryptographic algorithm through Passlib with automatically salted hashes in [`backend/utils/security.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/utils/security.py). It is computationally irreversible.
 
-#### Q5: "Order banate waqt stock khatam ho jaye to kya hoga?"
-> **Ans:** In `backend/services/order_service.py`, when an order is confirmed, the system checks product stock against requested quantity. If stock is insufficient, it raises `HTTPException(400, "Insufficient stock")` and rolls back the database transaction.
+#### Q5: "What occurs if a product runs out of stock while placing an order?"
+> **Answer:** In [`backend/services/order_service.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/services/order_service.py), when confirming an order, available inventory is evaluated against the requested item quantities. If inventory is insufficient, the system raises an `HTTPException(400, "Insufficient stock")` and rolls back the database transaction, preventing inconsistent stock states.
 
-#### Q6: "Invoice PDF dynamically generate ho rahi hai ya static file hai?"
-> **Ans:** Completely dynamic Sir. In `backend/utils/pdf.py`, we use Python's `reportlab` library to draw vector invoice tables, order line items, business headers, GST calculations, and customer details on-the-fly in an in-memory byte buffer (`io.BytesIO()`), which is returned with `Content-Type: application/pdf`.
+#### Q6: "Are invoice PDFs static files stored on the server or generated dynamically?"
+> **Answer:** They are compiled dynamically in memory on each request. In [`backend/utils/pdf.py`](file:///c:/Users/asus/Desktop/code/Git/bizai/backend/utils/pdf.py), Python's `reportlab` library draws the invoice layout, business headers, itemized pricing, and tax totals into an in-memory byte buffer (`io.BytesIO()`), streaming the output directly with a `Content-Type: application/pdf` header.
 
-#### Q7: "Aapne CORS kyu configure kiya?"
-> **Ans:** Cross-Origin Resource Sharing. Because our React frontend runs on Vercel (`biz-ai-sooty.vercel.app`) or `localhost:5173`, and the API runs on Render (`bizai-api-08zv.onrender.com`), the browser enforces same-origin policy. We configured FastAPI `CORSMiddleware` in `backend/main.py` to allow cross-origin HTTP requests with credentials.
+#### Q7: "Why was CORS middleware required?"
+> **Answer:** Our frontend is hosted on Vercel (`biz-ai-sooty.vercel.app`) while our API server operates on Render (`bizai-api-08zv.onrender.com`). Modern browsers enforce the **Same-Origin Policy** and block cross-domain requests by default. Configuring FastAPI's `CORSMiddleware` explicitly allows safe cross-origin communication between our client and server.
 
-#### Q8: "Vite kyu choose kiya Create-React-App (CRA) ki jagah?"
-> **Ans:** Create-React-App is deprecated by the React team and uses Webpack, which bundles the entire project on every change. Vite uses native browser ES modules during development with esbuild, resulting in 10x to 100x faster cold start and instant Hot Module Replacement (HMR).
+#### Q8: "Why choose Vite over Create-React-App?"
+> **Answer:** Create-React-App is deprecated and uses Webpack, which re-bundles the entire application on code changes. Vite leverages native browser ES modules during development alongside `esbuild`, yielding instantaneous server starts and immediate Hot Module Replacement (HMR).
 
-#### Q9: "Database migrations kaise manage hoti hain?"
-> **Ans:** We use SQLAlchemy declarative models. On startup, `Base.metadata.create_all(bind=engine)` creates missing tables, and `scripts/seed.py` populates initial master data if the database is empty. For future migrations, SQLAlchemy integrates directly with Alembic.
+#### Q9: "Why maintain both Pydantic schemas and SQLAlchemy models?"
+> **Answer:** **Separation of concerns.** SQLAlchemy models define the database persistence schema (tables, column constraints, relational joins). Pydantic schemas define the external API communication contract (payload validation and response serialization). This cleanly prevents sensitive database fields (such as `password_hash`) from being serialized and exposed to the client.
 
-#### Q10: "Pydantic ka role kya hai jab SQLAlchemy models already hain?"
-> **Ans:** **Separation of Concerns:** SQLAlchemy models define the database storage structure (tables, columns, foreign keys). Pydantic schemas define the API data transfer contract (request validation, password hashing exclusion, field validation, and response serialization). This ensures sensitive fields like `password_hash` are never accidentally returned to the frontend!
-
----
-
-*Good luck with your presentation! You have a production-grade, full-stack architecture with clean code and complete database integrity.*
+#### Q10: "How are database migrations handled?"
+> **Answer:** Table declarations are centralized in SQLAlchemy declarative models. On application startup, `Base.metadata.create_all(bind=engine)` executes DDL statements for any newly registered tables, while `scripts/seed.py` seeds initial master data if the database is unpopulated. For complex ongoing production schemas, SQLAlchemy integrates directly with Alembic.

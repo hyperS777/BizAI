@@ -144,8 +144,8 @@ def update_integration_settings(
     current_user: User = Depends(require_integration_admin),
 ):
     values = payload.model_dump(exclude_unset=True)
-    if "cancel_lock_after" in values and values["cancel_lock_after"] != "shipped":
-        raise HTTPException(status_code=400, detail="REIHH policy locks cancellation after dispatch")
+    if "cancel_lock_after" in values and values["cancel_lock_after"] not in {"confirmed", "shipped", "delivered"}:
+        raise HTTPException(status_code=400, detail="Cancel lock must be confirmed, shipped, or delivered")
     if "store_currency" in values and values["store_currency"] not in {"INR", "USD", "EUR", "GBP", "CAD", "AFN"}:
         raise HTTPException(status_code=400, detail="Unsupported store currency")
     for key, value in values.items():

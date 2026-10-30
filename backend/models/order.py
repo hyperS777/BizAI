@@ -39,6 +39,7 @@ class Order(Base):
     tracking_company = Column(String(120), nullable=True)
     tracking_number = Column(String(120), nullable=True)
     tracking_url = Column(String(500), nullable=True)
+    delivery_location = Column(String(200), nullable=True)
     delivery_latitude = Column(Float, nullable=True)
     delivery_longitude = Column(Float, nullable=True)
     delivery_updated_at = Column(DateTime(timezone=True), nullable=True)

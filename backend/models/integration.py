@@ -37,10 +37,37 @@ class StorefrontSimulation(Base):
     reference = Column(String(40), unique=True, nullable=False, index=True)
     customer_name = Column(String(150), nullable=False)
     customer_email = Column(String(255), nullable=False)
+    delivery_address = Column(Text, nullable=True)
     items = Column(Text, nullable=False)
     total_amount = Column(Float, nullable=False)
     currency = Column(String(3), default="INR", nullable=False)
+    delivery_status = Column(String(32), default="ready_to_pack", nullable=False)
+    delivery_agent_name = Column(String(120), nullable=True)
+    delivery_note = Column(Text, nullable=True)
+    delivery_token_hash = Column(String(64), unique=True, nullable=True, index=True)
+    delivery_updated_at = Column(DateTime(timezone=True), nullable=True)
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=True, index=True)
+    current_location = Column(String(200), nullable=True)
+    delivery_latitude = Column(Float, nullable=True)
+    delivery_longitude = Column(Float, nullable=True)
+    checkpoint_log = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class StorefrontAnalyticsEvent(Base):
+    __tablename__ = "storefront_analytics_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_id = Column(String(160), unique=True, nullable=False, index=True)
+    session_id = Column(String(80), nullable=False, index=True)
+    event_type = Column(String(32), nullable=False, index=True)
+    product_id = Column(String(80), nullable=False, index=True)
+    product_title = Column(String(200), nullable=False)
+    variant_id = Column(String(80), nullable=True)
+    variant_title = Column(String(160), nullable=True)
+    quantity = Column(Integer, default=1, nullable=False)
+    source = Column(String(20), default="storefront", nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 
 class WebhookEndpoint(Base):

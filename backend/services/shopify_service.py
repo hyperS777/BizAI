@@ -25,6 +25,7 @@ from models.user import User
 from services.integration_service import emit_event, setting_enabled
 from services.invoice_service import generate_invoice_from_order, record_payment, void_invoice
 from services.product_service import _sync_product_stock
+from services.storefront_service import record_shopify_purchase_events
 
 
 def shopify_connection_status() -> Dict[str, Any]:
@@ -417,6 +418,8 @@ def _import_order(db: Session, payload: dict, topic: str) -> Order:
                 sku=line.get("sku") or (variant.sku if variant else product.sku),
             )
         )
+    if order.status != OrderStatus.CANCELLED.value:
+        record_shopify_purchase_events(db, external_id, resolved_lines)
     db.flush()
     if order.status != OrderStatus.CANCELLED.value:
         _reconcile_order_payment(db, order, payload)

@@ -76,12 +76,26 @@ _EXTRA_COLUMNS = {
         ("tracking_company", "VARCHAR(120)"),
         ("tracking_number", "VARCHAR(120)"),
         ("tracking_url", "VARCHAR(500)"),
+        ("delivery_location", "VARCHAR(200)"),
         ("delivery_latitude", "FLOAT"),
         ("delivery_longitude", "FLOAT"),
         ("delivery_updated_at", "DATETIME"),
     ],
     "invoices": [
         ("public_token", "VARCHAR(80)"),
+    ],
+    "storefront_simulations": [
+        ("delivery_status", "VARCHAR(32) DEFAULT 'ready_to_pack'"),
+        ("delivery_agent_name", "VARCHAR(120)"),
+        ("delivery_note", "TEXT"),
+        ("delivery_address", "TEXT"),
+        ("delivery_token_hash", "VARCHAR(64)"),
+        ("delivery_updated_at", "DATETIME"),
+        ("order_id", "INTEGER"),
+        ("current_location", "VARCHAR(200)"),
+        ("delivery_latitude", "FLOAT"),
+        ("delivery_longitude", "FLOAT"),
+        ("checkpoint_log", "TEXT"),
     ],
     "customers": [
         ("tags", "VARCHAR(255)"),
@@ -121,6 +135,7 @@ def ensure_schema():
             ("product_variants", "shopify_inventory_item_id", "ux_variants_shopify_inventory_item_id"),
             ("orders", "shopify_order_id", "ux_orders_shopify_order_id"),
             ("invoices", "public_token", "ux_invoices_public_token"),
+            ("storefront_simulations", "delivery_token_hash", "ux_storefront_sim_delivery_token"),
         )
         for table, column, index_name in unique_indexes:
             if table in existing_tables:

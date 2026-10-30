@@ -16,6 +16,7 @@ import UsersPage from './pages/Users';
 import { Profile, Settings } from './pages/Settings';
 import Integrations from './pages/Integrations';
 import Storefront from './pages/Storefront';
+import DeliveryDemo from './pages/DeliveryDemo';
 
 function RequireRoles({ roles, children }) {
   const { role } = useAuth();
@@ -35,6 +36,7 @@ export default function App() {
       <Routes>
         <Route path="/store" element={<Storefront />} />
         <Route path="/store/demo" element={<Storefront />} />
+        <Route path="/delivery/demo/:token" element={<DeliveryDemo />} />
         <Route path="/login" element={<Login />} />
         <Route element={<ProtectedLayout />}>
           <Route path="/" element={<Dashboard />} />

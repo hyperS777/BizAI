@@ -51,3 +51,6 @@ htmlcov/
 # Testing
 .pytest_cache/
 .mypy_cache/
+
+# Office temp files
+~$*

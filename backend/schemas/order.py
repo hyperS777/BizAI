@@ -111,6 +111,7 @@ class OrderResponse(OrderBase):
     tracking_company: Optional[str] = None
     tracking_number: Optional[str] = None
     tracking_url: Optional[str] = None
+    delivery_location: Optional[str] = None
     delivery_latitude: Optional[float] = None
     delivery_longitude: Optional[float] = None
     delivery_updated_at: Optional[datetime] = None
