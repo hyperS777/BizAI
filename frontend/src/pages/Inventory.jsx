@@ -50,7 +50,21 @@ export default function Inventory() {
             <tbody>
               {products.map((product) => (
                 <tr key={product.id}>
-                  <td><strong>{product.name}</strong><div className="muted">{product.sku}</div></td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      {product.image_url ? (
+                        <img src={product.image_url} alt="" style={{ width: 34, height: 42, objectFit: 'cover', borderRadius: 4, background: '#eee', flexShrink: 0 }} />
+                      ) : (
+                        <div style={{ width: 34, height: 42, borderRadius: 4, background: '#f0f2f1', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                          <Package size={15} style={{ color: 'var(--muted)' }} />
+                        </div>
+                      )}
+                      <span>
+                        <strong style={{ display: 'block', fontSize: 13 }}>{product.name}</strong>
+                        <small style={{ color: 'var(--muted)', fontSize: 11 }}>{product.sku}</small>
+                      </span>
+                    </div>
+                  </td>
                   <td>{product.stock_qty}</td>
                   <td>{product.min_stock_level}</td>
                   <td>{product.is_low_stock ? <span className="status-pill overdue">Low stock</span> : <span className="status-pill paid">Healthy</span>}</td>

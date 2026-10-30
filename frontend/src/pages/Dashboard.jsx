@@ -4,7 +4,10 @@ import { Bar } from 'react-chartjs-2';
 import {
   CategoryScale, LinearScale, BarElement, Tooltip, Legend, Chart as ChartJS,
 } from 'chart.js';
-import { ChevronRight, CircleDollarSign, ClipboardList, Package, Search, Sparkles, UserPlus } from 'lucide-react';
+import {
+  BarChart3, ChevronRight, CircleDollarSign, ClipboardList, Package, Search,
+  ShoppingBag, Sparkles, UserPlus,
+} from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import client from '../api/client';
 import { EmptyState, PageHeader } from '../components/ui';
@@ -75,6 +78,25 @@ export default function Dashboard() {
         <article className="metric yellow"><span>Net profit</span><strong>{money(profit.profit)}</strong><small>After expenses {money(profit.expenses)}</small></article>
         <article className="metric coral"><span>Low-stock items</span><strong>{inventory.low_stock_products || 0}</strong><small>{inventory.total_products || 0} products tracked</small></article>
       </section>}
+
+      {role !== 'accountant' && (
+        <section className="command-strip storefront-pulse-strip" style={{ marginBottom: 14 }}>
+          <div className="command-intro">
+            <span className="command-kicker" style={{ color: 'var(--teal)' }}>● Interconnected Store</span>
+            <strong>REIHH Customer Demo</strong>
+          </div>
+          <button type="button" onClick={() => window.open('/store', '_blank')}>
+            <span className="command-icon teal-bg"><ShoppingBag size={16} /></span>
+            <span><strong>Open Customer Store</strong><small>Simulate shopping &amp; demo payment</small></span>
+            <ChevronRight size={15} />
+          </button>
+          <button type="button" onClick={() => navigate('/integrations')}>
+            <span className="command-icon blue-bg"><BarChart3 size={16} /></span>
+            <span><strong>Store Funnel &amp; Analytics</strong><small>View live visitor conversion metrics</small></span>
+            <ChevronRight size={15} />
+          </button>
+        </section>
+      )}
 
       {role !== 'accountant' && <section className="command-strip">
         <div className="command-intro"><span className="command-kicker">Workspace shortcuts</span><strong>Keep today moving</strong></div>

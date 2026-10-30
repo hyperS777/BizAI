@@ -249,10 +249,26 @@ def _ensure_catalog_variant(db: Session, product: dict, variant: dict) -> tuple[
     else:
         db_variant.price = price
         db_variant.is_active = True
-        if (db_variant.stock_qty or 0) < 8:
+        if db_variant.stock_qty is None:
             db_variant.stock_qty = 50
     _sync_product_stock(db_product)
     return db_product, db_variant
+
+
+def sync_all_reihh_catalog(db: Session, force: bool = False) -> dict:
+    """Sync the live REIHH collection into the BizAI database."""
+    catalog = get_public_storefront_products(force_refresh=force)
+    count_prods = 0
+    count_vars = 0
+    for product in catalog.get("products", []):
+        for variant in product.get("variants", []):
+            _ensure_catalog_variant(db, product, variant)
+            count_vars += 1
+        count_prods += 1
+    # Deactivate legacy dummy products so only real REIHH pieces are active
+    db.query(Product).filter(Product.shopify_product_id.is_(None)).update({"is_active": False}, synchronize_session=False)
+    db.commit()
+    return {"products_synced": count_prods, "variants_synced": count_vars}
 
 
 def _upsert_demo_customer(db: Session, name: str, email: str, address: str) -> Customer:
@@ -327,6 +343,7 @@ def create_storefront_simulation(
     session_id: str,
     requested_items: list,
     discount_code: str | None = None,
+    payment_method: str | None = "demo_card",
 ) -> dict:
     if not settings.STOREFRONT_SIMULATION_ENABLED:
         raise ValueError("Customer simulation is disabled")
@@ -438,6 +455,18 @@ def create_storefront_simulation(
             source="demo",
         ))
     invoice = db.query(Invoice).filter(Invoice.order_id == order.id).first()
+    if not invoice:
+        from services.invoice_service import generate_invoice_from_order
+        invoice = generate_invoice_from_order(db, order.id, commit=False)
+    if invoice and order.total_amount > 0:
+        from services.invoice_service import record_payment
+        record_payment(
+            db,
+            invoice,
+            order.total_amount,
+            method=payment_method or "demo_card",
+            notes=f"Demo storefront payment ({payment_method or 'demo_card'}) - simulated instant approval",
+        )
     db.commit()
     db.refresh(simulation)
     return {

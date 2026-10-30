@@ -70,7 +70,21 @@ export default function Products() {
             <tbody>
               {products.map((product) => (
                 <tr key={product.id}>
-                  <td><strong>{product.name}</strong></td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      {product.image_url ? (
+                        <img src={product.image_url} alt="" style={{ width: 36, height: 46, objectFit: 'cover', borderRadius: 4, background: '#eee', flexShrink: 0 }} />
+                      ) : (
+                        <div style={{ width: 36, height: 46, borderRadius: 4, background: '#f0f2f1', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                          <Package size={16} style={{ color: 'var(--muted)' }} />
+                        </div>
+                      )}
+                      <span>
+                        <strong style={{ display: 'block', fontSize: 13 }}>{product.name}</strong>
+                        <small style={{ color: 'var(--muted)', fontSize: 11 }}>{product.variants?.length ? `${product.variants.length} variant${product.variants.length > 1 ? 's' : ''}` : 'Single item'}</small>
+                      </span>
+                    </div>
+                  </td>
                   <td>{product.sku}</td>
                   <td>{product.category?.name || '—'}</td>
                   <td>{money(product.price)}</td>

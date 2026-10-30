@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
-  ArrowRight, Check, ChevronDown, ChevronUp, Heart, Minus, Plus,
-  Search, ShoppingBag, Star, Truck, X,
+  ArrowRight, Check, ChevronDown, ChevronUp, CreditCard, DollarSign,
+  Heart, Minus, Package, Plus, Search, ShoppingBag, Smartphone, Star, Truck, X,
 } from 'lucide-react';
 import client from '../api/client';
 import { apiError, money } from '../utils/format';
@@ -11,13 +11,13 @@ import './Storefront.css';
 const collections = ['All pieces', 'New arrivals', 'Menswear', 'Womenswear', 'Wishlist'];
 
 const DISCOUNT_CODES = {
-  REIHH10: { type: 'percent', value: 10, label: '10% off' },
+  REIHH10: { type: 'percent', value: 10, label: '10% off — Spring special' },
   WELCOME: { type: 'percent', value: 15, label: '15% off — Welcome discount' },
   DEMO20: { type: 'percent', value: 20, label: '20% off — Demo special' },
-  FLAT500: { type: 'fixed', value: 500, label: '₹500 off' },
+  FLAT500: { type: 'fixed', value: 500, label: '₹500 off order' },
 };
 
-function trackStoreEvent({ sessionId, source, eventType, product, variant, quantity = 1 }) {
+function trackStoreEvent({ sessionId, eventType, product, variant, quantity = 1 }) {
   client.post('/storefront/events', {
     event_id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     session_id: sessionId,
@@ -25,25 +25,11 @@ function trackStoreEvent({ sessionId, source, eventType, product, variant, quant
     product_id: product.id,
     variant_id: variant?.id || null,
     quantity,
-    source,
+    source: 'demo',
   }).catch(() => {});
 }
 
-function relativeTime(dateStr) {
-  if (!dateStr) return '';
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins} min ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} hr${hrs > 1 ? 's' : ''} ago`;
-  return `${Math.floor(hrs / 24)} day${Math.floor(hrs / 24) > 1 ? 's' : ''} ago`;
-}
-
 export default function Storefront() {
-  const location = useLocation();
-  const isSimulation = location.pathname === '/store/demo';
-
   const [sessionId] = useState(() => {
     const key = 'reihh-store-session';
     const existing = sessionStorage.getItem(key);
@@ -74,9 +60,10 @@ export default function Storefront() {
   const [cart, setCart] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
 
-  /* ── checkout multi-step ── */
-  const [checkoutStep, setCheckoutStep] = useState(0); // 0=cart 1=info 2=review 3=done
-  const [customer, setCustomer] = useState({ name: '', email: '', address: '' });
+  /* ── checkout multi-step: 0=cart 1=info 2=payment & review 3=done ── */
+  const [checkoutStep, setCheckoutStep] = useState(0);
+  const [customer, setCustomer] = useState({ name: 'Aarav Patel', email: 'aarav.patel@example.com', address: '42 Marine Drive, Nariman Point, Mumbai 400021' });
+  const [paymentMethod, setPaymentMethod] = useState('demo_card');
   const [checkoutError, setCheckoutError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [simulationReceipt, setSimulationReceipt] = useState(null);
@@ -91,7 +78,7 @@ export default function Storefront() {
   useEffect(() => {
     client.get('/storefront/products')
       .then(({ data }) => setProducts(data.products || []))
-      .catch(() => setError('The REIHH collection is temporarily unavailable. Please visit reihh.com to shop.'))
+      .catch(() => setError('The REIHH collection is temporarily unavailable. Please reload.'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -123,12 +110,12 @@ export default function Storefront() {
         if (!productId || viewedProducts.current.has(productId)) return;
         viewedProducts.current.add(productId);
         const product = filteredProducts.find((item) => item.id === productId);
-        if (product) trackStoreEvent({ sessionId, source: isSimulation ? 'demo' : 'live', eventType: 'product_view', product, variant: product.variants[0] });
+        if (product) trackStoreEvent({ sessionId, eventType: 'product_view', product, variant: product.variants[0] });
       });
     }, { threshold: 0.35 });
     gridRef.current.querySelectorAll('[data-product-id]').forEach((card) => observer.observe(card));
     return () => observer.disconnect();
-  }, [filteredProducts, sessionId, isSimulation]);
+  }, [filteredProducts, sessionId]);
 
   /* ── derived ── */
   const lineCount = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -151,7 +138,7 @@ export default function Storefront() {
   const addToCart = (product) => {
     const variant = selectedVariant(product);
     if (!variant?.available) return;
-    trackStoreEvent({ sessionId, source: isSimulation ? 'demo' : 'live', eventType: 'add_to_cart', product, variant });
+    trackStoreEvent({ sessionId, eventType: 'add_to_cart', product, variant });
     setCart((current) => {
       const found = current.find((line) => line.variant.id === variant.id);
       return found
@@ -174,8 +161,7 @@ export default function Storefront() {
   const toggleWishlist = (productId, product) => {
     setWishlist((prev) => {
       if (prev.includes(productId)) return prev.filter((id) => id !== productId);
-      // fire-and-forget wishlist_add event
-      if (product) trackStoreEvent({ sessionId, source: isSimulation ? 'demo' : 'live', eventType: 'add_to_cart', product, variant: product.variants[0] });
+      if (product) trackStoreEvent({ sessionId, eventType: 'add_to_cart', product, variant: product.variants[0] });
       return [...prev, productId];
     });
   };
@@ -184,7 +170,7 @@ export default function Storefront() {
     const code = discountInput.trim().toUpperCase();
     const match = DISCOUNT_CODES[code];
     if (!match) {
-      setDiscountError('Invalid discount code.');
+      setDiscountError('Invalid code. Try REIHH10, WELCOME, or DEMO20.');
       setAppliedDiscount(null);
       return;
     }
@@ -202,18 +188,12 @@ export default function Storefront() {
     if (!cart.length) return;
     cart.forEach((line) => trackStoreEvent({
       sessionId,
-      source: isSimulation ? 'demo' : 'live',
-      eventType: isSimulation ? 'demo_checkout_started' : 'checkout_started',
+      eventType: 'demo_checkout_started',
       product: line.product,
       variant: line.variant,
       quantity: line.quantity,
     }));
-    if (isSimulation) {
-      setCheckoutStep(1);
-    } else {
-      const items = cart.map((line) => `${line.variant.id}:${line.quantity}`).join(',');
-      window.location.assign(`https://reihh.com/cart/${items}`);
-    }
+    setCheckoutStep(1);
   };
 
   const submitSimulation = async () => {
@@ -226,6 +206,7 @@ export default function Storefront() {
         delivery_address: customer.address,
         session_id: sessionId,
         discount_code: appliedDiscount?.code || null,
+        payment_method: paymentMethod,
         items: cart.map((line) => ({ variant_id: line.variant.id, quantity: line.quantity })),
       });
       setSimulationReceipt(data);
@@ -233,7 +214,7 @@ export default function Storefront() {
       setAppliedDiscount(null);
       setCheckoutStep(3);
     } catch (err) {
-      setCheckoutError(apiError(err, 'Could not record this simulation. Please retry.'));
+      setCheckoutError(apiError(err, 'Could not complete demo order. Please retry.'));
     } finally {
       setSubmitting(false);
     }
@@ -241,7 +222,6 @@ export default function Storefront() {
 
   const resetCheckout = () => {
     setCheckoutStep(0);
-    setCustomer({ name: '', email: '', address: '' });
     setCheckoutError('');
     setSimulationReceipt(null);
     setCartOpen(false);
@@ -264,9 +244,12 @@ export default function Storefront() {
       return (
         <div className="order-confirmation">
           <div className="order-confirm-check"><Check size={32} /></div>
-          <span className="store-kicker">Order confirmed</span>
+          <span className="store-kicker">Order confirmed &amp; paid</span>
           <h3>{simulationReceipt.reference}</h3>
-          <p className="order-confirm-sub">Your order has been placed. Estimated delivery: <strong>3–5 business days</strong></p>
+          <p className="order-confirm-sub">
+            Payment verified via <strong>{paymentMethod === 'demo_card' ? 'Demo Card (Instant)' : paymentMethod === 'demo_upi' ? 'Demo UPI (Verified)' : 'Demo Cash on Delivery'}</strong>.
+            Estimated delivery: <strong>3–5 business days</strong>.
+          </p>
           <div className="order-receipt-items">
             {simulationReceipt.items?.map((item) => (
               <div className="receipt-line" key={item.variant_id}>
@@ -280,7 +263,7 @@ export default function Storefront() {
             ))}
           </div>
           <div className="receipt-total-row">
-            <span>Order total</span>
+            <span>Amount paid</span>
             <strong>{money(simulationReceipt.total_amount)}</strong>
           </div>
           <div className="order-confirm-actions">
@@ -290,7 +273,15 @@ export default function Storefront() {
               target="_blank"
               rel="noreferrer"
             >
-              Track delivery <ArrowRight size={16} />
+              Track delivery (Delivery Agent POV) <ArrowRight size={16} />
+            </a>
+            <a
+              className="store-secondary-button"
+              href="/orders"
+              target="_blank"
+              rel="noreferrer"
+            >
+              View in BizAI Merchant Orders →
             </a>
             <button className="store-continue-button" onClick={resetCheckout}>
               Continue shopping
@@ -316,14 +307,15 @@ export default function Storefront() {
       return (
         <div className="checkout-steps">
           <div className="step-indicators">
-            {['Customer info', 'Review order', 'Confirm'].map((label, i) => (
+            {['Customer info', 'Demo payment', 'Confirm'].map((label, i) => (
               <div key={label} className={`step-indicator ${i < checkoutStep ? 'done' : i === checkoutStep - 1 ? 'active' : ''}`}>
                 <span>{i + 1}</span>
                 <small>{label}</small>
               </div>
             ))}
           </div>
-          <h3 className="step-heading">Your information</h3>
+          <h3 className="step-heading">Customer &amp; delivery info</h3>
+          <p className="step-subheading">Enter demo customer details to simulate a live order.</p>
           <label className="simulation-customer-field">
             Full name
             <input
@@ -331,7 +323,7 @@ export default function Storefront() {
               autoComplete="name"
               value={customer.name}
               onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
-              placeholder="Jane Smith"
+              placeholder="Aarav Patel"
             />
           </label>
           <label className="simulation-customer-field">
@@ -342,7 +334,7 @@ export default function Storefront() {
               autoComplete="email"
               value={customer.email}
               onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
-              placeholder="jane@example.com"
+              placeholder="aarav@example.com"
             />
           </label>
           <label className="simulation-customer-field">
@@ -352,60 +344,101 @@ export default function Storefront() {
               autoComplete="street-address"
               value={customer.address}
               onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
-              placeholder="Street, city, state, PIN"
+              placeholder="42 Marine Drive, Mumbai, 400021"
             />
           </label>
           {checkoutError && <p className="simulation-error">{checkoutError}</p>}
           <div className="step-nav">
-            <button className="store-continue-button" onClick={() => setCheckoutStep(0)}>← Back</button>
+            <button className="store-continue-button" onClick={() => setCheckoutStep(0)}>← Back to bag</button>
             <button
               className="store-checkout-button step-next"
               disabled={!customer.name || !customer.email || !customer.address}
               onClick={() => setCheckoutStep(2)}
             >
-              Review order <ArrowRight size={15} />
+              Payment method <ArrowRight size={15} />
             </button>
           </div>
         </div>
       );
     }
 
-    // Step 2: Review order
+    // Step 2: Payment method & Review
     if (checkoutStep === 2) {
       return (
         <div className="checkout-steps">
           <div className="step-indicators">
-            {['Customer info', 'Review order', 'Confirm'].map((label, i) => (
+            {['Customer info', 'Demo payment', 'Confirm'].map((label, i) => (
               <div key={label} className={`step-indicator ${i < checkoutStep - 1 ? 'done' : i === checkoutStep - 1 ? 'active' : ''}`}>
                 <span>{i + 1}</span>
                 <small>{label}</small>
               </div>
             ))}
           </div>
-          <h3 className="step-heading">Review your order</h3>
-          <div className="review-customer">
-            <p><strong>{customer.name}</strong> · {customer.email}</p>
+          <h3 className="step-heading">Demo payment selection</h3>
+          <div className="demo-payment-options">
+            <label className={`demo-payment-option ${paymentMethod === 'demo_card' ? 'selected' : ''}`}>
+              <input
+                type="radio"
+                name="paymentMethod"
+                value="demo_card"
+                checked={paymentMethod === 'demo_card'}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+              />
+              <CreditCard size={18} />
+              <div>
+                <strong>Demo Visa / Mastercard</strong>
+                <small>Simulated card (•••• 4242) · Instant auto-approval</small>
+              </div>
+            </label>
+
+            <label className={`demo-payment-option ${paymentMethod === 'demo_upi' ? 'selected' : ''}`}>
+              <input
+                type="radio"
+                name="paymentMethod"
+                value="demo_upi"
+                checked={paymentMethod === 'demo_upi'}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+              />
+              <Smartphone size={18} />
+              <div>
+                <strong>Demo UPI (GooglePay / PhonePe)</strong>
+                <small>customer@okhdfcbank · One-click simulated approval</small>
+              </div>
+            </label>
+
+            <label className={`demo-payment-option ${paymentMethod === 'demo_cod' ? 'selected' : ''}`}>
+              <input
+                type="radio"
+                name="paymentMethod"
+                value="demo_cod"
+                checked={paymentMethod === 'demo_cod'}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+              />
+              <DollarSign size={18} />
+              <div>
+                <strong>Demo Cash on Delivery (COD)</strong>
+                <small>Simulated payment upon physical receipt</small>
+              </div>
+            </label>
+          </div>
+
+          <div className="review-customer" style={{ marginTop: 16 }}>
+            <p><strong>Deliver to:</strong> {customer.name} ({customer.email})</p>
             <p className="review-address">{customer.address}</p>
           </div>
-          <div className="cart-lines review-lines">
-            {cart.map(({ product, variant, quantity }) => (
-              <article className="cart-line" key={variant.id}>
-                {product.image_url && <img src={product.image_url} alt="" />}
-                <div className="cart-line-body">
-                  <strong>{product.title}</strong>
-                  <small>{variant.title}</small>
-                  <span>{money(variant.price)} × {quantity}</span>
-                </div>
-                <b>{money(variant.price * quantity)}</b>
-              </article>
-            ))}
+
+          <div className="cart-summary" style={{ marginTop: 14 }}>
+            <div><span>Subtotal ({lineCount} items)</span><strong>{money(subtotal)}</strong></div>
+            {appliedDiscount && (
+              <div className="discount-row">
+                <span>Discount ({appliedDiscount.code})</span>
+                <strong className="discount-value">−{money(discountAmount)}</strong>
+              </div>
+            )}
+            <div className="total-row"><span>Order total</span><strong>{money(orderTotal)}</strong></div>
+            <div className="free-shipping-row"><Truck size={13} /> FREE domestic express shipping</div>
           </div>
-          <div className="cart-summary">
-            <div><span>Subtotal</span><strong>{money(subtotal)}</strong></div>
-            {appliedDiscount && <div className="discount-row"><span>Discount ({appliedDiscount.code})</span><strong className="discount-value">−{money(discountAmount)}</strong></div>}
-            <div className="total-row"><span>Total</span><strong>{money(orderTotal)}</strong></div>
-            <div className="free-shipping-row"><Truck size={13} /> FREE delivery estimated in 3–5 business days</div>
-          </div>
+
           {checkoutError && <p className="simulation-error">{checkoutError}</p>}
           <div className="step-nav">
             <button className="store-continue-button" onClick={() => setCheckoutStep(1)}>← Back</button>
@@ -414,10 +447,10 @@ export default function Storefront() {
               disabled={submitting}
               onClick={submitSimulation}
             >
-              {submitting ? 'Placing order…' : 'Place order'} <ArrowRight size={15} />
+              {submitting ? 'Authorizing demo payment…' : `Pay ${money(orderTotal)} & Place Order`} <ArrowRight size={15} />
             </button>
           </div>
-          <p className="simulation-note"><Check size={13} /> Test simulation — no real payment or stock change</p>
+          <p className="simulation-note"><Check size={13} /> Demo transaction — instantly recorded in BizAI database &amp; reports</p>
         </div>
       );
     }
@@ -444,53 +477,42 @@ export default function Storefront() {
           ))}
         </div>
         <div className="cart-summary">
-          {isSimulation && (
-            <div className="discount-section">
-              <button
-                className="discount-toggle"
-                onClick={() => setDiscountOpen((o) => !o)}
-                aria-expanded={discountOpen}
-              >
-                Have a discount code? {discountOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              </button>
-              {discountOpen && (
-                <div className="discount-input-row">
-                  <input
-                    value={discountInput}
-                    onChange={(e) => setDiscountInput(e.target.value.toUpperCase())}
-                    placeholder="Enter code (e.g. REIHH10)"
-                    onKeyDown={(e) => e.key === 'Enter' && applyDiscount()}
-                  />
-                  <button onClick={applyDiscount} className="discount-apply-btn">Apply</button>
-                </div>
-              )}
-              {discountError && <p className="discount-error">{discountError}</p>}
-              {appliedDiscount && (
-                <p className="discount-applied">
-                  <Check size={13} /> {appliedDiscount.label}
-                  <button onClick={removeDiscount} className="discount-remove">Remove</button>
-                </p>
-              )}
-            </div>
-          )}
+          <div className="discount-section">
+            <button
+              className="discount-toggle"
+              onClick={() => setDiscountOpen(!discountOpen)}
+              type="button"
+            >
+              <span>Have a promo code? (Try REIHH10, WELCOME)</span>
+              {discountOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+            {discountOpen && (
+              <div className="discount-form">
+                <input
+                  value={discountInput}
+                  onChange={(e) => setDiscountInput(e.target.value)}
+                  placeholder="Code (e.g. REIHH10)"
+                  maxLength={20}
+                />
+                <button type="button" onClick={applyDiscount}>Apply</button>
+              </div>
+            )}
+            {discountError && <p className="discount-error">{discountError}</p>}
+            {appliedDiscount && (
+              <p className="discount-applied">
+                <Check size={13} /> {appliedDiscount.label}
+                <button onClick={removeDiscount} className="discount-remove">Remove</button>
+              </p>
+            )}
+          </div>
           <div><span>Subtotal</span><strong>{money(subtotal)}</strong></div>
           {appliedDiscount && <div className="discount-row"><span>Discount ({appliedDiscount.code})</span><strong className="discount-value">−{money(discountAmount)}</strong></div>}
           {appliedDiscount && <div className="total-row"><span>Total</span><strong>{money(orderTotal)}</strong></div>}
-          <div className="free-shipping-row"><Truck size={13} /> FREE delivery</div>
-          {isSimulation ? (
-            <>
-              <button className="store-checkout-button" onClick={startCheckout}>
-                Checkout — {money(orderTotal)} <ArrowRight size={16} />
-              </button>
-              <p className="simulation-note"><Check size={13} /> Test record only — no real payment or stock change</p>
-            </>
-          ) : (
-            <>
-              <small>Shipping and payment options are calculated at REIHH checkout.</small>
-              <button className="store-checkout-button" onClick={startCheckout}>Continue to REIHH checkout <ArrowRight size={16} /></button>
-              <p className="simulation-note"><Check size={13} /> Secure checkout on reihh.com</p>
-            </>
-          )}
+          <div className="free-shipping-row"><Truck size={13} /> Complimentary domestic delivery</div>
+          <button className="store-checkout-button" onClick={startCheckout}>
+            Proceed to checkout — {money(orderTotal)} <ArrowRight size={16} />
+          </button>
+          <p className="simulation-note"><Check size={13} /> Demo Store Mode — Instant simulated order &amp; live driver link</p>
         </div>
       </>
     );
@@ -500,21 +522,19 @@ export default function Storefront() {
     <div className="storefront">
       {/* Announcement bar */}
       <div className="store-announcement">
-        {isSimulation
-          ? <><span className="demo-badge">DEMO</span> No payment will be taken · Test orders are kept separate</>
-          : <>Complimentary domestic shipping <span>•</span> Flexible payment at checkout</>
-        }
-        <a href={isSimulation ? '/store' : '/store/demo'}>{isSimulation ? 'Live store →' : 'Customer demo →'}</a>
+        <span className="demo-badge">DEMO STORE</span>
+        <span>Interactive REIHH Experience · Instant Simulated Payment · Grounded in Live BizAI Data</span>
+        <a href="/integrations" target="_blank" rel="noreferrer">Merchant Analytics →</a>
       </div>
 
       {/* Header */}
       <header className="store-header">
-        <a className="store-wordmark" href="https://reihh.com/" aria-label="REIHH home">REIHH<span>®</span></a>
+        <a className="store-wordmark" href="/" aria-label="REIHH home">REIHH<span>®</span></a>
         <nav className="store-links" aria-label="Store collections">
-          <a href="https://reihh.com/collections/menswear">Menswear</a>
-          <a href="https://reihh.com/collections/womenswear">Womenswear</a>
-          <a href="https://reihh.com/collections/new-collections">New collections</a>
-          <a href="https://reihh.com/collections/best-sellers">Best sellers</a>
+          <a href="#menswear" onClick={(e) => { e.preventDefault(); setCategory('Menswear'); }}>Menswear</a>
+          <a href="#womenswear" onClick={(e) => { e.preventDefault(); setCategory('Womenswear'); }}>Womenswear</a>
+          <a href="#new" onClick={(e) => { e.preventDefault(); setCategory('New arrivals'); }}>New collections</a>
+          <a href="#wishlist" onClick={(e) => { e.preventDefault(); setCategory('Wishlist'); }}>Wishlist ({wishlist.length})</a>
         </nav>
         <button className="store-cart-button" onClick={() => setCartOpen(true)} aria-label={`Open shopping bag, ${lineCount} items`}>
           <div className="cart-btn-inner">
@@ -529,22 +549,19 @@ export default function Storefront() {
         {/* Hero section */}
         <section className="store-hero">
           <div className="hero-content">
-            <p className="store-kicker">{isSimulation ? 'Customer checkout simulation' : 'REIHH · Spring / Summer 26'}</p>
-            <h1>
-              {isSimulation
-                ? <><span>Try the</span><br />REIHH journey.</>
-                : <><span>Pieces with</span><br />presence.</>
-              }
-            </h1>
+            <p className="store-kicker">Interactive Customer Experience</p>
+            <h1><span>Pieces with</span><br />presence.</h1>
             <p className="store-intro-copy">
-              {isSimulation
-                ? 'Try the REIHH customer journey with live products. This preview never places or charges a real order.'
-                : 'Modern silhouettes, considered details, and expressive everyday dressing.'
-              }
+              Explore the real REIHH collection. Select pieces, customize sizes, apply discount codes, and test the full customer journey with instant simulated payment.
             </p>
-            <a className="store-original-link" href={isSimulation ? '/store' : 'https://reihh.com/collections/all'}>
-              {isSimulation ? 'Switch to live REIHH checkout' : 'Visit the original REIHH store'} <ArrowRight size={15} />
-            </a>
+            <div className="hero-actions">
+              <button className="store-hero-btn" onClick={() => { setCategory('All pieces'); window.scrollTo({ top: 400, behavior: 'smooth' }); }}>
+                Shop the Edit <ArrowRight size={15} />
+              </button>
+              <a className="store-original-link" href="/" target="_blank" rel="noreferrer">
+                Open BizAI Admin Portal <ArrowRight size={15} />
+              </a>
+            </div>
           </div>
           <div className="hero-art" aria-hidden="true">
             <div className="hero-circle hero-circle-1" />
@@ -557,10 +574,10 @@ export default function Storefront() {
         <section className="store-catalog" aria-label="REIHH product catalog">
           <div className="catalog-heading">
             <div>
-              <span className="store-kicker">{isSimulation ? 'Preview products' : 'The collection'}</span>
+              <span className="store-kicker">Real Catalog Feed</span>
               <h2>
-                {category === 'Wishlist' ? 'Your wishlist' : isSimulation ? 'Build a test bag' : 'Shop the edit'}
-                {' '}<small>{filteredProducts.length}</small>
+                {category === 'Wishlist' ? 'Your wishlist' : category}
+                {' '}<small>{filteredProducts.length} pieces</small>
               </h2>
             </div>
             <label className="store-search">
@@ -603,12 +620,12 @@ export default function Storefront() {
               return (
                 <article className="store-product" key={product.id} data-product-id={product.id}>
                   <div className="store-product-image-wrap">
-                    <a className="store-product-image" href={product.product_url} target="_blank" rel="noreferrer">
+                    <div className="store-product-image">
                       {product.image_url
                         ? <img src={product.image_url} alt={product.title} loading="lazy" />
                         : <span className="product-placeholder">REIHH</span>
                       }
-                    </a>
+                    </div>
                     {stockBadge(product)}
                     <button
                       className={`wishlist-btn ${isWished ? 'wished' : ''}`}
@@ -621,8 +638,8 @@ export default function Storefront() {
                   </div>
                   <div className="store-product-info">
                     <div className="store-product-title">
-                      <a href={product.product_url} target="_blank" rel="noreferrer">{product.title}</a>
-                      <span>{money(product.price)}</span>
+                      <span className="product-name">{product.title}</span>
+                      <span className="product-price">{money(product.price)}</span>
                     </div>
                     <small className="product-category">{product.category}</small>
                     {product.variants.length > 1 && (
@@ -633,7 +650,7 @@ export default function Storefront() {
                           onChange={(e) => {
                             const nextVariant = product.variants.find((v) => v.id === e.target.value);
                             setSelectedVariants({ ...selectedVariants, [product.id]: e.target.value });
-                            if (nextVariant) trackStoreEvent({ sessionId, source: isSimulation ? 'demo' : 'live', eventType: 'variant_selected', product, variant: nextVariant });
+                            if (nextVariant) trackStoreEvent({ sessionId, eventType: 'variant_selected', product, variant: nextVariant });
                           }}
                           aria-label={`Choose variant for ${product.title}`}
                         >
@@ -661,17 +678,17 @@ export default function Storefront() {
 
         {/* Trust strip */}
         <section className="trust-strip">
-          <div className="trust-item"><Truck size={16} /><span>Free delivery on all orders</span></div>
-          <div className="trust-item"><Star size={16} /><span>Genuine REIHH products</span></div>
-          <div className="trust-item"><Check size={16} /><span>Easy returns &amp; exchanges</span></div>
+          <div className="trust-item"><Truck size={16} /><span>Free express delivery on all orders</span></div>
+          <div className="trust-item"><Star size={16} /><span>100% Genuine REIHH Garments</span></div>
+          <div className="trust-item"><Check size={16} /><span>Connected to BizAI Warehouse &amp; Inventory</span></div>
         </section>
       </main>
 
       <footer className="store-footer">
-        <a href="https://reihh.com/pages/returns-exchanges">Returns &amp; exchanges</a>
-        <a href="https://reihh.com/pages/shipping">Shipping</a>
-        <a href={isSimulation ? '/store' : '/store/demo'}>{isSimulation ? 'Live storefront' : 'Customer preview'}</a>
-        <span>{isSimulation ? 'Simulation records never create payments or live orders.' : 'Checkout and payment are securely completed on REIHH.'}</span>
+        <a href="/" target="_blank" rel="noreferrer">BizAI Dashboard</a>
+        <a href="/orders" target="_blank" rel="noreferrer">Merchant Orders</a>
+        <a href="/integrations" target="_blank" rel="noreferrer">Store Analytics</a>
+        <span>Simulation records immediately update BizAI inventory, invoices, and analytics.</span>
       </footer>
 
       {/* Cart drawer */}
@@ -689,10 +706,10 @@ export default function Storefront() {
             <div className="cart-heading">
               <div>
                 <span className="store-kicker">
-                  {checkoutStep === 0 ? 'Your selection' : checkoutStep === 1 ? 'Step 1 of 3' : checkoutStep === 2 ? 'Step 2 of 3' : 'Order confirmed'}
+                  {checkoutStep === 0 ? 'Your selection' : checkoutStep === 1 ? 'Step 1 of 3: Customer' : checkoutStep === 2 ? 'Step 2 of 3: Demo Payment' : 'Order confirmed'}
                 </span>
                 <h2>
-                  {checkoutStep === 0 ? 'Shopping bag' : checkoutStep === 1 ? 'Customer info' : checkoutStep === 2 ? 'Review order' : 'Order placed!'}
+                  {checkoutStep === 0 ? 'Shopping bag' : checkoutStep === 1 ? 'Delivery details' : checkoutStep === 2 ? 'Demo payment' : 'Order placed!'}
                   {checkoutStep === 0 && lineCount > 0 && <small>{lineCount}</small>}
                 </h2>
               </div>

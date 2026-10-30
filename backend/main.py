@@ -19,9 +19,13 @@ from scripts.seed import seed_data
 seed_data()
 
 from services.integration_service import ensure_default_settings
+from services.storefront_service import sync_all_reihh_catalog
 db = SessionLocal()
 try:
     ensure_default_settings(db)
+    sync_all_reihh_catalog(db)
+except Exception as exc:
+    logger.warning("Could not auto-sync catalog on startup: %s", exc)
 finally:
     db.close()
 

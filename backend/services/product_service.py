@@ -35,7 +35,7 @@ def get_products(
     search: Optional[str] = None,
     product_type: Optional[str] = None,
 ) -> List[Product]:
-    query = db.query(Product).options(joinedload(Product.category), joinedload(Product.variants))
+    query = db.query(Product).options(joinedload(Product.category), joinedload(Product.variants)).filter(Product.is_active.is_(True))
     if category_id:
         query = query.filter(Product.category_id == category_id)
     if product_type:

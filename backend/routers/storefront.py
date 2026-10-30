@@ -39,11 +39,21 @@ def create_customer_simulation(payload: StorefrontSimulationCreate, db: Session 
             payload.session_id,
             payload.items,
             payload.discount_code,
+            payload.payment_method,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/sync-catalog")
+def sync_catalog_endpoint(db: Session = Depends(get_db)):
+    try:
+        from services.storefront_service import sync_all_reihh_catalog
+        return sync_all_reihh_catalog(db, force=True)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/demo-delivery/{token}")
