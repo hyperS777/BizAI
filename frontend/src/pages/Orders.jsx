@@ -51,8 +51,7 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice }) {
   return (
     <>
       <tr
-        className={`order-row ${expanded ? 'expanded' : ''}`}
-        style={{ cursor: 'pointer' }}
+        className={`order-data-row ${expanded ? 'expanded' : ''}`}
         onClick={() => setExpanded((x) => !x)}
       >
         <td>
@@ -88,7 +87,7 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice }) {
         </td>
         <td><strong>{money(order.total_amount)}</strong></td>
         <td>{formatDate(order.created_at)}</td>
-        <td onClick={(e) => e.stopPropagation()}>
+        <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'right' }}>
           {canInvoice && !order.invoice && (
             <button className="text-btn" onClick={() => onInvoice(order)}>Invoice</button>
           )}
@@ -330,7 +329,17 @@ export default function Orders() {
       ) : visibleOrders.length ? (
         <section className="panel table-panel order-table-panel">
           <table className="data-table orders-expandable-table">
-            <thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Delivery</th><th>Total</th><th>Date</th><th /></tr></thead>
+            <thead>
+              <tr>
+                <th style={{ width: '16%' }}>Order</th>
+                <th style={{ width: '20%' }}>Customer</th>
+                <th style={{ width: '14%' }}>Status</th>
+                <th style={{ width: '22%' }}>Delivery</th>
+                <th style={{ width: '12%' }}>Total</th>
+                <th style={{ width: '10%' }}>Date</th>
+                <th style={{ width: '6%', textAlign: 'right' }} />
+              </tr>
+            </thead>
             <tbody>
               {visibleOrders.map((order) => (
                 <OrderRow

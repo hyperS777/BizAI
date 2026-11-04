@@ -273,18 +273,39 @@ def sync_all_reihh_catalog(db: Session, force: bool = False) -> dict:
 
 
 def _upsert_demo_customer(db: Session, name: str, email: str, address: str) -> Customer:
-    customer = db.query(Customer).filter(Customer.email == email.lower()).first()
+    clean_email = email.strip().lower()
+    clean_name = name.strip() or "Demo Customer"
+    customer = db.query(Customer).filter(Customer.email == clean_email).first()
     if customer:
-        customer.name = name
-        customer.address = address
+        # If the existing customer has a different name, do NOT mutate it!
+        # Mutating customer.name would retroactively rename all past orders for this customer.
+        # Instead, generate a distinct demo customer so every device/identity stays isolated.
+        if customer.name and customer.name.strip().lower() != clean_name.lower():
+            prefix = clean_email.split("@")[0] if "@" in clean_email else "demo"
+            domain = clean_email.split("@")[-1] if "@" in clean_email else "demo.reihh.com"
+            unique_email = f"{prefix}_{secrets.token_hex(3)}@{domain}"
+            new_customer = Customer(
+                name=clean_name,
+                email=unique_email,
+                address=address,
+                company="REIHH demo customer",
+                tags="demo-store",
+                notes="Created from demo storefront checkout (separate device/identity).",
+            )
+            db.add(new_customer)
+            db.flush()
+            return new_customer
+        # Same customer name: update address if provided
+        if address:
+            customer.address = address
         if customer.tags and "demo-store" not in customer.tags:
             customer.tags = f"{customer.tags},demo-store"
         elif not customer.tags:
             customer.tags = "demo-store"
         return customer
     customer = Customer(
-        name=name,
-        email=email.lower(),
+        name=clean_name,
+        email=clean_email,
         address=address,
         company="REIHH demo customer",
         tags="demo-store",

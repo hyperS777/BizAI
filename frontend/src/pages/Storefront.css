@@ -12,9 +12,23 @@
   --store-red: #c0392b;
   --drawer-width: 435px;
   min-height: 100vh;
-  background: #fff;
-  color: var(--store-ink);
+  background: #fff !important;
+  color: #161b1a !important;
   font-family: 'DM Sans', sans-serif;
+  color-scheme: light;
+}
+
+.storefront button {
+  font-family: inherit;
+  color: inherit;
+}
+
+.storefront input,
+.storefront select {
+  font-family: inherit;
+  color: #161b1a !important;
+  background: #fff !important;
+  border-color: #dcded8 !important;
 }
 
 /* ── Announcement Bar ── */
