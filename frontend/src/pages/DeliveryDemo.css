@@ -563,3 +563,93 @@
   .checkpoint-entry { grid-template-columns: 1fr; padding-left: 44px; }
   .checkpoint-icon { left: 0; }
 }
+
+/* ── Invoice ready panel ── */
+.invoice-ready-panel {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 24px;
+  margin: 0 max(22px, calc((100vw - 900px)/2)) 20px;
+  background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+  border: 1.5px solid #81c784;
+  border-radius: 10px;
+}
+.invoice-ready-icon {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #2e7d32;
+  color: #fff;
+  display: grid;
+  place-items: center;
+}
+.invoice-ready-body { flex: 1; }
+.invoice-ready-body strong { display: block; font-size: 15px; color: #1b5e20; margin-bottom: 2px; }
+.invoice-ready-body span { font-size: 12px; color: #33691e; font-weight: 600; }
+.invoice-ready-body p { font-size: 12px; color: #555; margin-top: 6px; }
+.invoice-ready-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.invoice-btn { background: #2e7d32 !important; }
+.invoice-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: #c8e6c9;
+  color: #1b5e20;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* ── Static map placeholder ── */
+.delivery-map-static { margin-top: 10px; }
+.delivery-map-frame-static {
+  border: 1px solid var(--driver-line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e8f4ea;
+}
+.delivery-map-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, #e8f5e9, #f9fbe7);
+  color: var(--driver-ink);
+}
+.delivery-map-placeholder strong { display: block; font-size: 13px; }
+.delivery-map-placeholder small { font-size: 11px; color: var(--driver-muted); }
+.delivery-addr-full { font-size: 13px; color: var(--driver-muted); margin-top: 10px; line-height: 1.5; }
+.delivery-addr-short { font-size: 12px; color: var(--driver-muted); margin-top: 4px; }
+
+/* ── Loading state ── */
+.delivery-demo.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 100vh;
+  color: var(--driver-muted);
+}
+
+/* ── Checkpoint agent label ── */
+.checkpoint-agent {
+  font-size: 11px;
+  color: var(--driver-muted);
+  font-style: italic;
+}
+
+/* ── Delivery terminal state ── */
+.delivery-terminal-state {
+  font-size: 13px;
+  color: var(--driver-muted);
+  padding: 14px;
+  background: var(--driver-bg);
+  border-radius: 8px;
+  text-align: center;
+  border: 1px dashed var(--driver-line);
+}

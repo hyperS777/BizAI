@@ -1,26 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
-  ArrowLeft, ArrowRight, Check, CheckCircle2, Clock3,
-  MapPin, Navigation, Package, PackageCheck, Phone,
+  ArrowLeft, ArrowRight, Check, CheckCircle2, Clock3, Download,
+  FileText, MapPin, Navigation, Package, PackageCheck, Phone,
   RotateCcw, Scan, Truck, Upload, XCircle,
 } from 'lucide-react';
 import client from '../api/client';
 import { apiError, money } from '../utils/format';
 import './DeliveryDemo.css';
 
+/* Simplified 3-stage flow: ready_to_pack → out_for_delivery → delivered */
 const stages = [
   { id: 'ready_to_pack', label: 'Ready to pack', icon: Package, emoji: '📦' },
   { id: 'packed', label: 'Packed', icon: PackageCheck, emoji: '✅' },
-  { id: 'picked_up', label: 'Picked up', icon: Truck, emoji: '🚚' },
-  { id: 'out_for_delivery', label: 'Out for delivery', icon: Navigation, emoji: '📍' },
+  { id: 'out_for_delivery', label: 'Out for delivery', icon: Truck, emoji: '🚚' },
   { id: 'delivered', label: 'Delivered', icon: CheckCircle2, emoji: '🏠' },
 ];
 
+/* Route nodes: Warehouse → Out for delivery → Customer */
 const routeNodes = [
   { label: 'Warehouse', emoji: '🏭', id: 'warehouse' },
-  { label: 'Sorting hub', emoji: '🔃', id: 'sorting_hub' },
-  { label: 'City hub', emoji: '🏙️', id: 'city_hub' },
   { label: 'Out for delivery', emoji: '🚚', id: 'out_for_delivery' },
   { label: 'Customer', emoji: '🏠', id: 'customer_door' },
 ];
@@ -28,19 +27,17 @@ const routeNodes = [
 const statusToRouteIndex = {
   ready_to_pack: 0,
   packed: 0,
-  picked_up: 1,
-  out_for_delivery: 3,
-  failed_delivery: 2,
-  delivered: 4,
+  out_for_delivery: 1,
+  failed_delivery: 1,
+  delivered: 2,
   returned_to_store: 0,
 };
 
 const nextStates = {
   ready_to_pack: [{ status: 'packed', label: 'Mark packed' }],
-  packed: [{ status: 'picked_up', label: 'Confirm pickup' }],
-  picked_up: [{ status: 'out_for_delivery', label: 'Start delivery' }],
+  packed: [{ status: 'out_for_delivery', label: 'Start delivery run' }],
   out_for_delivery: [
-    { status: 'delivered', label: 'Confirm delivery' },
+    { status: 'delivered', label: 'Confirm delivery ✓' },
     { status: 'failed_delivery', label: 'Log failed attempt' },
   ],
   failed_delivery: [
@@ -49,6 +46,15 @@ const nextStates = {
   ],
   delivered: [],
   returned_to_store: [],
+};
+
+const STATUS_LABELS = {
+  ready_to_pack: 'Ready to pack',
+  packed: 'Packed',
+  out_for_delivery: 'Out for delivery',
+  failed_delivery: 'Failed attempt',
+  delivered: 'Delivered ✓',
+  returned_to_store: 'Returned to store',
 };
 
 function relativeTime(dateStr) {
@@ -62,13 +68,71 @@ function relativeTime(dateStr) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function CheckpointIcon({ status }) {
-  const icons = {
-    ready_to_pack: '📦', packed: '✅', picked_up: '🚚',
-    out_for_delivery: '📍', delivered: '🏠', failed_delivery: '❌',
-    returned_to_store: '↩️', Warehouse: '🏭',
+function statusEmoji(status) {
+  const map = {
+    ready_to_pack: '📦', packed: '✅', out_for_delivery: '🚚',
+    delivered: '🏠', failed_delivery: '❌', returned_to_store: '↩️', Warehouse: '🏭',
   };
-  return <span>{icons[status] || '📍'}</span>;
+  return map[status] || '📍';
+}
+
+/* Delhi static map using OpenStreetMap tile */
+function DeliveryMapStatic({ delivery }) {
+  // Delhi coordinates: 28.6139, 77.2090
+  const lat = delivery?.delivery_latitude ?? 28.6139;
+  const lng = delivery?.delivery_longitude ?? 77.2090;
+  const zoom = 13;
+  const mapsUrl = delivery?.delivery_address
+    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(delivery.delivery_address)}`
+    : `https://maps.google.com/?q=${lat},${lng}`;
+  const tileUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=${zoom}&size=640x220&markers=${lat},${lng},red`;
+
+  return (
+    <div className="delivery-map-static">
+      <div className="delivery-map-frame-static">
+        <div className="delivery-map-placeholder">
+          <MapPin size={28} />
+          <div>
+            <strong>{delivery?.current_location || 'REIHH Delhi Warehouse'}</strong>
+            <small>{lat.toFixed(4)}°N, {lng.toFixed(4)}°E</small>
+          </div>
+        </div>
+        <a className="delivery-directions" href={mapsUrl} target="_blank" rel="noreferrer">
+          <Navigation size={15} /> Open in Google Maps <ArrowRight size={14} />
+        </a>
+      </div>
+    </div>
+  );
+}
+
+/* Invoice panel shown after delivery */
+function InvoicePanel({ delivery }) {
+  if (!delivery?.invoice_number) return null;
+  return (
+    <div className="invoice-ready-panel">
+      <div className="invoice-ready-icon"><FileText size={28} /></div>
+      <div className="invoice-ready-body">
+        <strong>Invoice ready</strong>
+        <span>Invoice #{delivery.invoice_number} · Order successfully delivered</span>
+        <p>Your invoice has been generated and marked as paid. Download or share it below.</p>
+      </div>
+      <div className="invoice-ready-actions">
+        {delivery.invoice_token && (
+          <a
+            className="delivery-primary-action invoice-btn"
+            href={`/invoices/${delivery.invoice_token}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Download size={15} /> View invoice
+          </a>
+        )}
+        <span className="invoice-status-badge">
+          <Check size={13} /> {delivery.invoice_status || 'paid'}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 export default function DeliveryDemo() {
@@ -102,17 +166,21 @@ export default function DeliveryDemo() {
 
   useEffect(() => { load(); }, [token]);
 
+  /* Auto-refresh every 15s while not delivered */
+  useEffect(() => {
+    if (!delivery || delivery.delivery_status === 'delivered' || delivery.delivery_status === 'returned_to_store') return undefined;
+    const timer = setInterval(load, 15000);
+    return () => clearInterval(timer);
+  }, [delivery?.delivery_status]);
+
   const stageIndex = useMemo(
     () => stages.findIndex((s) => s.id === delivery?.delivery_status),
     [delivery],
   );
   const routeIndex = statusToRouteIndex[delivery?.delivery_status] ?? 0;
 
-  const directionsUrl = delivery?.delivery_address
-    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(delivery.delivery_address)}`
-    : null;
-
   const checkpointLog = delivery?.checkpoint_log || [];
+  const isDelivered = delivery?.delivery_status === 'delivered';
 
   const updateStatus = async (status) => {
     if (!agentName.trim()) {
@@ -129,8 +197,12 @@ export default function DeliveryDemo() {
       });
       setDelivery(data);
       setNote('');
-      setMessage(`Delivery updated to: ${status.replaceAll('_', ' ')}.`);
-      showToast('Customer notified via SMS · Demo only');
+      setMessage(`Status updated to: ${STATUS_LABELS[status] || status}.`);
+      if (status === 'delivered') {
+        showToast('🎉 Delivery complete! Invoice generated and sent to customer.');
+      } else {
+        showToast('Customer notified · Demo only');
+      }
     } catch (err) {
       setError(apiError(err, 'Could not update demo delivery.'));
     } finally {
@@ -154,7 +226,7 @@ export default function DeliveryDemo() {
   };
   const closeUpload = () => { setUploadModal(false); setUploadDone(false); };
 
-  if (loading) return <main className="delivery-demo loading">Loading delivery demo…</main>;
+  if (loading) return <main className="delivery-demo loading"><Package size={24} /><span>Loading delivery demo…</span></main>;
   if (!delivery) return (
     <main className="delivery-demo">
       <div className="delivery-demo-error">
@@ -173,7 +245,7 @@ export default function DeliveryDemo() {
 
       {/* Header */}
       <header className="delivery-demo-header">
-        <a className="delivery-demo-brand" href="/store/demo">REIHH <span>DEMO DELIVERY</span></a>
+        <a className="delivery-demo-brand" href="/store/demo">REIHH <span>DELIVERY</span></a>
         <span className="demo-only-badge"><span /> Simulated delivery — no real GPS</span>
       </header>
 
@@ -185,14 +257,15 @@ export default function DeliveryDemo() {
           <div>
             <p className="delivery-kicker">Delivery run</p>
             <h1>#{delivery.reference}</h1>
-            <p className="delivery-customer">For {delivery.customer_name}</p>
+            <p className="delivery-customer">For <strong>{delivery.customer_name}</strong></p>
+            <p className="delivery-addr-short">{delivery.delivery_address}</p>
           </div>
           <span className={`delivery-status-chip ${delivery.delivery_status}`}>
-            {delivery.delivery_status.replaceAll('_', ' ')}
+            {STATUS_LABELS[delivery.delivery_status] || delivery.delivery_status.replaceAll('_', ' ')}
           </span>
         </section>
 
-        {/* Route visualiser */}
+        {/* Route visualiser - simplified 3 nodes */}
         <section className="route-visualizer" aria-label="Delivery route">
           {routeNodes.map((node, idx) => (
             <div key={node.id} className={`route-node ${idx <= routeIndex ? 'active' : ''} ${idx === routeIndex ? 'current' : ''}`}>
@@ -206,7 +279,7 @@ export default function DeliveryDemo() {
           ))}
         </section>
 
-        {/* Delivery timeline */}
+        {/* Delivery stages timeline */}
         <section className="delivery-timeline" aria-label="Delivery progress">
           {stages.map((stage, index) => {
             const Icon = stage.icon;
@@ -222,8 +295,11 @@ export default function DeliveryDemo() {
           })}
         </section>
 
+        {/* Invoice panel on delivery */}
+        {isDelivered && <InvoicePanel delivery={delivery} />}
+
         <div className="delivery-demo-grid">
-          {/* Destination */}
+          {/* Map / location */}
           <section className="delivery-section delivery-destination">
             <div className="delivery-section-heading">
               <div>
@@ -232,12 +308,8 @@ export default function DeliveryDemo() {
               </div>
               <MapPin size={19} />
             </div>
-            <p>{delivery.delivery_address}</p>
-            {directionsUrl && (
-              <a className="delivery-directions" href={directionsUrl} target="_blank" rel="noreferrer">
-                <Navigation size={15} /> Open directions <ArrowRight size={14} />
-              </a>
-            )}
+            <DeliveryMapStatic delivery={delivery} />
+            <p className="delivery-addr-full">{delivery.delivery_address}</p>
             {delivery.delivery_agent_name && (
               <small className="agent-attribution">
                 Last update by {delivery.delivery_agent_name}
@@ -288,11 +360,12 @@ export default function DeliveryDemo() {
               {checkpointLog.map((entry, i) => (
                 <div className="checkpoint-entry" key={i}>
                   <div className="checkpoint-icon">
-                    <CheckpointIcon status={entry.agent_name === 'Warehouse' ? 'Warehouse' : entry.status} />
+                    <span>{statusEmoji(entry.agent_name === 'Warehouse' ? 'Warehouse' : entry.status)}</span>
                   </div>
                   <div className="checkpoint-body">
                     <strong>{entry.label}</strong>
-                    <span>{entry.agent_name}</span>
+                    <span>{STATUS_LABELS[entry.status] || entry.status?.replaceAll('_', ' ')}</span>
+                    {entry.agent_name && <span className="checkpoint-agent">by {entry.agent_name}</span>}
                     {entry.note && <em>{entry.note}</em>}
                     <small>{relativeTime(entry.at)}</small>
                   </div>
@@ -303,25 +376,27 @@ export default function DeliveryDemo() {
         )}
 
         {/* Quick actions */}
-        <section className="delivery-section quick-actions-panel">
-          <div className="delivery-section-heading">
-            <div>
-              <p className="delivery-kicker">Tools</p>
-              <h2>Quick actions</h2>
+        {!isDelivered && (
+          <section className="delivery-section quick-actions-panel">
+            <div className="delivery-section-heading">
+              <div>
+                <p className="delivery-kicker">Tools</p>
+                <h2>Quick actions</h2>
+              </div>
             </div>
-          </div>
-          <div className="quick-action-buttons">
-            <button className="quick-action-btn" onClick={doQrScan}>
-              <Scan size={18} /> Scan QR code
-            </button>
-            <button className="quick-action-btn" onClick={doUpload}>
-              <Upload size={18} /> Upload proof
-            </button>
-            <button className="quick-action-btn" onClick={() => setDialerModal(true)}>
-              <Phone size={18} /> Call customer
-            </button>
-          </div>
-        </section>
+            <div className="quick-action-buttons">
+              <button className="quick-action-btn" onClick={doQrScan}>
+                <Scan size={18} /> Scan QR code
+              </button>
+              <button className="quick-action-btn" onClick={doUpload}>
+                <Upload size={18} /> Upload proof
+              </button>
+              <button className="quick-action-btn" onClick={() => setDialerModal(true)}>
+                <Phone size={18} /> Call customer
+              </button>
+            </div>
+          </section>
+        )}
 
         {/* Agent controls */}
         <section className="delivery-agent-controls">
@@ -338,24 +413,27 @@ export default function DeliveryDemo() {
               value={agentName}
               onChange={(e) => setAgentName(e.target.value)}
               placeholder="Your name"
+              disabled={isDelivered}
             />
           </label>
-          <label className="delivery-field">
-            Delivery note <span className="optional-label">Optional</span>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              maxLength={500}
-              placeholder="Add a note for this demo run (press Enter to submit action)"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  const actions = nextStates[delivery.delivery_status] || [];
-                  if (actions.length === 1) { e.preventDefault(); updateStatus(actions[0].status); }
-                }
-              }}
-            />
-          </label>
-          <p className="keyboard-hint">Press Enter in the notes field to submit the primary action.</p>
+          {!isDelivered && (
+            <label className="delivery-field">
+              Delivery note <span className="optional-label">Optional</span>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                maxLength={500}
+                placeholder="Add a note for this demo run…"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    const actions = nextStates[delivery.delivery_status] || [];
+                    if (actions.length === 1) { e.preventDefault(); updateStatus(actions[0].status); }
+                  }
+                }}
+              />
+            </label>
+          )}
+          {!isDelivered && <p className="keyboard-hint">Press Enter in notes to trigger the primary action.</p>}
           {error && <p className="delivery-error">{error}</p>}
           {message && <p className="delivery-success"><Check size={15} /> {message}</p>}
           <div className="delivery-actions">
@@ -381,7 +459,9 @@ export default function DeliveryDemo() {
           </div>
           {nextStates[delivery.delivery_status]?.length === 0 && (
             <p className="delivery-terminal-state">
-              This demo delivery is complete. No further agent actions are available.
+              {isDelivered
+                ? '🎉 Delivery complete! Invoice has been generated for this order.'
+                : 'This demo delivery is complete. No further agent actions are available.'}
             </p>
           )}
         </section>

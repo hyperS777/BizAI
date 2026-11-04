@@ -120,11 +120,15 @@ def get_public_storefront_products(force_refresh: bool = False) -> Dict[str, Any
     }
 
 
-WAREHOUSE = {"id": "warehouse", "label": "REIHH warehouse — Mumbai", "lat": 19.0760, "lng": 72.8777}
+WAREHOUSE = {"id": "warehouse", "label": "REIHH Delhi Warehouse", "lat": 28.6139, "lng": 77.2090}
 CITY_COORDS = (
+    ("delhi", 28.6139, 77.2090),
+    ("noida", 28.5355, 77.3910),
+    ("gurgaon", 28.4595, 77.0266),
+    ("gurugram", 28.4595, 77.0266),
     ("mumbai", 19.0760, 72.8777),
     ("pune", 18.5204, 73.8567),
-    ("delhi", 28.6139, 77.2090),
+    ("delhi_ncr", 28.6139, 77.2090),
     ("noida", 28.5355, 77.3910),
     ("gurgaon", 28.4595, 77.0266),
     ("gurugram", 28.4595, 77.0266),
@@ -145,8 +149,6 @@ def demo_checkpoints(address: str | None = None) -> list[dict]:
     city_lat, city_lng = _guess_city_coords(address)
     return [
         {**WAREHOUSE},
-        {"id": "sorting_hub", "label": "Sorting hub — Bhiwandi", "lat": 19.2813, "lng": 73.0486},
-        {"id": "city_hub", "label": "City hub — destination city", "lat": city_lat, "lng": city_lng},
         {"id": "out_for_delivery", "label": "Out for delivery — near customer", "lat": round(city_lat + 0.018, 4), "lng": round(city_lng + 0.012, 4)},
         {"id": "customer_door", "label": "At customer address", "lat": round(city_lat - 0.008, 4), "lng": round(city_lng - 0.006, 4)},
     ]
@@ -157,16 +159,15 @@ def _guess_city_coords(address: str | None) -> tuple[float, float]:
     for name, lat, lng in CITY_COORDS:
         if name in text:
             return lat, lng
-    return 19.0760, 72.8777
+    return 28.6139, 77.2090
 
 
 def _checkpoint_for_status(status: str, address: str | None) -> dict:
     mapping = {
         "ready_to_pack": "warehouse",
         "packed": "warehouse",
-        "picked_up": "sorting_hub",
         "out_for_delivery": "out_for_delivery",
-        "failed_delivery": "city_hub",
+        "failed_delivery": "out_for_delivery",
         "delivered": "customer_door",
         "returned_to_store": "warehouse",
     }
@@ -177,7 +178,7 @@ def _checkpoint_for_status(status: str, address: str | None) -> dict:
 def _order_status_for_delivery(status: str) -> str | None:
     if status in {"ready_to_pack", "packed"}:
         return OrderStatus.CONFIRMED.value
-    if status in {"picked_up", "out_for_delivery", "failed_delivery"}:
+    if status in {"out_for_delivery", "failed_delivery"}:
         return OrderStatus.SHIPPED.value
     if status == OrderStatus.DELIVERED.value or status == "delivered":
         return OrderStatus.DELIVERED.value
@@ -330,6 +331,11 @@ def _serialize_delivery(row: StorefrontSimulation, extra: dict | None = None) ->
         "checkpoints": demo_checkpoints(row.delivery_address),
         "checkpoint_log": _checkpoint_history(row),
     }
+    # Attach invoice info if order is delivered
+    if row.order_id and row.delivery_status == "delivered":
+        from models.invoice import Invoice as InvoiceModel
+        # Note: db not in scope here, invoice_info set via extra kwarg from callers
+        pass
     if extra:
         payload.update(extra)
     return payload
@@ -494,8 +500,7 @@ def list_storefront_simulations(db: Session, limit: int = 100) -> list[dict]:
 
 DEMO_DELIVERY_TRANSITIONS = {
     "ready_to_pack": {"packed"},
-    "packed": {"picked_up"},
-    "picked_up": {"out_for_delivery"},
+    "packed": {"out_for_delivery"},
     "out_for_delivery": {"delivered", "failed_delivery"},
     "failed_delivery": {"out_for_delivery", "returned_to_store"},
     "delivered": set(),
@@ -580,6 +585,17 @@ def update_demo_delivery(
                     order.delivery_location = label
                     order.delivery_latitude = lat
                     order.delivery_longitude = lng
+    # On delivery: expose invoice info
+    invoice_info = {}
+    if row.delivery_status == "delivered" and row.order_id:
+        from models.invoice import Invoice as _Invoice
+        inv = db.query(_Invoice).filter(_Invoice.order_id == row.order_id).first()
+        if inv:
+            invoice_info = {
+                "invoice_number": inv.invoice_number,
+                "invoice_token": inv.public_token,
+                "invoice_status": inv.status,
+            }
     db.add(IntegrationEvent(
         event_type=f"storefront.demo_delivery.{row.delivery_status}",
         entity_type="order" if row.order_id else "storefront_simulation",
@@ -592,7 +608,10 @@ def update_demo_delivery(
         }),
     ))
     db.commit()
-    return get_demo_delivery_by_token(db, token)
+    result = get_demo_delivery_by_token(db, token)
+    if invoice_info:
+        result.update(invoice_info)
+    return result
 
 
 def _catalog_variant(product_id: str, variant_id: str | None = None) -> tuple[dict, dict]:

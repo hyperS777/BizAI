@@ -17,6 +17,23 @@ const DISCOUNT_CODES = {
   FLAT500: { type: 'fixed', value: 500, label: '₹500 off order' },
 };
 
+/* Generate or retrieve a stable device-unique ID stored in localStorage */
+function getDeviceId() {
+  const KEY = 'reihh-device-id';
+  let id = localStorage.getItem(KEY);
+  if (!id) {
+    id = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    localStorage.setItem(KEY, id);
+  }
+  return id;
+}
+
+/* Build a device-scoped demo email that never clashes across devices */
+function deviceDemoEmail() {
+  const deviceId = getDeviceId();
+  return `demo-${deviceId.slice(0, 8)}@demo.reihh.com`;
+}
+
 function trackStoreEvent({ sessionId, eventType, product, variant, quantity = 1 }) {
   client.post('/storefront/events', {
     event_id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -62,7 +79,20 @@ export default function Storefront() {
 
   /* ── checkout multi-step: 0=cart 1=info 2=payment & review 3=done ── */
   const [checkoutStep, setCheckoutStep] = useState(0);
-  const [customer, setCustomer] = useState({ name: 'Aarav Patel', email: 'aarav.patel@example.com', address: '42 Marine Drive, Nariman Point, Mumbai 400021' });
+
+  /* Device-unique customer — name blank so each device enters their own */
+  const [customer, setCustomer] = useState(() => {
+    const saved = (() => {
+      try { return JSON.parse(localStorage.getItem('reihh-customer-info') || 'null'); }
+      catch { return null; }
+    })();
+    return {
+      name: saved?.name || '',
+      email: deviceDemoEmail(),
+      address: saved?.address || '',
+    };
+  });
+
   const [paymentMethod, setPaymentMethod] = useState('demo_card');
   const [checkoutError, setCheckoutError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -86,6 +116,11 @@ export default function Storefront() {
   useEffect(() => {
     sessionStorage.setItem('reihh-wishlist', JSON.stringify(wishlist));
   }, [wishlist]);
+
+  /* ── persist customer name + address (but not device email) ── */
+  useEffect(() => {
+    localStorage.setItem('reihh-customer-info', JSON.stringify({ name: customer.name, address: customer.address }));
+  }, [customer.name, customer.address]);
 
   /* ── filter ── */
   const filteredProducts = useMemo(() => {
@@ -266,6 +301,12 @@ export default function Storefront() {
             <span>Amount paid</span>
             <strong>{money(simulationReceipt.total_amount)}</strong>
           </div>
+          {simulationReceipt.invoice_number && (
+            <div className="receipt-invoice-row">
+              <span>🧾 Invoice</span>
+              <strong>{simulationReceipt.invoice_number}</strong>
+            </div>
+          )}
           <div className="order-confirm-actions">
             <a
               className="store-checkout-button"
@@ -315,7 +356,7 @@ export default function Storefront() {
             ))}
           </div>
           <h3 className="step-heading">Customer &amp; delivery info</h3>
-          <p className="step-subheading">Enter demo customer details to simulate a live order.</p>
+          <p className="step-subheading">Enter your name and delivery address to simulate a live order.</p>
           <label className="simulation-customer-field">
             Full name
             <input
@@ -323,7 +364,7 @@ export default function Storefront() {
               autoComplete="name"
               value={customer.name}
               onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
-              placeholder="Aarav Patel"
+              placeholder="Your name"
             />
           </label>
           <label className="simulation-customer-field">
@@ -334,8 +375,9 @@ export default function Storefront() {
               autoComplete="email"
               value={customer.email}
               onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
-              placeholder="aarav@example.com"
+              placeholder="your@email.com"
             />
+            <small className="field-hint">🔒 Auto-generated per device — stays unique across sessions</small>
           </label>
           <label className="simulation-customer-field">
             Delivery address
@@ -344,7 +386,7 @@ export default function Storefront() {
               autoComplete="street-address"
               value={customer.address}
               onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
-              placeholder="42 Marine Drive, Mumbai, 400021"
+              placeholder="e.g. 42 Connaught Place, New Delhi 110001"
             />
           </label>
           {checkoutError && <p className="simulation-error">{checkoutError}</p>}
@@ -401,8 +443,8 @@ export default function Storefront() {
               />
               <Smartphone size={18} />
               <div>
-                <strong>Demo UPI (GooglePay / PhonePe)</strong>
-                <small>customer@okhdfcbank · One-click simulated approval</small>
+                <strong>Demo UPI</strong>
+                <small>demo@upi · Auto-verified payment</small>
               </div>
             </label>
 
@@ -416,27 +458,63 @@ export default function Storefront() {
               />
               <DollarSign size={18} />
               <div>
-                <strong>Demo Cash on Delivery (COD)</strong>
-                <small>Simulated payment upon physical receipt</small>
+                <strong>Demo Cash on Delivery</strong>
+                <small>Pay ₹ cash to delivery agent on arrival</small>
               </div>
             </label>
           </div>
 
-          <div className="review-customer" style={{ marginTop: 16 }}>
-            <p><strong>Deliver to:</strong> {customer.name} ({customer.email})</p>
-            <p className="review-address">{customer.address}</p>
-          </div>
-
-          <div className="cart-summary" style={{ marginTop: 14 }}>
-            <div><span>Subtotal ({lineCount} items)</span><strong>{money(subtotal)}</strong></div>
-            {appliedDiscount && (
+          {/* Discount */}
+          <div className="discount-section">
+            <button
+              className="discount-toggle"
+              type="button"
+              onClick={() => setDiscountOpen((x) => !x)}
+            >
+              {discountOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+              {appliedDiscount ? `Discount applied: ${appliedDiscount.code}` : 'Have a discount code?'}
+            </button>
+            {discountOpen && (
               <div className="discount-row">
-                <span>Discount ({appliedDiscount.code})</span>
-                <strong className="discount-value">−{money(discountAmount)}</strong>
+                {appliedDiscount ? (
+                  <>
+                    <span className="discount-applied-pill">{appliedDiscount.label}</span>
+                    <button type="button" className="remove-discount" onClick={removeDiscount}><X size={13} /></button>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      value={discountInput}
+                      onChange={(e) => setDiscountInput(e.target.value.toUpperCase())}
+                      placeholder="REIHH10"
+                      onKeyDown={(e) => e.key === 'Enter' && applyDiscount()}
+                    />
+                    <button type="button" className="apply-discount-btn" onClick={applyDiscount}>Apply</button>
+                  </>
+                )}
+                {discountError && <p className="discount-error">{discountError}</p>}
               </div>
             )}
-            <div className="total-row"><span>Order total</span><strong>{money(orderTotal)}</strong></div>
-            <div className="free-shipping-row"><Truck size={13} /> FREE domestic express shipping</div>
+          </div>
+
+          {/* Order summary */}
+          <div className="checkout-summary">
+            <div className="checkout-summary-heading">Order summary</div>
+            {cart.map((line) => (
+              <div className="checkout-summary-line" key={line.variant.id}>
+                {line.product.image_url && <img src={line.product.image_url} alt="" />}
+                <span>
+                  <strong>{line.product.title}</strong>
+                  <small>{line.variant.title} × {line.quantity}</small>
+                </span>
+                <b>{money(line.variant.price * line.quantity)}</b>
+              </div>
+            ))}
+            <div className="checkout-summary-totals">
+              <div><span>Subtotal</span><span>{money(subtotal)}</span></div>
+              {appliedDiscount && <div className="discount-line"><span>Discount ({appliedDiscount.code})</span><span>−{money(discountAmount)}</span></div>}
+              <div className="total-line"><span>Total</span><strong>{money(orderTotal)}</strong></div>
+            </div>
           </div>
 
           {checkoutError && <p className="simulation-error">{checkoutError}</p>}
@@ -447,10 +525,9 @@ export default function Storefront() {
               disabled={submitting}
               onClick={submitSimulation}
             >
-              {submitting ? 'Authorizing demo payment…' : `Pay ${money(orderTotal)} & Place Order`} <ArrowRight size={15} />
+              {submitting ? 'Processing…' : `Place demo order · ${money(orderTotal)}`} {!submitting && <Check size={15} />}
             </button>
           </div>
-          <p className="simulation-note"><Check size={13} /> Demo transaction — instantly recorded in BizAI database &amp; reports</p>
         </div>
       );
     }
@@ -458,272 +535,258 @@ export default function Storefront() {
     // Step 0: Cart
     return (
       <>
-        <div className="cart-lines">
-          {cart.map(({ product, variant, quantity }) => (
-            <article className="cart-line" key={variant.id}>
-              {product.image_url && <img src={product.image_url} alt="" />}
-              <div className="cart-line-body">
-                <strong>{product.title}</strong>
-                <small>{variant.title}</small>
-                <span>{money(variant.price)}</span>
-                <div className="cart-quantity">
-                  <button onClick={() => changeQuantity(variant.id, -1)} aria-label={`Remove one ${product.title}`}><Minus size={13} /></button>
-                  <span>{quantity}</span>
-                  <button onClick={() => changeQuantity(variant.id, 1)} aria-label={`Add one ${product.title}`}><Plus size={13} /></button>
-                </div>
+        <div className="cart-items">
+          {cart.map((line) => (
+            <div className="cart-line" key={line.variant.id}>
+              {line.product.image_url && (
+                <img src={line.product.image_url} className="cart-line-image" alt="" />
+              )}
+              <div className="cart-line-info">
+                <strong>{line.product.title}</strong>
+                <small>{line.variant.title}</small>
+                <span>{money(line.variant.price)}</span>
               </div>
-              <button className="cart-remove" onClick={() => removeFromCart(variant.id)} aria-label={`Remove ${product.title}`}><X size={15} /></button>
-            </article>
+              <div className="cart-qty-row">
+                <button onClick={() => changeQuantity(line.variant.id, -1)}><Minus size={13} /></button>
+                <span>{line.quantity}</span>
+                <button onClick={() => changeQuantity(line.variant.id, 1)}><Plus size={13} /></button>
+                <button className="cart-remove" onClick={() => removeFromCart(line.variant.id)}><X size={13} /></button>
+              </div>
+            </div>
           ))}
         </div>
-        <div className="cart-summary">
-          <div className="discount-section">
-            <button
-              className="discount-toggle"
-              onClick={() => setDiscountOpen(!discountOpen)}
-              type="button"
-            >
-              <span>Have a promo code? (Try REIHH10, WELCOME)</span>
-              {discountOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </button>
-            {discountOpen && (
-              <div className="discount-form">
-                <input
-                  value={discountInput}
-                  onChange={(e) => setDiscountInput(e.target.value)}
-                  placeholder="Code (e.g. REIHH10)"
-                  maxLength={20}
-                />
-                <button type="button" onClick={applyDiscount}>Apply</button>
-              </div>
-            )}
-            {discountError && <p className="discount-error">{discountError}</p>}
-            {appliedDiscount && (
-              <p className="discount-applied">
-                <Check size={13} /> {appliedDiscount.label}
-                <button onClick={removeDiscount} className="discount-remove">Remove</button>
-              </p>
-            )}
-          </div>
-          <div><span>Subtotal</span><strong>{money(subtotal)}</strong></div>
-          {appliedDiscount && <div className="discount-row"><span>Discount ({appliedDiscount.code})</span><strong className="discount-value">−{money(discountAmount)}</strong></div>}
-          {appliedDiscount && <div className="total-row"><span>Total</span><strong>{money(orderTotal)}</strong></div>}
-          <div className="free-shipping-row"><Truck size={13} /> Complimentary domestic delivery</div>
-          <button className="store-checkout-button" onClick={startCheckout}>
-            Proceed to checkout — {money(orderTotal)} <ArrowRight size={16} />
+
+        {/* Discount preview */}
+        <div className="discount-section">
+          <button
+            className="discount-toggle"
+            type="button"
+            onClick={() => setDiscountOpen((x) => !x)}
+          >
+            {discountOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+            {appliedDiscount ? `Discount: ${appliedDiscount.code}` : 'Add discount code'}
           </button>
-          <p className="simulation-note"><Check size={13} /> Demo Store Mode — Instant simulated order &amp; live driver link</p>
+          {discountOpen && (
+            <div className="discount-row">
+              {appliedDiscount ? (
+                <>
+                  <span className="discount-applied-pill">{appliedDiscount.label}</span>
+                  <button type="button" className="remove-discount" onClick={removeDiscount}><X size={13} /></button>
+                </>
+              ) : (
+                <>
+                  <input
+                    value={discountInput}
+                    onChange={(e) => setDiscountInput(e.target.value.toUpperCase())}
+                    placeholder="REIHH10"
+                    onKeyDown={(e) => e.key === 'Enter' && applyDiscount()}
+                  />
+                  <button type="button" className="apply-discount-btn" onClick={applyDiscount}>Apply</button>
+                </>
+              )}
+              {discountError && <p className="discount-error">{discountError}</p>}
+            </div>
+          )}
+        </div>
+
+        <div className="cart-footer">
+          <div className="cart-subtotal">
+            <span>Subtotal</span>
+            <strong>{money(subtotal)}</strong>
+          </div>
+          {appliedDiscount && (
+            <div className="cart-subtotal discount-line">
+              <span>Discount</span>
+              <span>−{money(discountAmount)}</span>
+            </div>
+          )}
+          <div className="cart-subtotal total-line">
+            <span>Total</span>
+            <strong>{money(orderTotal)}</strong>
+          </div>
+          <button
+            className="store-checkout-button full-width"
+            disabled={!cart.length}
+            onClick={startCheckout}
+          >
+            Checkout <ArrowRight size={16} />
+          </button>
         </div>
       </>
     );
   };
 
+  /* ── main render ── */
   return (
-    <div className="storefront">
-      {/* Announcement bar */}
-      <div className="store-announcement">
-        <span className="demo-badge">DEMO STORE</span>
-        <span>Interactive REIHH Experience · Instant Simulated Payment · Grounded in Live BizAI Data</span>
-        <a href="/integrations" target="_blank" rel="noreferrer">Merchant Analytics →</a>
-      </div>
-
-      {/* Header */}
-      <header className="store-header">
-        <a className="store-wordmark" href="/" aria-label="REIHH home">REIHH<span>®</span></a>
-        <nav className="store-links" aria-label="Store collections">
-          <a href="#menswear" onClick={(e) => { e.preventDefault(); setCategory('Menswear'); }}>Menswear</a>
-          <a href="#womenswear" onClick={(e) => { e.preventDefault(); setCategory('Womenswear'); }}>Womenswear</a>
-          <a href="#new" onClick={(e) => { e.preventDefault(); setCategory('New arrivals'); }}>New collections</a>
-          <a href="#wishlist" onClick={(e) => { e.preventDefault(); setCategory('Wishlist'); }}>Wishlist ({wishlist.length})</a>
-        </nav>
-        <button className="store-cart-button" onClick={() => setCartOpen(true)} aria-label={`Open shopping bag, ${lineCount} items`}>
-          <div className="cart-btn-inner">
-            <ShoppingBag size={19} />
-            <span>Bag</span>
-            {lineCount > 0 && <b className="cart-count">{lineCount}</b>}
-          </div>
-        </button>
-      </header>
-
-      <main className="store-main">
-        {/* Hero section */}
-        <section className="store-hero">
-          <div className="hero-content">
-            <p className="store-kicker">Interactive Customer Experience</p>
-            <h1><span>Pieces with</span><br />presence.</h1>
-            <p className="store-intro-copy">
-              Explore the real REIHH collection. Select pieces, customize sizes, apply discount codes, and test the full customer journey with instant simulated payment.
-            </p>
-            <div className="hero-actions">
-              <button className="store-hero-btn" onClick={() => { setCategory('All pieces'); window.scrollTo({ top: 400, behavior: 'smooth' }); }}>
-                Shop the Edit <ArrowRight size={15} />
-              </button>
-              <a className="store-original-link" href="/" target="_blank" rel="noreferrer">
-                Open BizAI Admin Portal <ArrowRight size={15} />
-              </a>
-            </div>
-          </div>
-          <div className="hero-art" aria-hidden="true">
-            <div className="hero-circle hero-circle-1" />
-            <div className="hero-circle hero-circle-2" />
-            <div className="hero-text-art">REIHH</div>
-          </div>
-        </section>
-
-        {/* Catalog */}
-        <section className="store-catalog" aria-label="REIHH product catalog">
-          <div className="catalog-heading">
-            <div>
-              <span className="store-kicker">Real Catalog Feed</span>
-              <h2>
-                {category === 'Wishlist' ? 'Your wishlist' : category}
-                {' '}<small>{filteredProducts.length} pieces</small>
-              </h2>
-            </div>
-            <label className="store-search">
-              <Search size={16} />
+    <div className="storefront-root">
+      {/* ── Navbar ── */}
+      <nav className="store-nav">
+        <div className="store-nav-inner">
+          <a className="store-brand" href="/store/demo">REIHH</a>
+          <div className="store-nav-right">
+            <div className="store-search-wrap">
+              <Search size={15} />
               <input
+                className="store-search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search pieces"
-                aria-label="Search products"
+                placeholder="Search pieces…"
               />
-            </label>
-          </div>
-
-          <div className="store-filter" role="tablist" aria-label="Filter collections">
-            {collections.map((item) => (
-              <button
-                key={item}
-                role="tab"
-                aria-selected={category === item}
-                className={category === item ? 'selected' : ''}
-                onClick={() => setCategory(item)}
-              >
-                {item === 'Wishlist' ? <><Heart size={12} /> Wishlist {wishlist.length > 0 ? `(${wishlist.length})` : ''}</> : item}
-              </button>
-            ))}
-          </div>
-
-          {error && <div className="store-message">{error}</div>}
-          {loading && <div className="store-message store-message-loading"><span className="spinner" />Loading the REIHH collection…</div>}
-          {!loading && !error && filteredProducts.length === 0 && (
-            <div className="store-message">
-              {category === 'Wishlist' ? 'No wishlisted pieces yet. Click the ♡ on any product to save it.' : 'No pieces match this search.'}
             </div>
-          )}
+            <button
+              className="store-cart-btn"
+              onClick={() => { setCartOpen(true); if (checkoutStep !== 0 && checkoutStep !== 3) setCheckoutStep(0); }}
+            >
+              <ShoppingBag size={18} />
+              {lineCount > 0 && <span className="cart-badge">{lineCount}</span>}
+            </button>
+          </div>
+        </div>
+        {/* Collection tabs */}
+        <div className="store-collection-tabs">
+          {collections.map((col) => (
+            <button
+              key={col}
+              className={`store-col-tab ${category === col ? 'active' : ''}`}
+              onClick={() => setCategory(col)}
+            >
+              {col}
+              {col === 'Wishlist' && wishlist.length > 0 && <span>{wishlist.length}</span>}
+            </button>
+          ))}
+        </div>
+      </nav>
 
-          <div className="store-product-grid" ref={gridRef}>
-            {filteredProducts.map((product) => {
-              const variant = selectedVariant(product);
-              const isWished = wishlist.includes(product.id);
-              return (
-                <article className="store-product" key={product.id} data-product-id={product.id}>
-                  <div className="store-product-image-wrap">
-                    <div className="store-product-image">
-                      {product.image_url
-                        ? <img src={product.image_url} alt={product.title} loading="lazy" />
-                        : <span className="product-placeholder">REIHH</span>
-                      }
-                    </div>
-                    {stockBadge(product)}
-                    <button
-                      className={`wishlist-btn ${isWished ? 'wished' : ''}`}
-                      onClick={() => toggleWishlist(product.id, product)}
-                      aria-label={isWished ? `Remove ${product.title} from wishlist` : `Add ${product.title} to wishlist`}
-                      title={isWished ? 'Remove from wishlist' : 'Add to wishlist'}
-                    >
-                      <Heart size={16} fill={isWished ? 'currentColor' : 'none'} />
-                    </button>
+      {/* ── Hero ── */}
+      <section className="store-hero">
+        <div className="store-hero-inner">
+          <p className="store-eyebrow">REIHH × BizAI Demo Store</p>
+          <h1>Premium fashion.<br />Live analytics.</h1>
+          <p className="store-hero-sub">Every action you take here — browsing, adding to cart, checking out — feeds real data into the BizAI merchant dashboard.</p>
+          <div className="store-hero-actions">
+            <button className="store-checkout-button" onClick={() => setCategory('All pieces')}>Shop the collection</button>
+            <a className="store-secondary-button" href="/integrations" target="_blank" rel="noreferrer">View analytics dashboard →</a>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Grid ── */}
+      <section className="store-grid-section">
+        <div className="store-grid-header">
+          <h2>{category}</h2>
+          <span className="store-grid-count">{filteredProducts.length} pieces</span>
+        </div>
+
+        {loading && <div className="store-loading"><Package size={24} /><span>Loading REIHH collection…</span></div>}
+        {error && <div className="store-error-banner">{error}</div>}
+
+        <div className="store-grid" ref={gridRef}>
+          {filteredProducts.map((product) => {
+            const variant = selectedVariant(product);
+            const inWishlist = wishlist.includes(product.id);
+            const otherVariants = product.variants.filter((v) => v.id !== variant?.id);
+            return (
+              <article
+                className="product-card"
+                key={product.id}
+                data-product-id={product.id}
+                onClick={() => trackStoreEvent({ sessionId, eventType: 'product_view', product, variant })}
+              >
+                <div className="product-image-wrap">
+                  {product.image_url
+                    ? <img src={product.image_url} alt={product.title} className="product-img" loading="lazy" />
+                    : <div className="product-img-placeholder"><Package size={32} /></div>}
+                  {stockBadge(product)}
+                  <button
+                    className={`wishlist-btn ${inWishlist ? 'active' : ''}`}
+                    onClick={(e) => { e.stopPropagation(); toggleWishlist(product.id, product); }}
+                    aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+                  >
+                    <Heart size={15} fill={inWishlist ? 'currentColor' : 'none'} />
+                  </button>
+                </div>
+                <div className="product-info">
+                  <span className="product-category">{product.category}</span>
+                  <h3 className="product-title">
+                    <a href={product.product_url} target="_blank" rel="noreferrer">{product.title}</a>
+                  </h3>
+                  <div className="product-stars">
+                    {[1,2,3,4,5].map((i) => <Star key={i} size={11} fill="currentColor" />)}
+                    <small>({Math.floor(Math.random() * 80) + 20})</small>
                   </div>
-                  <div className="store-product-info">
-                    <div className="store-product-title">
-                      <span className="product-name">{product.title}</span>
-                      <span className="product-price">{money(product.price)}</span>
-                    </div>
-                    <small className="product-category">{product.category}</small>
-                    {product.variants.length > 1 && (
-                      <label className="store-variant-select">
-                        <span>{variant?.title || 'Select option'}</span>
-                        <select
-                          value={variant?.id || ''}
-                          onChange={(e) => {
-                            const nextVariant = product.variants.find((v) => v.id === e.target.value);
-                            setSelectedVariants({ ...selectedVariants, [product.id]: e.target.value });
-                            if (nextVariant) trackStoreEvent({ sessionId, eventType: 'variant_selected', product, variant: nextVariant });
+                  <p className="product-price">{money(variant?.price || product.price)}</p>
+
+                  {/* Variant selector */}
+                  {product.variants.length > 1 && (
+                    <div className="variant-selector">
+                      {product.variants.slice(0, 6).map((v) => (
+                        <button
+                          key={v.id}
+                          className={`variant-pill ${selectedVariants[product.id] === v.id || (!selectedVariants[product.id] && product.variants[0]?.id === v.id) ? 'active' : ''} ${!v.available ? 'sold-out-pill' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedVariants((prev) => ({ ...prev, [product.id]: v.id }));
+                            trackStoreEvent({ sessionId, eventType: 'variant_selected', product, variant: v });
                           }}
-                          aria-label={`Choose variant for ${product.title}`}
                         >
-                          {product.variants.map((v) => (
-                            <option key={v.id} value={v.id} disabled={!v.available}>
-                              {v.title}{v.available ? '' : ' · sold out'}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
-                    <button
-                      className="store-add-button"
-                      disabled={!variant?.available}
-                      onClick={() => addToCart(product)}
-                    >
-                      {variant?.available ? 'Add to bag' : 'Sold out'} {variant?.available && <Plus size={14} />}
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
+                          {v.options?.[0] || v.title}
+                        </button>
+                      ))}
+                      {product.variants.length > 6 && <span className="more-variants">+{product.variants.length - 6}</span>}
+                    </div>
+                  )}
+
+                  <button
+                    className={`add-to-bag-btn ${!variant?.available ? 'disabled' : ''}`}
+                    disabled={!variant?.available}
+                    onClick={(e) => { e.stopPropagation(); addToCart(product); }}
+                  >
+                    {variant?.available ? <><Plus size={15} /> Add to bag</> : 'Sold out'}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+
+        {!loading && filteredProducts.length === 0 && (
+          <div className="store-empty">
+            <Package size={28} />
+            <strong>No pieces found.</strong>
+            <span>Try a different filter or search term.</span>
           </div>
-        </section>
+        )}
+      </section>
 
-        {/* Trust strip */}
-        <section className="trust-strip">
-          <div className="trust-item"><Truck size={16} /><span>Free express delivery on all orders</span></div>
-          <div className="trust-item"><Star size={16} /><span>100% Genuine REIHH Garments</span></div>
-          <div className="trust-item"><Check size={16} /><span>Connected to BizAI Warehouse &amp; Inventory</span></div>
-        </section>
-      </main>
-
-      <footer className="store-footer">
-        <a href="/" target="_blank" rel="noreferrer">BizAI Dashboard</a>
-        <a href="/orders" target="_blank" rel="noreferrer">Merchant Orders</a>
-        <a href="/integrations" target="_blank" rel="noreferrer">Store Analytics</a>
-        <span>Simulation records immediately update BizAI inventory, invoices, and analytics.</span>
-      </footer>
-
-      {/* Cart drawer */}
+      {/* ── Cart drawer ── */}
       {cartOpen && (
-        <div
-          className={`store-cart-backdrop ${cartOpen ? 'open' : ''}`}
-          onClick={() => { setCartOpen(false); if (checkoutStep > 0 && checkoutStep < 3) setCheckoutStep(0); }}
-          role="presentation"
-        >
-          <aside
-            className="store-cart-drawer"
-            onClick={(e) => e.stopPropagation()}
-            aria-label="Shopping bag"
-          >
-            <div className="cart-heading">
-              <div>
-                <span className="store-kicker">
-                  {checkoutStep === 0 ? 'Your selection' : checkoutStep === 1 ? 'Step 1 of 3: Customer' : checkoutStep === 2 ? 'Step 2 of 3: Demo Payment' : 'Order confirmed'}
-                </span>
-                <h2>
-                  {checkoutStep === 0 ? 'Shopping bag' : checkoutStep === 1 ? 'Delivery details' : checkoutStep === 2 ? 'Demo payment' : 'Order placed!'}
-                  {checkoutStep === 0 && lineCount > 0 && <small>{lineCount}</small>}
-                </h2>
-              </div>
-              <button
-                onClick={() => { setCartOpen(false); if (checkoutStep > 0 && checkoutStep < 3) setCheckoutStep(0); }}
-                aria-label="Close shopping bag"
-              >
-                <X size={21} />
-              </button>
+        <div className="cart-overlay" onClick={() => setCartOpen(false)}>
+          <aside className="cart-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="cart-drawer-header">
+              <h2>
+                {checkoutStep === 0 ? 'Your bag' : checkoutStep === 3 ? 'Order confirmed' : 'Checkout'}
+                {checkoutStep === 0 && lineCount > 0 && <span className="cart-count-label">{lineCount} items</span>}
+              </h2>
+              <button className="cart-close" onClick={() => setCartOpen(false)}><X size={19} /></button>
             </div>
-            {renderCartContent()}
+            <div className="cart-drawer-body">
+              {renderCartContent()}
+            </div>
           </aside>
         </div>
       )}
+
+      {/* ── Footer ── */}
+      <footer className="store-footer">
+        <div className="store-footer-inner">
+          <span>REIHH × BizAI Demo Store — all orders are simulated, no real payments are processed.</span>
+          <div className="store-footer-links">
+            <a href="https://reihh.com" target="_blank" rel="noreferrer">reihh.com</a>
+            <a href="/integrations" target="_blank" rel="noreferrer">Merchant analytics</a>
+            <a href="/orders" target="_blank" rel="noreferrer">Orders</a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
