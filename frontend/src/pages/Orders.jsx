@@ -172,6 +172,7 @@ export default function Orders() {
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
   const [status, setStatus] = useState('all');
+  const [search, setSearch] = useState('');
   const [view, setView] = useState('orders');
   const [error, setError] = useState('');
   const [modal, setModal] = useState(false);
@@ -194,19 +195,30 @@ export default function Orders() {
 
   useEffect(() => { load(); }, []);
   useEffect(() => {
-    if (view !== 'map') return undefined;
-    const timer = window.setInterval(load, 30_000);
+    const timer = window.setInterval(load, 15_000);
     return () => window.clearInterval(timer);
-  }, [view]);
+  }, []);
 
   const statusCounts = useMemo(() => orders.reduce((counts, order) => {
     counts[order.status] = (counts[order.status] || 0) + 1;
     counts.all += 1;
     return counts;
-  }, { all: 0 }), [orders]);
+  }, { all: 0, simulations: simulations.length }), [orders, simulations.length]);
 
   const tabs = canSeeSimulations ? [...statusTabs, { id: 'simulations', label: 'Simulations' }] : statusTabs;
-  const visibleOrders = useMemo(() => status === 'all' ? orders : orders.filter((order) => order.status === status), [orders, status]);
+  const visibleOrders = useMemo(() => {
+    let list = status === 'all' ? orders : orders.filter((order) => order.status === status);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((order) =>
+        String(order.order_number).toLowerCase().includes(q)
+        || String(order.customer?.name || '').toLowerCase().includes(q)
+        || String(order.customer?.email || '').toLowerCase().includes(q)
+        || (order.items || []).some((item) => String(item.product?.name || '').toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [orders, status, search]);
   const mappedOrders = useMemo(() => visibleOrders.filter((order) => (
     order.status !== 'cancelled'
     && Number.isFinite(order.delivery_latitude)

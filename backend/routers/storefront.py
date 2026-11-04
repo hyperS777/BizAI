@@ -40,6 +40,7 @@ def create_customer_simulation(payload: StorefrontSimulationCreate, db: Session 
             payload.items,
             payload.discount_code,
             payload.payment_method,
+            customer_phone=payload.customer_phone,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

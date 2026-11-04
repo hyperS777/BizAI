@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowRight, Check, ChevronDown, ChevronUp, Clock, CreditCard, DollarSign,
+  ArrowRight, Check, ChevronDown, ChevronUp, Clock, CreditCard, DollarSign, MessageCircle, QrCode, ShieldCheck,
   Heart, Minus, Package, Plus, Search, ShoppingBag, Smartphone, Star, Truck, X,
 } from 'lucide-react';
 import client from '../api/client';
@@ -89,19 +89,31 @@ export default function Storefront() {
     return {
       name: saved?.name || '',
       email: deviceDemoEmail(),
+      phone: saved?.phone || '+91 98765 43210',
       address: saved?.address || '42 Connaught Place, New Delhi 110001',
+      whatsappUpdates: saved?.whatsappUpdates ?? true,
     };
   });
 
   const [paymentMethod, setPaymentMethod] = useState('demo_card');
+  /* ── Payment Modes: 'demo' (instant) | 'real_demo' (interactive sandbox) ── */
+  const [paymentMode, setPaymentMode] = useState('demo');
+  const [sandboxModal, setSandboxModal] = useState(null); // 'card_otp' | 'upi_qr' | 'cod_otp'
+  const [sandboxOtp, setSandboxOtp] = useState('');
+  const [quickViewProduct, setQuickViewProduct] = useState(null);
+  const [quickViewQuantity, setQuickViewQuantity] = useState(1);
   const [checkoutError, setCheckoutError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [simulationReceipt, setSimulationReceipt] = useState(null);
 
-  /* ── order history (persisted for session) ── */
+  /* ── order history (persisted per device in localStorage) ── */
   const [orderHistory, setOrderHistory] = useState(() => {
-    try { return JSON.parse(sessionStorage.getItem('reihh-order-history') || '[]'); }
-    catch { return []; }
+    try {
+      const key = `reihh-orders-${getDeviceId()}`;
+      return JSON.parse(localStorage.getItem(key) || sessionStorage.getItem('reihh-order-history') || '[]');
+    } catch {
+      return [];
+    }
   });
 
   /* ── discount ── */
@@ -125,8 +137,13 @@ export default function Storefront() {
 
   /* ── persist local customer details ── */
   useEffect(() => {
-    localStorage.setItem('reihh-customer-info', JSON.stringify({ name: customer.name, address: customer.address }));
-  }, [customer.name, customer.address]);
+    localStorage.setItem('reihh-customer-info', JSON.stringify({
+      name: customer.name,
+      phone: customer.phone,
+      address: customer.address,
+      whatsappUpdates: customer.whatsappUpdates,
+    }));
+  }, [customer.name, customer.phone, customer.address, customer.whatsappUpdates]);
 
   /* ── filter products ── */
   const filteredProducts = useMemo(() => {
@@ -246,6 +263,7 @@ export default function Storefront() {
         customer_name: customer.name || 'Demo Customer',
         customer_email: customer.email,
         delivery_address: customer.address || '42 Connaught Place, New Delhi 110001',
+        customer_phone: customer.phone || '+91 98765 43210',
         session_id: sessionId,
         discount_code: appliedDiscount?.code || null,
         payment_method: paymentMethod,
@@ -254,7 +272,10 @@ export default function Storefront() {
       setSimulationReceipt(data);
       setOrderHistory((prev) => {
         const updated = [data, ...prev];
-        sessionStorage.setItem('reihh-order-history', JSON.stringify(updated));
+        try {
+          localStorage.setItem(`reihh-orders-${getDeviceId()}`, JSON.stringify(updated));
+          sessionStorage.setItem('reihh-order-history', JSON.stringify(updated));
+        } catch {}
         return updated;
       });
       setCart([]);
@@ -411,6 +432,23 @@ export default function Storefront() {
               Track delivery (Delivery Agent POV) <ArrowRight size={15} />
             </a>
             <a
+              className="store-whatsapp-btn"
+              href={`https://wa.me/${(customer.phone || '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                `🛍️ *REIHH Order Confirmed!*\n\n` +
+                `Thank you ${customer.name || 'Customer'},\n` +
+                `Your order *#${simulationReceipt.reference}* has been placed successfully.\n` +
+                `Total: ₹${simulationReceipt.total_amount?.toLocaleString('en-IN')}\n\n` +
+                `📍 Fulfillment: REIHH Delhi Warehouse\n` +
+                `📦 Track Live Delivery (Delhi NCR):\n${window.location.origin}/delivery/demo/${simulationReceipt.delivery_token}\n\n` +
+                `📄 Download Tax Invoice (PDF):\n${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api').replace(/\/api\/?$/, '')}/api/invoices/public/${simulationReceipt.invoice_token}/pdf\n\n` +
+                `REIHH Studio · Demo Store`
+              )}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <MessageCircle size={15} /> Send WhatsApp Order Updates →
+            </a>
+            <a
               className="store-secondary-button"
               href="/orders"
               target="_blank"
@@ -523,6 +561,28 @@ export default function Storefront() {
               placeholder="e.g. 42 Connaught Place, New Delhi 110001"
             />
           </label>
+          <label className="simulation-customer-field">
+            Phone number (WhatsApp Updates)
+            <input
+              required
+              type="tel"
+              value={customer.phone}
+              onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
+              placeholder="+91 98765 43210"
+            />
+            <small style={{ color: 'var(--store-muted)', fontSize: 10, marginTop: 4 }}>
+              💬 Used to send real-time Delhi rider tracking and official tax invoices on WhatsApp.
+            </small>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', margin: '6px 0 12px' }}>
+            <input
+              type="checkbox"
+              checked={customer.whatsappUpdates}
+              onChange={(e) => setCustomer({ ...customer, whatsappUpdates: e.target.checked })}
+              style={{ width: 16, height: 16, accentColor: '#25D366' }}
+            />
+            <span>Receive live delivery dispatch &amp; tax invoice on WhatsApp</span>
+          </label>
           {checkoutError && <p className="simulation-error">{checkoutError}</p>}
           <div className="step-nav">
             <button className="store-continue-button" onClick={() => setCheckoutStep(0)}>← Bag</button>
@@ -553,52 +613,125 @@ export default function Storefront() {
           <h3 className="step-heading">Demo Payment</h3>
           <p className="step-subheading">Choose a simulated payment method. No real charges are made.</p>
 
-          <div className="demo-payment-options">
-            <label className={`demo-payment-option ${paymentMethod === 'demo_card' ? 'selected' : ''}`}>
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="demo_card"
-                checked={paymentMethod === 'demo_card'}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-              />
-              <CreditCard size={18} />
-              <div>
-                <strong>Demo Visa / Mastercard</strong>
-                <small>Simulated card (•••• 4242) · Instant approval</small>
-              </div>
-            </label>
-
-            <label className={`demo-payment-option ${paymentMethod === 'demo_upi' ? 'selected' : ''}`}>
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="demo_upi"
-                checked={paymentMethod === 'demo_upi'}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-              />
-              <Smartphone size={18} />
-              <div>
-                <strong>Demo UPI</strong>
-                <small>UPI transfer · Simulated instant verification</small>
-              </div>
-            </label>
-
-            <label className={`demo-payment-option ${paymentMethod === 'demo_cod' ? 'selected' : ''}`}>
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="demo_cod"
-                checked={paymentMethod === 'demo_cod'}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-              />
-              <DollarSign size={18} />
-              <div>
-                <strong>Cash on Delivery (COD)</strong>
-                <small>Pay delivery agent upon arrival in Delhi NCR</small>
-              </div>
-            </label>
+          {/* Two Payment Mode Switcher */}
+          <div className="payment-mode-tabs">
+            <button
+              type="button"
+              className={`payment-mode-tab ${paymentMode === 'demo' ? 'active' : ''}`}
+              onClick={() => { setPaymentMode('demo'); setPaymentMethod('demo_card'); }}
+            >
+              <strong>Demo Payment</strong>
+              <small>Instant 1-click simulation</small>
+            </button>
+            <button
+              type="button"
+              className={`payment-mode-tab ${paymentMode === 'real_demo' ? 'active' : ''}`}
+              onClick={() => { setPaymentMode('real_demo'); setPaymentMethod('real_demo_gateway'); }}
+            >
+              <strong>Real Demo Payment</strong>
+              <small>Interactive OTP &amp; QR sandbox</small>
+            </button>
           </div>
+
+          {/* Mode 1: Instant Demo */}
+          {paymentMode === 'demo' && (
+            <div className="demo-payment-options">
+              <label className={`demo-payment-option ${paymentMethod === 'demo_card' ? 'selected' : ''}`}>
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="demo_card"
+                  checked={paymentMethod === 'demo_card'}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                />
+                <CreditCard size={18} />
+                <div>
+                  <strong>Demo Visa / Mastercard (Instant)</strong>
+                  <small>Simulated card (•••• 4242) · Instant approval</small>
+                </div>
+              </label>
+
+              <label className={`demo-payment-option ${paymentMethod === 'demo_upi' ? 'selected' : ''}`}>
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="demo_upi"
+                  checked={paymentMethod === 'demo_upi'}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                />
+                <Smartphone size={18} />
+                <div>
+                  <strong>Demo UPI (Instant)</strong>
+                  <small>Simulated handle · Instant verification</small>
+                </div>
+              </label>
+
+              <label className={`demo-payment-option ${paymentMethod === 'demo_cod' ? 'selected' : ''}`}>
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="demo_cod"
+                  checked={paymentMethod === 'demo_cod'}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                />
+                <DollarSign size={18} />
+                <div>
+                  <strong>Demo Cash on Delivery</strong>
+                  <small>Pay delivery rider upon arrival in Delhi NCR</small>
+                </div>
+              </label>
+            </div>
+          )}
+
+          {/* Mode 2: Real Demo (Interactive Sandbox) */}
+          {paymentMode === 'real_demo' && (
+            <div className="demo-payment-options">
+              <label className={`demo-payment-option ${paymentMethod === 'real_demo_gateway' ? 'selected' : ''}`}>
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="real_demo_gateway"
+                  checked={paymentMethod === 'real_demo_gateway'}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                />
+                <ShieldCheck size={18} />
+                <div>
+                  <strong>Card Gateway + 3D Secure OTP</strong>
+                  <small>Interactive card form with SMS OTP challenge</small>
+                </div>
+              </label>
+
+              <label className={`demo-payment-option ${paymentMethod === 'real_demo_upi_qr' ? 'selected' : ''}`}>
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="real_demo_upi_qr"
+                  checked={paymentMethod === 'real_demo_upi_qr'}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                />
+                <QrCode size={18} />
+                <div>
+                  <strong>Live Scannable Demo UPI QR</strong>
+                  <small>Interactive QR code with simulated app approval</small>
+                </div>
+              </label>
+
+              <label className={`demo-payment-option ${paymentMethod === 'real_demo_cod_otp' ? 'selected' : ''}`}>
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="real_demo_cod_otp"
+                  checked={paymentMethod === 'real_demo_cod_otp'}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                />
+                <DollarSign size={18} />
+                <div>
+                  <strong>Verified COD (Phone OTP Verification)</strong>
+                  <small>Sends SMS OTP code to customer before dispatch</small>
+                </div>
+              </label>
+            </div>
+          )}
 
           {/* Discount section */}
           <div className="discount-section" style={{ marginTop: 16 }}>
@@ -657,9 +790,21 @@ export default function Storefront() {
             <button
               className="store-checkout-button step-next"
               disabled={submitting}
-              onClick={submitSimulation}
+              onClick={() => {
+                if (paymentMethod === 'real_demo_gateway') {
+                  setSandboxModal('card_otp');
+                  setSandboxOtp('');
+                } else if (paymentMethod === 'real_demo_upi_qr') {
+                  setSandboxModal('upi_qr');
+                } else if (paymentMethod === 'real_demo_cod_otp') {
+                  setSandboxModal('cod_otp');
+                  setSandboxOtp('');
+                } else {
+                  submitSimulation();
+                }
+              }}
             >
-              {submitting ? 'Placing order…' : `Place demo order · ${money(orderTotal)}`} {!submitting && <ArrowRight size={15} />}
+              {submitting ? 'Placing order…' : paymentMode === 'real_demo' ? `Continue to Payment · ${money(orderTotal)}` : `Place demo order · ${money(orderTotal)}`} {!submitting && <ArrowRight size={15} />}
             </button>
           </div>
         </div>
@@ -827,13 +972,21 @@ export default function Storefront() {
                   onClick={() => trackStoreEvent({ sessionId, eventType: 'product_view', product, variant })}
                 >
                   <div className="store-product-image-wrap">
-                    <a className="store-product-image" href={product.product_url} target="_blank" rel="noreferrer">
+                    <div
+                      className="store-product-image"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        setQuickViewProduct(product);
+                        setQuickViewQuantity(1);
+                        trackStoreEvent({ sessionId, eventType: 'product_view', product, variant });
+                      }}
+                    >
                       {product.image_url ? (
                         <img src={product.image_url} alt={product.title} loading="lazy" />
                       ) : (
                         <div className="product-placeholder">REIHH</div>
                       )}
-                    </a>
+                    </div>
                     {stockBadge(product)}
                     <button
                       className={`wishlist-btn ${inWishlist ? 'wished' : ''}`}
@@ -846,7 +999,16 @@ export default function Storefront() {
 
                   <div className="store-product-info">
                     <div className="store-product-title">
-                      <a href={product.product_url} target="_blank" rel="noreferrer">{product.title}</a>
+                      <span
+                        style={{ cursor: 'pointer', fontWeight: 600 }}
+                        onClick={() => {
+                          setQuickViewProduct(product);
+                          setQuickViewQuantity(1);
+                          trackStoreEvent({ sessionId, eventType: 'product_view', product, variant });
+                        }}
+                      >
+                        {product.title}
+                      </span>
                       <span>{money(variant?.price || product.price)}</span>
                     </div>
                     <span className="product-category">{product.category}</span>
@@ -971,6 +1133,233 @@ export default function Storefront() {
           </aside>
         </div>
       )}
+    
+      {/* ── Interactive Sandbox Modals for Real Demo Payment ── */}
+      {sandboxModal === 'card_otp' && (
+        <div className="store-modal-backdrop" onClick={() => setSandboxModal(null)}>
+          <div className="store-sandbox-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="sandbox-modal-header">
+              <ShieldCheck size={24} style={{ color: '#0e766e' }} />
+              <div>
+                <strong>3D Secure 2.0 Card Verification</strong>
+                <small>Simulated Visa / Mastercard Sandbox</small>
+              </div>
+              <button className="sandbox-close-btn" onClick={() => setSandboxModal(null)}><X size={16} /></button>
+            </div>
+            <div className="sandbox-modal-body">
+              <p>A simulated one-time password has been sent to customer phone <strong>{customer.phone || '+91 98765 43210'}</strong>.</p>
+              <div className="sandbox-demo-hint">
+                <span>Demo OTP:</span> <strong>123456</strong>
+                <button type="button" onClick={() => setSandboxOtp('123456')}>Auto-fill</button>
+              </div>
+              <label className="simulation-customer-field" style={{ marginTop: 12 }}>
+                Enter 6-digit OTP
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={sandboxOtp}
+                  onChange={(e) => setSandboxOtp(e.target.value)}
+                  placeholder="123456"
+                  autoFocus
+                />
+              </label>
+              <div className="sandbox-modal-footer">
+                <button className="store-continue-button" onClick={() => setSandboxModal(null)}>Cancel</button>
+                <button
+                  className="store-checkout-button"
+                  disabled={sandboxOtp.trim().length < 4 || submitting}
+                  onClick={() => {
+                    setSandboxModal(null);
+                    submitSimulation();
+                  }}
+                >
+                  {submitting ? 'Verifying…' : `Authorize ${money(orderTotal)}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sandboxModal === 'upi_qr' && (
+        <div className="store-modal-backdrop" onClick={() => setSandboxModal(null)}>
+          <div className="store-sandbox-modal upi-qr-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="sandbox-modal-header">
+              <QrCode size={24} style={{ color: '#0e766e' }} />
+              <div>
+                <strong>Live Demo UPI QR Payment</strong>
+                <small>Scan or simulate instant UPI approval</small>
+              </div>
+              <button className="sandbox-close-btn" onClick={() => setSandboxModal(null)}><X size={16} /></button>
+            </div>
+            <div className="sandbox-modal-body" style={{ textAlign: 'center' }}>
+              <div className="demo-qr-box">
+                {/* Simulated high-res UPI QR code using static QR API */}
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=upi://pay?pa=reihh.studio@icici%26pn=REIHH%20Studio%26am=${orderTotal}%26cu=INR`}
+                  alt="UPI QR Code"
+                  style={{ width: 170, height: 170, borderRadius: 8 }}
+                />
+                <span className="demo-vpa">reihh.studio@icici</span>
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--store-muted)', margin: '10px 0' }}>
+                Open GPay, PhonePe, or Paytm and scan, or click below to simulate instant payment verification.
+              </p>
+              <div className="sandbox-modal-footer">
+                <button className="store-continue-button" onClick={() => setSandboxModal(null)}>Cancel</button>
+                <button
+                  className="store-checkout-button"
+                  disabled={submitting}
+                  onClick={() => {
+                    setSandboxModal(null);
+                    submitSimulation();
+                  }}
+                >
+                  {submitting ? 'Verifying…' : `Simulate UPI App Approval (${money(orderTotal)})`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sandboxModal === 'cod_otp' && (
+        <div className="store-modal-backdrop" onClick={() => setSandboxModal(null)}>
+          <div className="store-sandbox-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="sandbox-modal-header">
+              <DollarSign size={24} style={{ color: '#0e766e' }} />
+              <div>
+                <strong>Verify Phone for Cash on Delivery</strong>
+                <small>Delhi NCR Courier Dispatch Verification</small>
+              </div>
+              <button className="sandbox-close-btn" onClick={() => setSandboxModal(null)}><X size={16} /></button>
+            </div>
+            <div className="sandbox-modal-body">
+              <p>To prevent fake orders, please verify phone number <strong>{customer.phone || '+91 98765 43210'}</strong>.</p>
+              <div className="sandbox-demo-hint">
+                <span>Verification Code:</span> <strong>7890</strong>
+                <button type="button" onClick={() => setSandboxOtp('7890')}>Auto-fill</button>
+              </div>
+              <label className="simulation-customer-field" style={{ marginTop: 12 }}>
+                Enter 4-digit SMS Code
+                <input
+                  type="text"
+                  maxLength={4}
+                  value={sandboxOtp}
+                  onChange={(e) => setSandboxOtp(e.target.value)}
+                  placeholder="7890"
+                  autoFocus
+                />
+              </label>
+              <div className="sandbox-modal-footer">
+                <button className="store-continue-button" onClick={() => setSandboxModal(null)}>Cancel</button>
+                <button
+                  className="store-checkout-button"
+                  disabled={sandboxOtp.trim().length < 4 || submitting}
+                  onClick={() => {
+                    setSandboxModal(null);
+                    submitSimulation();
+                  }}
+                >
+                  {submitting ? 'Confirming…' : 'Verify & Confirm COD Order'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Product Quick-View Modal ── */}
+      {quickViewProduct && (
+        <div className="store-modal-backdrop" onClick={() => setQuickViewProduct(null)}>
+          <div className="store-quick-view-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="quick-view-close" onClick={() => setQuickViewProduct(null)} aria-label="Close">
+              <X size={18} />
+            </button>
+            <div className="quick-view-body">
+              <div className="quick-view-image-pane">
+                {quickViewProduct.image_url ? (
+                  <img src={quickViewProduct.image_url} alt={quickViewProduct.title} />
+                ) : (
+                  <div className="product-placeholder">REIHH</div>
+                )}
+              </div>
+              <div className="quick-view-info-pane">
+                <span className="store-kicker">{quickViewProduct.category}</span>
+                <h2>{quickViewProduct.title}</h2>
+                <div className="quick-view-price-row">
+                  <strong>{money(selectedVariant(quickViewProduct)?.price || quickViewProduct.price)}</strong>
+                  <span className="quick-view-stock-tag">● In stock · Delhi dispatch</span>
+                </div>
+
+                <div className="quick-view-variants">
+                  <span className="variant-label">Select Size / Variant:</span>
+                  <div className="variant-chips">
+                    {quickViewProduct.variants.map((v) => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        className={`variant-chip ${selectedVariants[quickViewProduct.id] === v.id || (!selectedVariants[quickViewProduct.id] && v.id === quickViewProduct.variants[0]?.id) ? 'selected' : ''}`}
+                        disabled={!v.available}
+                        onClick={() => setSelectedVariants((prev) => ({ ...prev, [quickViewProduct.id]: v.id }))}
+                      >
+                        {v.options?.join(' / ') || v.title} {!v.available ? '(Sold out)' : ''}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="quick-view-quantity">
+                  <span className="variant-label">Quantity:</span>
+                  <div className="cart-quantity">
+                    <button type="button" onClick={() => setQuickViewQuantity((q) => Math.max(1, q - 1))}><Minus size={12} /></button>
+                    <span>{quickViewQuantity}</span>
+                    <button type="button" onClick={() => setQuickViewQuantity((q) => q + 1)}><Plus size={12} /></button>
+                  </div>
+                </div>
+
+                <div className="quick-view-desc">
+                  <p>
+                    {quickViewProduct.description
+                      ? quickViewProduct.description.replace(/<[^>]+>/g, '').slice(0, 240) + '…'
+                      : 'Signature REIHH contemporary silhouette crafted with premium structured fabrics.'}
+                  </p>
+                </div>
+
+                <div className="quick-view-actions">
+                  <button
+                    className="store-checkout-button"
+                    onClick={() => {
+                      const variant = selectedVariant(quickViewProduct);
+                      trackStoreEvent({ sessionId, eventType: 'add_to_cart', product: quickViewProduct, variant, quantity: quickViewQuantity });
+                      setCart((current) => {
+                        const found = current.find((line) => line.variant.id === variant.id);
+                        return found
+                          ? current.map((line) => line.variant.id === variant.id ? { ...line, quantity: line.quantity + quickViewQuantity } : line)
+                          : [...current, { product: quickViewProduct, variant, quantity: quickViewQuantity }];
+                      });
+                      setQuickViewProduct(null);
+                      setDrawerTab('bag');
+                      setCartOpen(true);
+                    }}
+                  >
+                    + Add {quickViewQuantity} to Bag · {money((selectedVariant(quickViewProduct)?.price || quickViewProduct.price) * quickViewQuantity)}
+                  </button>
+                  <a
+                    className="store-original-link"
+                    href={quickViewProduct.product_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Official piece on reihh.com ↗
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

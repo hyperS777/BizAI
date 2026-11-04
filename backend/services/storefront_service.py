@@ -272,7 +272,7 @@ def sync_all_reihh_catalog(db: Session, force: bool = False) -> dict:
     return {"products_synced": count_prods, "variants_synced": count_vars}
 
 
-def _upsert_demo_customer(db: Session, name: str, email: str, address: str) -> Customer:
+def _upsert_demo_customer(db: Session, name: str, email: str, address: str, phone: str | None = None) -> Customer:
     clean_email = email.strip().lower()
     clean_name = name.strip() or "Demo Customer"
     customer = db.query(Customer).filter(Customer.email == clean_email).first()
@@ -287,6 +287,7 @@ def _upsert_demo_customer(db: Session, name: str, email: str, address: str) -> C
             new_customer = Customer(
                 name=clean_name,
                 email=unique_email,
+                phone=phone,
                 address=address,
                 company="REIHH demo customer",
                 tags="demo-store",
@@ -298,6 +299,8 @@ def _upsert_demo_customer(db: Session, name: str, email: str, address: str) -> C
         # Same customer name: update address if provided
         if address:
             customer.address = address
+        if phone:
+            customer.phone = phone
         if customer.tags and "demo-store" not in customer.tags:
             customer.tags = f"{customer.tags},demo-store"
         elif not customer.tags:
@@ -306,6 +309,7 @@ def _upsert_demo_customer(db: Session, name: str, email: str, address: str) -> C
     customer = Customer(
         name=clean_name,
         email=clean_email,
+        phone=phone,
         address=address,
         company="REIHH demo customer",
         tags="demo-store",
@@ -371,6 +375,7 @@ def create_storefront_simulation(
     requested_items: list,
     discount_code: str | None = None,
     payment_method: str | None = "demo_card",
+    customer_phone: str | None = None,
 ) -> dict:
     if not settings.STOREFRONT_SIMULATION_ENABLED:
         raise ValueError("Customer simulation is disabled")
@@ -412,7 +417,7 @@ def create_storefront_simulation(
             quantity=item.quantity,
         ))
 
-    customer = _upsert_demo_customer(db, customer_name.strip(), str(customer_email).lower(), requested_address)
+    customer = _upsert_demo_customer(db, customer_name.strip(), str(customer_email).lower(), requested_address, phone=customer_phone)
     user_id = _system_user_id(db)
     db.flush()
     order = create_order(
@@ -497,7 +502,7 @@ def create_storefront_simulation(
     db.commit()
     db.refresh(simulation)
     return {
-        **_serialize_delivery(simulation, {"delivery_token": delivery_token}),
+        **_serialize_delivery(simulation, {"delivery_token": delivery_token, "customer_phone": customer_phone or customer.phone}),
         "order_number": order.order_number,
         "invoice_number": invoice.invoice_number if invoice else None,
         "invoice_token": invoice.public_token if invoice else None,
@@ -515,6 +520,8 @@ def list_storefront_simulations(db: Session, limit: int = 100) -> list[dict]:
         payload = _serialize_delivery(row)
         payload["order_number"] = order.order_number if order else row.reference
         payload["order_status"] = order.status if order else None
+    if order and order.customer:
+        payload["customer_phone"] = order.customer.phone
         result.append(payload)
     return result
 
@@ -538,6 +545,8 @@ def get_demo_delivery_by_token(db: Session, token: str) -> dict:
     payload = _serialize_delivery(row)
     payload["order_number"] = order.order_number if order else row.reference
     payload["order_status"] = order.status if order else None
+    if order and order.customer:
+        payload["customer_phone"] = order.customer.phone
     return payload
 
 

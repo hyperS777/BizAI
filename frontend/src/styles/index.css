@@ -1031,3 +1031,9 @@ body{background:radial-gradient(circle at 90% 0%,rgba(14,118,110,.06),transparen
   font-size: 11px;
   color: var(--muted);
 }
+
+/* Dark Mode Leaflet Tile Inversion */
+[data-theme='dark'] .delivery-map .leaflet-tile-pane,
+[data-theme='dark'] .delivery-interactive-map-wrap .leaflet-tile-pane {
+  filter: brightness(0.65) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+}

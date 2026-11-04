@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, Check, CheckCircle2, Clock3, Download,
-  FileText, MapPin, Navigation, Package, PackageCheck, Phone,
+  FileText, MapPin, MessageCircle, Navigation, Package, PackageCheck, Phone,
   RotateCcw, Scan, Truck, Upload, XCircle,
 } from 'lucide-react';
 import client from '../api/client';
 import { apiError, money } from '../utils/format';
 import './DeliveryDemo.css';
+import { CircleMarker, MapContainer, Popup, TileLayer, ZoomControl, Polyline } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 
 /* Simplified 3-stage flow: ready_to_pack → out_for_delivery → delivered */
 const stages = [
@@ -76,29 +78,93 @@ function statusEmoji(status) {
   return map[status] || '📍';
 }
 
-/* Delhi static map using OpenStreetMap tile */
-function DeliveryMapStatic({ delivery }) {
-  // Delhi coordinates: 28.6139, 77.2090
-  const lat = delivery?.delivery_latitude ?? 28.6139;
-  const lng = delivery?.delivery_longitude ?? 77.2090;
-  const zoom = 13;
+/* WhatsApp notification URL builder */
+function getWhatsAppUpdateUrl(delivery) {
+  const phone = (delivery?.customer_phone || '').replace(/[^0-9]/g, '');
+  const invoiceLink = delivery?.invoice_token
+    ? `\n📄 *Tax Invoice (PDF):*\n${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api').replace(/\/api\/?$/, '')}/api/invoices/public/${delivery.invoice_token}/pdf\n`
+    : '';
+
+  const text = encodeURIComponent(
+    `🛍️ *REIHH Studio Delivery Notification*\n\n` +
+    `Hello ${delivery?.customer_name || 'Customer'},\n` +
+    `Your order *#${delivery?.reference}* status is: *${STATUS_LABELS[delivery?.delivery_status] || delivery?.delivery_status}*.\n\n` +
+    `📍 *Current Location:* ${delivery?.current_location || 'Delhi NCR'}\n` +
+    `🚚 *Fulfillment Carrier:* ${delivery?.delivery_agent_name || 'REIHH Demo Rider'}\n` +
+    (delivery?.delivery_note ? `📝 *Rider Note:* "${delivery.delivery_note}"\n` : '') +
+    `\n📦 *Live Delivery Agent POV:*\n${window.location.href}\n` +
+    invoiceLink +
+    `\nThank you for choosing REIHH Studio!`
+  );
+  return `https://wa.me/${phone ? phone : ''}?text=${text}`;
+}
+
+/* Interactive Leaflet delivery map */
+function DeliveryInteractiveMap({ delivery }) {
+  const lat = Number(delivery?.delivery_latitude) || 28.6139;
+  const lng = Number(delivery?.delivery_longitude) || 77.2090;
+  const warehouse = [28.6139, 77.2090];
+  const customerLoc = [lat - 0.006, lng - 0.005];
+  const riderLoc = [lat, lng];
+
   const mapsUrl = delivery?.delivery_address
     ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(delivery.delivery_address)}`
     : `https://maps.google.com/?q=${lat},${lng}`;
-  const tileUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=${zoom}&size=640x220&markers=${lat},${lng},red`;
 
   return (
-    <div className="delivery-map-static">
-      <div className="delivery-map-frame-static">
-        <div className="delivery-map-placeholder">
-          <MapPin size={28} />
-          <div>
-            <strong>{delivery?.current_location || 'REIHH Delhi Warehouse'}</strong>
-            <small>{lat.toFixed(4)}°N, {lng.toFixed(4)}°E</small>
-          </div>
-        </div>
-        <a className="delivery-directions" href={mapsUrl} target="_blank" rel="noreferrer">
-          <Navigation size={15} /> Open in Google Maps <ArrowRight size={14} />
+    <div className="delivery-interactive-map-wrap" style={{ marginTop: 10 }}>
+      <div style={{ height: 260, width: '100%', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--line, #e2e8f0)' }}>
+        <MapContainer
+          center={[lat, lng]}
+          zoom={12}
+          scrollWheelZoom={false}
+          style={{ height: '100%', width: '100%' }}
+          zoomControl={false}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          <ZoomControl position="bottomright" />
+
+          {/* Delhi Warehouse Pin */}
+          <CircleMarker center={warehouse} radius={7} pathOptions={{ color: '#0e766e', fillColor: '#0e766e', fillOpacity: 0.9 }}>
+            <Popup>
+              <strong>REIHH Delhi Warehouse</strong><br />
+              <small>Fulfillment Hub</small>
+            </Popup>
+          </CircleMarker>
+
+          {/* Customer Destination Pin */}
+          <CircleMarker center={customerLoc} radius={7} pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.9 }}>
+            <Popup>
+              <strong>Customer Address</strong><br />
+              <small>{delivery?.delivery_address || 'Delhi'}</small>
+            </Popup>
+          </CircleMarker>
+
+          {/* Live Rider Pin */}
+          <CircleMarker center={riderLoc} radius={9} pathOptions={{ color: '#10b981', fillColor: '#10b981', fillOpacity: 1 }}>
+            <Popup>
+              <strong>Rider Location: {delivery?.current_location || 'En route'}</strong><br />
+              <small>Carrier: {delivery?.delivery_agent_name || 'REIHH Demo Rider'}</small>
+            </Popup>
+          </CircleMarker>
+
+          {/* Route corridor */}
+          <Polyline
+            positions={[warehouse, riderLoc, customerLoc]}
+            pathOptions={{ color: '#0e766e', weight: 3, dashArray: '6, 8', opacity: 0.7 }}
+          />
+        </MapContainer>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+        <small style={{ color: 'var(--muted, #64748b)', fontSize: 11 }}>
+          📍 Live position: <strong>{delivery?.current_location || 'Delhi NCR'}</strong>
+        </small>
+        <a className="delivery-directions" href={mapsUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, padding: '4px 10px' }}>
+          <Navigation size={12} /> Google Maps ↗
         </a>
       </div>
     </div>
@@ -268,19 +334,7 @@ export default function DeliveryDemo() {
           </span>
         </section>
 
-        {/* Route visualiser - simplified 3 nodes */}
-        <section className="route-visualizer" aria-label="Delivery route">
-          {routeNodes.map((node, idx) => (
-            <div key={node.id} className={`route-node ${idx <= routeIndex ? 'active' : ''} ${idx === routeIndex ? 'current' : ''}`}>
-              <div className="route-node-dot">
-                {idx === routeIndex && <span className="pulse-ring" />}
-                <span className="route-node-emoji">{node.emoji}</span>
-              </div>
-              <span className="route-node-label">{node.label}</span>
-              {idx < routeNodes.length - 1 && <div className={`route-connector ${idx < routeIndex ? 'done' : ''}`} />}
-            </div>
-          ))}
-        </section>
+
 
         {/* Delivery stages timeline */}
         <section className="delivery-timeline" aria-label="Delivery progress">
@@ -298,6 +352,31 @@ export default function DeliveryDemo() {
           })}
         </section>
 
+                {/* WhatsApp notification action */}
+        <div style={{ margin: '14px 0 6px' }}>
+          <a
+            className="delivery-whatsapp-btn"
+            href={getWhatsAppUpdateUrl(delivery)}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              background: '#25D366',
+              color: '#ffffff',
+              padding: '10px 18px',
+              borderRadius: '6px',
+              fontSize: 13,
+              fontWeight: 600,
+              textDecoration: 'none',
+              boxShadow: '0 2px 6px rgba(37, 211, 102, 0.25)',
+            }}
+          >
+            <MessageCircle size={16} /> Send WhatsApp Update to Customer
+          </a>
+        </div>
+
         {/* Invoice panel on delivery */}
         {isDelivered && <InvoicePanel delivery={delivery} />}
 
@@ -311,7 +390,7 @@ export default function DeliveryDemo() {
               </div>
               <MapPin size={19} />
             </div>
-            <DeliveryMapStatic delivery={delivery} />
+            <DeliveryInteractiveMap delivery={delivery} />
             <p className="delivery-addr-full">{delivery.delivery_address}</p>
             {delivery.delivery_agent_name && (
               <small className="agent-attribution">

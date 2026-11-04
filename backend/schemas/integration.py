@@ -89,6 +89,7 @@ class StorefrontSimulationCreate(BaseModel):
     session_id: str = Field(min_length=4, max_length=80)
     discount_code: Optional[str] = Field(default=None, max_length=40)
     payment_method: Optional[str] = Field(default="demo_card", max_length=50)
+    customer_phone: Optional[str] = Field(default=None, max_length=40)
 
 
 class StorefrontAnalyticsEventCreate(BaseModel):
@@ -113,6 +114,7 @@ class StorefrontSimulationResponse(BaseModel):
     delivery_address: Optional[str] = None
     delivery_status: str = "ready_to_pack"
     delivery_agent_name: Optional[str] = None
+    customer_phone: Optional[str] = None
     delivery_token: Optional[str] = None
     order_id: Optional[int] = None
     order_number: Optional[str] = None
