@@ -725,6 +725,89 @@
 .order-confirm-actions { display: flex; flex-direction: column; gap: 8px; }
 .order-confirm-actions .store-checkout-button { margin-top: 0; }
 
+/* ── Order History (session) ── */
+.order-history-section {
+  margin-top: 24px;
+  border-top: 1px solid var(--store-border);
+  padding-top: 18px;
+}
+.order-history-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 11px 'Space Grotesk', sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--store-muted);
+  margin-bottom: 12px;
+}
+.order-history-list { display: flex; flex-direction: column; gap: 10px; }
+.order-history-card {
+  background: var(--store-warm-gray);
+  border: 1px solid var(--store-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.order-history-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.order-history-ref {
+  font: 600 12px 'Space Grotesk', sans-serif;
+  color: var(--store-ink);
+  letter-spacing: 0.03em;
+}
+.order-history-total {
+  font: 700 13px 'Space Grotesk', sans-serif;
+  color: var(--store-green);
+}
+.order-history-items-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.order-history-item-chip {
+  background: var(--store-bg);
+  border: 1px solid var(--store-border);
+  border-radius: 20px;
+  padding: 2px 9px;
+  font-size: 10px;
+  color: var(--store-ink);
+  white-space: nowrap;
+}
+.order-history-item-chip.muted { color: var(--store-muted); }
+.order-history-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+.order-history-track-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 500 11px 'Space Grotesk', sans-serif;
+  color: var(--store-green);
+  text-decoration: none;
+  border: 1px solid var(--store-green);
+  border-radius: 6px;
+  padding: 3px 10px;
+}
+.order-history-track-link:hover { background: var(--store-green); color: #fff; }
+.order-history-latest-badge {
+  font: 600 9px 'Space Grotesk', sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--store-green);
+  color: #fff;
+  border-radius: 20px;
+  padding: 2px 8px;
+}
+
 /* ── Miscellaneous ── */
 .simulation-only { background: #eaf0f6; color: #46617a; white-space: nowrap; }
 .simulation-table-panel .data-table td small { display: block; color: var(--muted); font-size: 10px; }

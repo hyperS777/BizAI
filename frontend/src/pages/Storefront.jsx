@@ -97,6 +97,12 @@ export default function Storefront() {
   const [submitting, setSubmitting] = useState(false);
   const [simulationReceipt, setSimulationReceipt] = useState(null);
 
+  /* ── order history (persisted for session) ── */
+  const [orderHistory, setOrderHistory] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('reihh-order-history') || '[]'); }
+    catch { return []; }
+  });
+
   /* ── discount ── */
   const [discountOpen, setDiscountOpen] = useState(false);
   const [discountInput, setDiscountInput] = useState('');
@@ -244,6 +250,11 @@ export default function Storefront() {
         items: cart.map((line) => ({ variant_id: line.variant.id, quantity: line.quantity })),
       });
       setSimulationReceipt(data);
+      setOrderHistory((prev) => {
+        const updated = [data, ...prev];
+        sessionStorage.setItem('reihh-order-history', JSON.stringify(updated));
+        return updated;
+      });
       setCart([]);
       setAppliedDiscount(null);
       setCheckoutStep(3);
@@ -272,17 +283,19 @@ export default function Storefront() {
 
   /* ── Drawer content ── */
   const renderCartContent = () => {
-    // Step 3: Confirmation
+    // Step 3: Confirmation + full order history
     if (checkoutStep === 3 && simulationReceipt) {
+      const payLabel = paymentMethod === 'demo_card' ? 'Demo Card (Instant)' : paymentMethod === 'demo_upi' ? 'Demo UPI (Verified)' : 'Demo Cash on Delivery';
       return (
         <div className="order-confirmation">
           <div className="order-confirm-check"><Check size={32} /></div>
           <span className="store-kicker">Order confirmed &amp; simulated</span>
           <h3>{simulationReceipt.reference}</h3>
           <p className="order-confirm-sub">
-            Payment verified via <strong>{paymentMethod === 'demo_card' ? 'Demo Card (Instant)' : paymentMethod === 'demo_upi' ? 'Demo UPI (Verified)' : 'Demo Cash on Delivery'}</strong>.
-            Fulfillment point: <strong>REIHH Delhi Warehouse</strong>.
+            Payment via <strong>{payLabel}</strong>. Fulfillment: <strong>REIHH Delhi Warehouse</strong>.
           </p>
+
+          {/* Latest order receipt */}
           <div className="order-receipt-items">
             {simulationReceipt.items?.map((item) => (
               <div className="receipt-line" key={item.variant_id}>
@@ -299,6 +312,7 @@ export default function Storefront() {
             <span>Total amount</span>
             <strong>{money(simulationReceipt.total_amount)}</strong>
           </div>
+
           <div className="order-confirm-actions">
             <a
               className="store-checkout-button"
@@ -320,6 +334,47 @@ export default function Storefront() {
               Continue shopping
             </button>
           </div>
+
+          {/* Session order history */}
+          {orderHistory.length > 1 && (
+            <div className="order-history-section">
+              <div className="order-history-heading">
+                <Star size={13} />
+                <span>All orders this session ({orderHistory.length})</span>
+              </div>
+              <div className="order-history-list">
+                {orderHistory.map((order, idx) => (
+                  <div className="order-history-card" key={order.reference}>
+                    <div className="order-history-card-top">
+                      <span className="order-history-ref">{order.reference}</span>
+                      <span className="order-history-total">{money(order.total_amount)}</span>
+                    </div>
+                    <div className="order-history-items-preview">
+                      {order.items?.slice(0, 3).map((item) => (
+                        <span key={item.variant_id} className="order-history-item-chip">
+                          {item.title} {item.variant_title ? `(${item.variant_title})` : ''} ×{item.quantity}
+                        </span>
+                      ))}
+                      {order.items?.length > 3 && (
+                        <span className="order-history-item-chip muted">+{order.items.length - 3} more</span>
+                      )}
+                    </div>
+                    <div className="order-history-card-actions">
+                      <a
+                        href={`/delivery/demo/${order.delivery_token}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="order-history-track-link"
+                      >
+                        <Truck size={11} /> Track
+                      </a>
+                      {idx === 0 && <span className="order-history-latest-badge">Latest</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       );
     }
@@ -785,7 +840,11 @@ export default function Storefront() {
                 </p>
                 <h2>
                   {checkoutStep === 0 ? 'Review selection' : checkoutStep === 3 ? 'Order confirmed' : 'Customer & Payment'}
-                  <small>({lineCount} {lineCount === 1 ? 'item' : 'items'})</small>
+                  <small>
+                    {checkoutStep === 3
+                      ? `(${orderHistory.length} ${orderHistory.length === 1 ? 'order' : 'orders'} this session)`
+                      : `(${lineCount} ${lineCount === 1 ? 'item' : 'items'})`}
+                  </small>
                 </h2>
               </div>
               <button onClick={() => setCartOpen(false)} aria-label="Close cart">
