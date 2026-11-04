@@ -27,6 +27,15 @@ class Settings(BaseSettings):
     # AI
     AI_PROVIDER: str = "groq"
     GROQ_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
+
+    # Real Payment Gateway (Razorpay)
+    RAZORPAY_KEY_ID: str = ""
+    RAZORPAY_KEY_SECRET: str = ""
+
+    # Real Courier / Logistics (Delhivery)
+    DELHIVERY_API_KEY: str = ""
+    DELHIVERY_CLIENT_ID: str = "REIHH_STUDIO_DELHI"
 
     # Shopify Admin API and webhook signing
     SHOPIFY_STORE_DOMAIN: str = ""

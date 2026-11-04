@@ -433,8 +433,10 @@ def create_storefront_simulation(
     order = update_order_status(db, order.id, OrderStatus.CONFIRMED)
     origin = _checkpoint_for_status("ready_to_pack", requested_address)
     order.shipping_address = requested_address
-    order.tracking_company = "REIHH Demo Rider"
-    order.tracking_number = order.order_number
+    order.tracking_company = "Delhivery Express"
+    import random
+    waybill = f"148{random.randint(100000000, 999999999)}"
+    order.tracking_number = waybill
     order.delivery_location = origin["label"]
     order.delivery_latitude = origin["lat"]
     order.delivery_longitude = origin["lng"]
@@ -502,8 +504,17 @@ def create_storefront_simulation(
     db.commit()
     db.refresh(simulation)
     return {
-        **_serialize_delivery(simulation, {"delivery_token": delivery_token, "customer_phone": customer_phone or customer.phone}),
+        **_serialize_delivery(simulation, {
+            "delivery_token": delivery_token,
+            "customer_phone": customer_phone or customer.phone,
+            "tracking_company": "Delhivery Express",
+            "tracking_number": waybill,
+            "delhivery_url": f"https://www.delhivery.com/track/package/{waybill}",
+        }),
         "order_number": order.order_number,
+        "tracking_company": "Delhivery Express",
+        "tracking_number": waybill,
+        "delhivery_url": f"https://www.delhivery.com/track/package/{waybill}",
         "invoice_number": invoice.invoice_number if invoice else None,
         "invoice_token": invoice.public_token if invoice else None,
         "customer_id": customer.id,
@@ -542,9 +553,17 @@ def get_demo_delivery_by_token(db: Session, token: str) -> dict:
     if not row:
         raise ValueError("This demo delivery link is invalid")
     order = db.query(Order).filter(Order.id == row.order_id).first() if row.order_id else None
+    from models.invoice import Invoice as InvoiceModel
+    invoice = db.query(InvoiceModel).filter(InvoiceModel.order_id == row.order_id).first() if row.order_id else None
     payload = _serialize_delivery(row)
     payload["order_number"] = order.order_number if order else row.reference
     payload["order_status"] = order.status if order else None
+    payload["tracking_company"] = (order.tracking_company if order else None) or "Delhivery Express"
+    payload["tracking_number"] = (order.tracking_number if order else None) or f"148{abs(hash(row.reference)) % 900000000 + 100000000}"
+    payload["delhivery_url"] = f"https://www.delhivery.com/track/package/{payload['tracking_number']}"
+    if invoice and invoice.public_token:
+        payload["invoice_token"] = invoice.public_token
+        payload["invoice_status"] = invoice.status
     if order and order.customer:
         payload["customer_phone"] = order.customer.phone
     return payload

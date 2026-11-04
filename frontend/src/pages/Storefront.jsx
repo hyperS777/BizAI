@@ -97,7 +97,9 @@ export default function Storefront() {
 
   const [paymentMethod, setPaymentMethod] = useState('demo_card');
   /* ── Payment Modes: 'demo' (instant) | 'real_demo' (interactive sandbox) ── */
-  const [paymentMode, setPaymentMode] = useState('demo');
+  const [paymentMode, setPaymentMode] = useState('real_razorpay');
+  const [sortBy, setSortBy] = useState('featured');
+  const [priceFilter, setPriceFilter] = useState('all');
   const [sandboxModal, setSandboxModal] = useState(null); // 'card_otp' | 'upi_qr' | 'cod_otp'
   const [sandboxOtp, setSandboxOtp] = useState('');
   const [quickViewProduct, setQuickViewProduct] = useState(null);
@@ -145,18 +147,28 @@ export default function Storefront() {
     }));
   }, [customer.name, customer.phone, customer.address, customer.whatsappUpdates]);
 
-  /* ── filter products ── */
+  /* ── filter & sort products (Shopify-style) ── */
   const filteredProducts = useMemo(() => {
-    if (category === 'Wishlist') {
-      return products.filter((p) => wishlist.includes(p.id));
-    }
-    return products.filter((product) => {
+    let list = products.filter((product) => {
+      if (category === 'Wishlist') return wishlist.includes(product.id);
       const matchesCategory = category === 'All pieces'
         || (category === 'New arrivals' ? product.collections?.includes('new-collections') : product.category === category);
       const matchesSearch = !query || `${product.title} ${product.category}`.toLowerCase().includes(query.toLowerCase());
-      return matchesCategory && matchesSearch;
+      if (!matchesCategory || !matchesSearch) return false;
+
+      const p = product.price || 0;
+      if (priceFilter === 'under_5000' && p >= 5000) return false;
+      if (priceFilter === '5000_10000' && (p < 5000 || p > 10000)) return false;
+      if (priceFilter === 'above_10000' && p <= 10000) return false;
+      return true;
     });
-  }, [products, category, query, wishlist]);
+
+    if (sortBy === 'price_low') list.sort((a, b) => (a.price || 0) - (b.price || 0));
+    else if (sortBy === 'price_high') list.sort((a, b) => (b.price || 0) - (a.price || 0));
+    else if (sortBy === 'title_asc') list.sort((a, b) => a.title.localeCompare(b.title));
+
+    return list;
+  }, [products, category, query, wishlist, priceFilter, sortBy]);
 
   /* ── view analytics tracking ── */
   useEffect(() => {
@@ -253,6 +265,102 @@ export default function Storefront() {
       quantity: line.quantity,
     }));
     setCheckoutStep(1);
+  };
+
+  const handleRazorpayPayment = async () => {
+    setSubmitting(true);
+    setCheckoutError('');
+    try {
+      // 1. Create order on backend
+      const { data: orderData } = await client.post('/payments/razorpay/create-order', {
+        amount: orderTotal,
+        currency: 'INR',
+        receipt: `rcpt_${sessionId.slice(0, 8)}`,
+        notes: {
+          customer_name: customer.name || 'Demo Customer',
+          customer_email: customer.email || 'customer@reihh.com',
+          phone: customer.phone || '+91 98765 43210',
+        },
+      });
+
+      // 2. Ensure Razorpay Checkout script is loaded
+      if (!window.Razorpay) {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('Failed to load Razorpay payment gateway script'));
+          document.body.appendChild(script);
+        });
+      }
+
+      // 3. Open Razorpay options
+      const options = {
+        key: orderData.key_id || 'rzp_test_bizai_demo',
+        amount: orderData.amount,
+        currency: orderData.currency || 'INR',
+        name: 'REIHH Fashion Studio',
+        description: `Order Payment (${cart.length} pieces)`,
+        order_id: orderData.id?.startsWith('order_test_') ? undefined : orderData.id,
+        handler: async function (response) {
+          try {
+            setSubmitting(true);
+            const { data } = await client.post('/payments/razorpay/verify', {
+              razorpay_order_id: response.razorpay_order_id || orderData.id,
+              razorpay_payment_id: response.razorpay_payment_id || `pay_${Date.now()}`,
+              razorpay_signature: response.razorpay_signature || null,
+              customer_name: customer.name || 'Demo Customer',
+              customer_email: customer.email || 'customer@reihh.com',
+              customer_phone: customer.phone || '+91 98765 43210',
+              delivery_address: customer.address || '42 Connaught Place, New Delhi 110001',
+              session_id: sessionId,
+              discount_code: appliedDiscount?.code || null,
+              items: cart.map((line) => ({ variant_id: line.variant.id, quantity: line.quantity })),
+            });
+            const receipt = data.simulation || data;
+            setSimulationReceipt(receipt);
+            setOrderHistory((prev) => {
+              const updated = [receipt, ...prev];
+              try {
+                localStorage.setItem(`reihh-orders-${getDeviceId()}`, JSON.stringify(updated));
+                sessionStorage.setItem('reihh-order-history', JSON.stringify(updated));
+              } catch {}
+              return updated;
+            });
+            setCart([]);
+            setAppliedDiscount(null);
+            setCheckoutStep(3);
+          } catch (verifyErr) {
+            setCheckoutError(apiError(verifyErr, 'Payment verification failed. Please try again.'));
+          } finally {
+            setSubmitting(false);
+          }
+        },
+        prefill: {
+          name: customer.name || 'Demo Customer',
+          email: customer.email || 'customer@reihh.com',
+          contact: customer.phone || '+91 98765 43210',
+        },
+        theme: {
+          color: '#0e766e',
+        },
+        modal: {
+          ondismiss: function () {
+            setSubmitting(false);
+          },
+        },
+      };
+
+      const rzpInstance = new window.Razorpay(options);
+      rzpInstance.on('payment.failed', function (resp) {
+        setCheckoutError(`Payment unsuccessful: ${resp.error?.description || 'Transaction cancelled'}`);
+        setSubmitting(false);
+      });
+      rzpInstance.open();
+    } catch (err) {
+      setCheckoutError(apiError(err, 'Could not initiate Razorpay payment.'));
+      setSubmitting(false);
+    }
   };
 
   const submitSimulation = async () => {
@@ -401,8 +509,27 @@ export default function Storefront() {
           <span className="store-kicker">Order confirmed &amp; simulated</span>
           <h3>{simulationReceipt.reference}</h3>
           <p className="order-confirm-sub">
-            Payment via <strong>{payLabel}</strong>. Fulfillment: <strong>REIHH Delhi Warehouse</strong>.
+            Payment via <strong>{payLabel}</strong>. Fulfillment: <strong>REIHH Delhi Central Warehouse</strong>.
           </p>
+          <div className="order-confirm-delhivery-card" style={{ margin: '10px 0 14px', padding: '12px 14px', background: 'rgba(14, 118, 110, 0.07)', borderRadius: 8, border: '1px solid rgba(14, 118, 110, 0.22)', fontSize: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Truck size={14} style={{ color: 'var(--teal)' }} /> Delhivery Express Fulfillment
+              </span>
+              <span style={{ color: 'var(--teal)', fontSize: 11, fontWeight: 600 }}>Dispatched</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'var(--store-muted)', marginTop: 4 }}>
+              <span>AWB Waybill: <strong style={{ color: 'var(--store-ink)' }}>#{simulationReceipt.tracking_number || '148392019482'}</strong></span>
+              <a
+                href={simulationReceipt.delhivery_url || `https://www.delhivery.com/track/package/${simulationReceipt.tracking_number || '148392019482'}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: 'var(--teal)', textDecoration: 'underline', fontSize: 11 }}
+              >
+                Track on Delhivery.com ↗
+              </a>
+            </div>
+          </div>
 
           {/* Latest order receipt */}
           <div className="order-receipt-items">
@@ -613,25 +740,71 @@ export default function Storefront() {
           <h3 className="step-heading">Demo Payment</h3>
           <p className="step-subheading">Choose a simulated payment method. No real charges are made.</p>
 
-          {/* Two Payment Mode Switcher */}
-          <div className="payment-mode-tabs">
+          {/* Three Payment Modes: Real Razorpay, Real Sandbox, Instant Demo */}
+          <div className="payment-mode-tabs three-modes">
             <button
               type="button"
-              className={`payment-mode-tab ${paymentMode === 'demo' ? 'active' : ''}`}
-              onClick={() => { setPaymentMode('demo'); setPaymentMethod('demo_card'); }}
+              className={`payment-mode-tab ${paymentMode === 'real_razorpay' ? 'active' : ''}`}
+              onClick={() => { setPaymentMode('real_razorpay'); setPaymentMethod('razorpay'); }}
             >
-              <strong>Demo Payment</strong>
-              <small>Instant 1-click simulation</small>
+              <strong>Real Gateway</strong>
+              <small>Razorpay: UPI, Cards, NetBanking</small>
             </button>
             <button
               type="button"
               className={`payment-mode-tab ${paymentMode === 'real_demo' ? 'active' : ''}`}
               onClick={() => { setPaymentMode('real_demo'); setPaymentMethod('real_demo_gateway'); }}
             >
-              <strong>Real Demo Payment</strong>
-              <small>Interactive OTP &amp; QR sandbox</small>
+              <strong>Sandbox Demo</strong>
+              <small>Interactive OTP &amp; QR modal</small>
+            </button>
+            <button
+              type="button"
+              className={`payment-mode-tab ${paymentMode === 'demo' ? 'active' : ''}`}
+              onClick={() => { setPaymentMode('demo'); setPaymentMethod('demo_card'); }}
+            >
+              <strong>Instant Demo</strong>
+              <small>1-click rapid simulation</small>
             </button>
           </div>
+
+          {/* Mode 0: Real Razorpay Gateway */}
+          {paymentMode === 'real_razorpay' && (
+            <div className="demo-payment-options">
+              <div className="razorpay-intro-box" style={{ padding: '14px 16px', background: 'rgba(14, 118, 110, 0.06)', borderRadius: 8, border: '1px solid rgba(14, 118, 110, 0.25)', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                  <ShieldCheck size={22} style={{ color: 'var(--teal)' }} />
+                  <div>
+                    <strong style={{ fontSize: 13, display: 'block' }}>Official Razorpay Gateway (India &amp; Global)</strong>
+                    <small style={{ color: 'var(--store-muted)', fontSize: 11 }}>Accepts real and test payments securely</small>
+                  </div>
+                </div>
+                <ul style={{ margin: '8px 0 0 18px', padding: 0, fontSize: 12, color: 'var(--store-muted)', lineHeight: 1.6 }}>
+                  <li><strong>UPI:</strong> Google Pay, PhonePe, Paytm, BHIM, Scan any QR code.</li>
+                  <li><strong>Cards:</strong> Visa, MasterCard, RuPay, Amex with bank OTP verification.</li>
+                  <li><strong>NetBanking:</strong> HDFC, ICICI, SBI, Axis, and 50+ banks.</li>
+                </ul>
+                <small style={{ display: 'block', marginTop: 8, fontSize: 11, color: 'var(--teal)', fontWeight: 600 }}>
+                  💡 Test credentials work out of the box. Add live keys in Settings to accept real card charges.
+                </small>
+              </div>
+
+              <label className={`demo-payment-option ${paymentMethod === 'razorpay' ? 'selected' : ''}`}>
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="razorpay"
+                  checked={paymentMethod === 'razorpay'}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                />
+                <CreditCard size={18} />
+                <div>
+                  <strong>Pay via Razorpay (UPI, Cards, Wallets)</strong>
+                  <small>Opens official popup modal with live &amp; test mode support</small>
+                </div>
+              </label>
+            </div>
+          )}
 
           {/* Mode 1: Instant Demo */}
           {paymentMode === 'demo' && (
@@ -791,7 +964,9 @@ export default function Storefront() {
               className="store-checkout-button step-next"
               disabled={submitting}
               onClick={() => {
-                if (paymentMethod === 'real_demo_gateway') {
+                if (paymentMode === 'real_razorpay') {
+                  handleRazorpayPayment();
+                } else if (paymentMethod === 'real_demo_gateway') {
                   setSandboxModal('card_otp');
                   setSandboxOtp('');
                 } else if (paymentMethod === 'real_demo_upi_qr') {
@@ -804,7 +979,13 @@ export default function Storefront() {
                 }
               }}
             >
-              {submitting ? 'Placing order…' : paymentMode === 'real_demo' ? `Continue to Payment · ${money(orderTotal)}` : `Place demo order · ${money(orderTotal)}`} {!submitting && <ArrowRight size={15} />}
+              {submitting
+                ? 'Processing…'
+                : paymentMode === 'real_razorpay'
+                  ? `Pay ${money(orderTotal)} with Razorpay`
+                  : paymentMode === 'real_demo'
+                    ? `Continue to Payment · ${money(orderTotal)}`
+                    : `Place demo order · ${money(orderTotal)}`} {!submitting && <ArrowRight size={15} />}
             </button>
           </div>
         </div>
@@ -950,6 +1131,51 @@ export default function Storefront() {
               </button>
             ))}
           </nav>
+
+          {/* Shopify Polaris-style Secondary Toolbar: Price Filters & Sort */}
+          <div className="store-secondary-toolbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, margin: '14px 0 16px', padding: '10px 14px', background: 'var(--panel-bg, #fdfbf7)', borderRadius: 8, border: '1px solid var(--border, #eee)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--store-muted)', letterSpacing: '0.04em' }}>Price:</span>
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'under_5000', label: 'Under ₹5k' },
+                { id: '5000_10000', label: '₹5k–₹10k' },
+                { id: 'above_10000', label: '₹10k+' },
+              ].map((pf) => (
+                <button
+                  key={pf.id}
+                  type="button"
+                  style={{
+                    fontSize: 11,
+                    padding: '4px 10px',
+                    borderRadius: 14,
+                    border: priceFilter === pf.id ? '1px solid var(--teal)' : '1px solid var(--border, #ddd)',
+                    background: priceFilter === pf.id ? 'var(--teal)' : 'transparent',
+                    color: priceFilter === pf.id ? '#fff' : 'inherit',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => setPriceFilter(pf.id)}
+                >
+                  {pf.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <label htmlFor="store-sort" style={{ fontSize: 12, color: 'var(--store-muted)' }}>Sort by:</label>
+              <select
+                id="store-sort"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border, #ddd)', fontSize: 12, background: 'transparent' }}
+              >
+                <option value="featured">Featured / Best matches</option>
+                <option value="price_low">Price: Low to High</option>
+                <option value="price_high">Price: High to Low</option>
+                <option value="title_asc">Name: A–Z</option>
+              </select>
+            </div>
+          </div>
 
           {loading && (
             <div className="store-message store-message-loading">
@@ -1101,7 +1327,7 @@ export default function Storefront() {
                     {drawerTab === 'orders'
                       ? `(${orderHistory.length} placed)`
                       : checkoutStep === 3
-                        ? `(${orderHistory.length} ${orderHistory.length === 1 ? 'order' : 'orders'})`
+                        ? `(${simulationReceipt?.items?.length || 1} ${simulationReceipt?.items?.length === 1 ? 'item' : 'items'})`
                         : `(${lineCount} ${lineCount === 1 ? 'item' : 'items'})`}
                   </small>
                 </h2>

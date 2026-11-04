@@ -1337,3 +1337,58 @@
   gap: 8px;
   margin-top: 8px;
 }
+
+
+/* ── Real Razorpay & Delhivery Additions (Shopify Style) ── */
+.payment-mode-tabs.three-modes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 14px;
+}
+@media (max-width: 540px) {
+  .payment-mode-tabs.three-modes {
+    grid-template-columns: 1fr;
+  }
+}
+.payment-mode-tab strong {
+  display: block;
+  font-size: 12px;
+}
+.payment-mode-tab small {
+  display: block;
+  font-size: 10px;
+  color: var(--store-muted);
+  margin-top: 2px;
+}
+.razorpay-intro-box {
+  animation: fadeIn 0.2s ease;
+}
+.store-secondary-toolbar {
+  animation: fadeIn 0.25s ease;
+}
+.price-filter-chip {
+  transition: all 0.15s ease;
+}
+.price-filter-chip:hover {
+  border-color: var(--store-ink) !important;
+}
+.store-delhivery-trust-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(14, 118, 110, 0.05);
+  border: 1px solid rgba(14, 118, 110, 0.2);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--store-ink);
+  margin-bottom: 16px;
+}
+.order-confirm-delhivery-card {
+  animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}

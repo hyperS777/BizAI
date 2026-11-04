@@ -288,6 +288,32 @@ export default function DeliveryDemo() {
   const closeQr = () => { setQrModal(false); setQrScanned(false); };
 
   /* ── Upload simulation ── */
+  const autoSimulateTransit = async () => {
+    if (busy || delivery?.delivery_status === 'delivered') return;
+    setBusy(true);
+    showToast('Starting automated Delhivery Express transit run…');
+
+    const sequence = ['packed', 'out_for_delivery', 'delivered'];
+    const currentIdx = sequence.indexOf(delivery?.delivery_status);
+    const remaining = currentIdx === -1 ? sequence : sequence.slice(currentIdx + 1);
+
+    for (const st of remaining) {
+      await new Promise((r) => setTimeout(r, 2200));
+      try {
+        await client.patch(`/storefront/demo-delivery/${token}`, {
+          status: st,
+          agent_name: 'Delhivery Courier Executive',
+          note: `Automated courier checkpoint: Package is ${st.replaceAll('_', ' ')}.`,
+        });
+        await load();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    setBusy(false);
+    showToast('Delhivery doorstep delivery complete! Tax invoice generated.');
+  };
+
   const doUpload = () => {
     setUploadModal(true);
     setUploadDone(false);
@@ -332,6 +358,56 @@ export default function DeliveryDemo() {
           <span className={`delivery-status-chip ${delivery.delivery_status}`}>
             {STATUS_LABELS[delivery.delivery_status] || delivery.delivery_status.replaceAll('_', ' ')}
           </span>
+        </section>
+
+        {/* Delhivery Express Logistics Strip */}
+        <section className="delhivery-logistics-strip" style={{
+          margin: '14px 0',
+          padding: '12px 18px',
+          background: 'var(--panel-bg, #fff)',
+          border: '1px solid var(--border)',
+          borderRadius: '10px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 12,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 42, height: 42, borderRadius: 8, background: '#1c1c1c', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 13, letterSpacing: -0.5 }}>
+              DLV
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <strong style={{ fontSize: 14 }}>Delhivery Express Surface &amp; Air</strong>
+                <span style={{ fontSize: 11, background: '#eaf4f1', color: 'var(--teal)', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>Active AWB</span>
+              </div>
+              <small style={{ color: 'var(--store-muted)', display: 'block', marginTop: 2, fontSize: 12 }}>
+                AWB Waybill: <strong style={{ color: 'var(--ink)' }}>#{delivery.tracking_number || '148392019482'}</strong> · Origin: REIHH Central Hub, Delhi NCR
+              </small>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <a
+              href={delivery.delhivery_url || `https://www.delhivery.com/track/package/${delivery.tracking_number || '148392019482'}`}
+              target="_blank"
+              rel="noreferrer"
+              className="outline-btn"
+              style={{ fontSize: 12, padding: '7px 12px', display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
+            >
+              <Truck size={14} /> Track on Delhivery.com ↗
+            </a>
+            {!isDelivered && (
+              <button
+                className="primary-btn"
+                style={{ fontSize: 12, padding: '7px 12px' }}
+                disabled={busy}
+                onClick={autoSimulateTransit}
+              >
+                ⚡ Auto-Simulate Delhivery Run
+              </button>
+            )}
+          </div>
         </section>
 
 

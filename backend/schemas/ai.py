@@ -3,12 +3,13 @@ AI and Report schemas
 """
 
 from pydantic import BaseModel
-from typing import Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 
 class AIQueryRequest(BaseModel):
     query: str
+    conversation_history: Optional[List[Dict[str, Any]]] = None
 
 
 class AIQueryResponse(BaseModel):

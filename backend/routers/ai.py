@@ -18,7 +18,12 @@ def ai_chat(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_finance),
 ):
-    return answer_query(db, current_user, request.query)
+    return answer_query(
+        db,
+        current_user,
+        request.query,
+        conversation_history=request.conversation_history,
+    )
 
 
 @router.get("/summary", response_model=AISummaryResponse)
