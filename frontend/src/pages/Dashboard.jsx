@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [summary, setSummary] = useState('');
   const [error, setError] = useState('');
   const [lowStock, setLowStock] = useState([]);
+  const [funnel, setFunnel] = useState(null);
 
   useEffect(() => {
     if (role === 'employee') {
@@ -44,6 +45,19 @@ export default function Dashboard() {
         setLowStock(stock.data || []);
       })
       .catch((err) => setError(err.response?.data?.detail || 'Could not load live business data.'));
+  }, [role]);
+
+  const loadFunnel = () => {
+    if (role === 'employee') return;
+    client.get('/storefront/analytics/funnel?days=30')
+      .then((res) => setFunnel(res.data))
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    loadFunnel();
+    const timer = setInterval(loadFunnel, 15000);
+    return () => clearInterval(timer);
   }, [role]);
 
   const sales = metrics?.sales_summary || {};
@@ -80,21 +94,55 @@ export default function Dashboard() {
       </section>}
 
       {role !== 'accountant' && (
-        <section className="command-strip storefront-pulse-strip" style={{ marginBottom: 14 }}>
-          <div className="command-intro">
-            <span className="command-kicker" style={{ color: 'var(--teal)' }}>● Interconnected Store</span>
-            <strong>REIHH Customer Demo</strong>
+        <section className="panel live-storefront-pulse" style={{ marginBottom: 14 }}>
+          <div className="panel-heading" style={{ alignItems: 'center', marginBottom: 14 }}>
+            <div>
+              <p className="eyebrow" style={{ color: 'var(--teal)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+                <span className="live-indicator-dot" /> Live Storefront Pulse · REIHH Customer Store
+              </p>
+              <h2 style={{ fontSize: 18, marginTop: 4 }}>Real-Time Traffic &amp; Conversion</h2>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button
+                className="outline-btn"
+                style={{ fontSize: 11, padding: '7px 11px' }}
+                onClick={() => window.open('/store', '_blank')}
+                title="Open customer storefront in a new tab"
+              >
+                <ShoppingBag size={13} /> Open Store ↗
+              </button>
+              <button
+                className="outline-btn"
+                style={{ fontSize: 11, padding: '7px 11px' }}
+                onClick={() => navigate('/integrations')}
+              >
+                <BarChart3 size={13} /> Funnel Details
+              </button>
+            </div>
           </div>
-          <button type="button" onClick={() => window.open('/store', '_blank')}>
-            <span className="command-icon teal-bg"><ShoppingBag size={16} /></span>
-            <span><strong>Open Customer Store</strong><small>Simulate shopping &amp; demo payment</small></span>
-            <ChevronRight size={15} />
-          </button>
-          <button type="button" onClick={() => navigate('/integrations')}>
-            <span className="command-icon blue-bg"><BarChart3 size={16} /></span>
-            <span><strong>Store Funnel &amp; Analytics</strong><small>View live visitor conversion metrics</small></span>
-            <ChevronRight size={15} />
-          </button>
+
+          <div className="storefront-pulse-metrics">
+            <div className="pulse-card">
+              <span className="pulse-label">Visitors</span>
+              <strong className="pulse-value">{funnel?.totals?.unique_sessions || 0}</strong>
+              <small className="pulse-sub">Active buyer sessions</small>
+            </div>
+            <div className="pulse-card">
+              <span className="pulse-label">Product Views</span>
+              <strong className="pulse-value">{funnel?.totals?.product_view || 0}</strong>
+              <small className="pulse-sub">Catalog views</small>
+            </div>
+            <div className="pulse-card">
+              <span className="pulse-label">Added to Bag</span>
+              <strong className="pulse-value">{funnel?.totals?.add_to_cart || 0}</strong>
+              <small className="pulse-sub">{funnel?.totals?.view_to_cart_rate || 0}% view-to-cart rate</small>
+            </div>
+            <div className="pulse-card highlight">
+              <span className="pulse-label">Demo Purchases</span>
+              <strong className="pulse-value">{funnel?.totals?.demo_purchase || 0}</strong>
+              <small className="pulse-sub">{funnel?.totals?.purchase_rate || 0}% overall conversion</small>
+            </div>
+          </div>
         </section>
       )}
 

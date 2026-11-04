@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowRight, Check, ChevronDown, ChevronUp, CreditCard, DollarSign,
+  ArrowRight, Check, ChevronDown, ChevronUp, Clock, CreditCard, DollarSign,
   Heart, Minus, Package, Plus, Search, ShoppingBag, Smartphone, Star, Truck, X,
 } from 'lucide-react';
 import client from '../api/client';
@@ -75,6 +75,7 @@ export default function Storefront() {
   /* ── cart ── */
   const [cart, setCart] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState('bag'); // 'bag' | 'orders'
 
   /* ── multi-step checkout: 0=cart 1=info 2=payment 3=confirmed ── */
   const [checkoutStep, setCheckoutStep] = useState(0);
@@ -185,6 +186,7 @@ export default function Storefront() {
         ? current.map((line) => line.variant.id === variant.id ? { ...line, quantity: line.quantity + 1 } : line)
         : [...current, { product, variant, quantity: 1 }];
     });
+    setDrawerTab('bag');
     setCartOpen(true);
   };
 
@@ -201,7 +203,7 @@ export default function Storefront() {
   const toggleWishlist = (productId, product) => {
     setWishlist((prev) => {
       if (prev.includes(productId)) return prev.filter((id) => id !== productId);
-      if (product) trackStoreEvent({ sessionId, eventType: 'add_to_cart', product, variant: product.variants[0] });
+      if (product) trackStoreEvent({ sessionId, eventType: 'wishlist_add', product, variant: product.variants[0] });
       return [...prev, productId];
     });
   };
@@ -279,6 +281,92 @@ export default function Storefront() {
     if (lowStock) return <i className="product-badge low-stock">Low stock</i>;
     if (product.collections?.includes('new-collections')) return <i className="product-badge new-badge">New</i>;
     return null;
+  };
+
+
+  /* ── Orders Tab in Drawer ── */
+  const renderOrdersTab = () => {
+    if (orderHistory.length === 0) {
+      return (
+        <div className="cart-empty">
+          <Clock size={28} />
+          <strong>No orders placed this session.</strong>
+          <span>Add items to your bag and simulate a checkout. Each device keeps its own order history.</span>
+          <button className="store-hero-btn" style={{ marginTop: 14 }} onClick={() => { setDrawerTab('bag'); setCartOpen(false); }}>
+            Browse Collection
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="drawer-orders-content">
+        <p className="drawer-orders-subtitle">
+          Orders simulated from this device are synced with BizAI core with live Delhi fulfillment.
+        </p>
+        <div className="order-history-list">
+          {orderHistory.map((order, idx) => (
+            <div className="order-history-card expanded" key={order.reference || idx}>
+              <div className="order-history-card-top">
+                <div>
+                  <span className="order-history-ref">{order.reference}</span>
+                  <small style={{ display: 'block', color: 'var(--store-muted)', fontSize: 10, marginTop: 2 }}>
+                    {order.customer_name || 'Demo Customer'}
+                  </small>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span className="order-history-total">{money(order.total_amount)}</span>
+                  {idx === 0 && <span className="order-history-latest-badge" style={{ marginLeft: 6 }}>Latest</span>}
+                </div>
+              </div>
+
+              <div className="order-history-items-detailed">
+                {order.items?.map((item, itemIdx) => (
+                  <div className="receipt-line compact" key={item.variant_id || itemIdx}>
+                    {item.image_url && <img src={item.image_url} alt="" />}
+                    <span>
+                      <strong>{item.title}</strong>
+                      <small>{item.variant_title || 'Default'} · Qty {item.quantity}</small>
+                    </span>
+                    <b>{money(item.line_total || ((item.unit_price || 0) * item.quantity))}</b>
+                  </div>
+                ))}
+              </div>
+
+              <div className="order-history-card-actions" style={{ marginTop: 8 }}>
+                {order.delivery_token && (
+                  <a
+                    href={`/delivery/demo/${order.delivery_token}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="order-history-track-link primary"
+                  >
+                    <Truck size={12} /> Track Delivery (Rider POV) →
+                  </a>
+                )}
+                {order.invoice_token && (
+                  <a
+                    href={`${(import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api').replace(/\/api\/?$/, '')}/api/invoices/public/${order.invoice_token}/pdf`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="order-history-track-link"
+                  >
+                    Invoice PDF
+                  </a>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        <button
+          className="store-continue-button"
+          style={{ marginTop: 18 }}
+          onClick={() => { setDrawerTab('bag'); setCartOpen(false); }}
+        >
+          Continue shopping
+        </button>
+      </div>
+    );
   };
 
   /* ── Drawer content ── */
@@ -653,7 +741,8 @@ export default function Storefront() {
           <a href="/orders" target="_blank" rel="noreferrer">Orders</a>
         </div>
         <a href="/store/demo" className="store-wordmark">REIHH<span>STUDIO</span></a>
-        <button className="store-cart-button" onClick={() => { setCartOpen(true); if (checkoutStep !== 0 && checkoutStep !== 3) setCheckoutStep(0); }}>
+        <button className="store-cart-button" onClick={() => { setDrawerTab('bag');
+    setCartOpen(true); if (checkoutStep !== 0 && checkoutStep !== 3) setCheckoutStep(0); }}>
           <div className="cart-btn-inner">
             <ShoppingBag size={15} />
             <span>Bag</span>
@@ -836,14 +925,22 @@ export default function Storefront() {
             <div className="cart-heading">
               <div>
                 <p className="store-kicker">
-                  {checkoutStep === 0 ? 'Your Bag' : checkoutStep === 3 ? 'Confirmed' : 'Checkout'}
+                  {drawerTab === 'orders' ? 'Session History' : checkoutStep === 0 ? 'Your Bag' : checkoutStep === 3 ? 'Confirmed' : 'Checkout'}
                 </p>
                 <h2>
-                  {checkoutStep === 0 ? 'Review selection' : checkoutStep === 3 ? 'Order confirmed' : 'Customer & Payment'}
+                  {drawerTab === 'orders'
+                    ? `My Orders (${orderHistory.length})`
+                    : checkoutStep === 0
+                      ? 'Review selection'
+                      : checkoutStep === 3
+                        ? 'Order confirmed'
+                        : 'Customer & Payment'}
                   <small>
-                    {checkoutStep === 3
-                      ? `(${orderHistory.length} ${orderHistory.length === 1 ? 'order' : 'orders'} this session)`
-                      : `(${lineCount} ${lineCount === 1 ? 'item' : 'items'})`}
+                    {drawerTab === 'orders'
+                      ? `(${orderHistory.length} placed)`
+                      : checkoutStep === 3
+                        ? `(${orderHistory.length} ${orderHistory.length === 1 ? 'order' : 'orders'})`
+                        : `(${lineCount} ${lineCount === 1 ? 'item' : 'items'})`}
                   </small>
                 </h2>
               </div>
@@ -852,7 +949,25 @@ export default function Storefront() {
               </button>
             </div>
 
-            {renderCartContent()}
+            {/* Drawer Navigation Tabs */}
+            <div className="store-drawer-nav">
+              <button
+                type="button"
+                className={`store-tab-btn ${drawerTab === 'bag' ? 'active' : ''}`}
+                onClick={() => setDrawerTab('bag')}
+              >
+                <ShoppingBag size={13} /> Bag ({lineCount})
+              </button>
+              <button
+                type="button"
+                className={`store-tab-btn ${drawerTab === 'orders' ? 'active' : ''}`}
+                onClick={() => setDrawerTab('orders')}
+              >
+                <Clock size={13} /> My Orders ({orderHistory.length})
+              </button>
+            </div>
+
+            {drawerTab === 'orders' ? renderOrdersTab() : renderCartContent()}
           </aside>
         </div>
       )}

@@ -808,6 +808,118 @@
   padding: 2px 8px;
 }
 
+
+/* Header Actions */
+.store-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.store-orders-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--store-warm-gray);
+  border: 1px solid var(--store-border);
+  padding: 8px 14px;
+  border-radius: 20px;
+  font: 500 12px 'Space Grotesk', sans-serif;
+  color: var(--store-ink);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.store-orders-nav-btn:hover,
+.store-orders-nav-btn.active {
+  background: var(--store-ink);
+  color: #fff;
+  border-color: var(--store-ink);
+}
+.orders-badge {
+  background: var(--store-green);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 50%;
+  width: 17px;
+  height: 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Drawer Nav Tabs */
+.store-drawer-nav {
+  display: flex;
+  border-bottom: 1px solid var(--store-border);
+  margin-bottom: 18px;
+  padding-bottom: 2px;
+  gap: 8px;
+}
+.store-tab-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  font: 600 12px 'Space Grotesk', sans-serif;
+  color: var(--store-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.store-tab-btn:hover {
+  color: var(--store-ink);
+}
+.store-tab-btn.active {
+  color: var(--store-ink);
+  border-bottom-color: var(--store-green);
+}
+.drawer-orders-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.drawer-orders-subtitle {
+  font-size: 11px;
+  color: var(--store-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+.order-history-card.expanded {
+  padding: 14px;
+  gap: 12px;
+}
+.order-history-items-detailed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--store-border);
+}
+.receipt-line.compact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+}
+.receipt-line.compact img {
+  width: 36px;
+  height: 46px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.order-history-track-link.primary {
+  background: var(--store-green);
+  color: #fff !important;
+  font-weight: 600;
+}
+.order-history-track-link.primary:hover {
+  background: #0f1c19;
+}
+
 /* ── Miscellaneous ── */
 .simulation-only { background: #eaf0f6; color: #46617a; white-space: nowrap; }
 .simulation-table-panel .data-table td small { display: block; color: var(--muted); font-size: 10px; }

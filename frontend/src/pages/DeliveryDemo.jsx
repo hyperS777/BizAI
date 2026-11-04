@@ -108,23 +108,26 @@ function DeliveryMapStatic({ delivery }) {
 /* Invoice panel shown after delivery */
 function InvoicePanel({ delivery }) {
   if (!delivery?.invoice_number) return null;
+  const rawApi = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api').replace(/\/api\/?$/, '');
+  const invoicePdfUrl = `${rawApi}/api/invoices/public/${delivery.invoice_token}/pdf`;
+
   return (
     <div className="invoice-ready-panel">
       <div className="invoice-ready-icon"><FileText size={28} /></div>
       <div className="invoice-ready-body">
         <strong>Invoice ready</strong>
         <span>Invoice #{delivery.invoice_number} · Order successfully delivered</span>
-        <p>Your invoice has been generated and marked as paid. Download or share it below.</p>
+        <p>Your official tax invoice has been generated and marked as paid. View or download the PDF below.</p>
       </div>
       <div className="invoice-ready-actions">
         {delivery.invoice_token && (
           <a
             className="delivery-primary-action invoice-btn"
-            href={`/invoices/${delivery.invoice_token}`}
+            href={invoicePdfUrl}
             target="_blank"
             rel="noreferrer"
           >
-            <Download size={15} /> View invoice
+            <Download size={15} /> Download Invoice (PDF)
           </a>
         )}
         <span className="invoice-status-badge">

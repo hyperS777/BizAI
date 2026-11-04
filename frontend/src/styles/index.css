@@ -939,3 +939,95 @@ body{background:radial-gradient(circle at 90% 0%,rgba(14,118,110,.06),transparen
   color: var(--muted);
 }
 .receipt-invoice-row strong { color: var(--ink); }
+
+/* Explicit Dark Theme Table and Detail Overrides */
+[data-theme='dark'] .data-table tbody tr td {
+  color: var(--ink);
+}
+[data-theme='dark'] .orders-expandable-table tbody tr.order-data-row td {
+  background: var(--surface);
+  color: var(--ink);
+}
+[data-theme='dark'] .orders-expandable-table tbody tr.order-data-row:hover td {
+  background: #1e332e !important;
+}
+[data-theme='dark'] .orders-expandable-table tbody tr.order-data-row.expanded td {
+  background: #233c36 !important;
+}
+[data-theme='dark'] .order-detail-section {
+  background: #172422 !important;
+  color: #e5eeeb !important;
+}
+[data-theme='dark'] .order-detail-panel {
+  background: #2b3d39 !important;
+}
+[data-theme='dark'] .order-detail-item {
+  border-bottom-color: #2b3d39 !important;
+}
+
+/* Live Storefront Pulse on Dashboard */
+.live-storefront-pulse {
+  padding: 18px 22px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.live-indicator-dot {
+  width: 8px;
+  height: 8px;
+  background: #10b981;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
+  animation: pulse-ring 2s infinite;
+}
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.4); }
+  50% { box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.15); }
+  100% { box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.4); }
+}
+.storefront-pulse-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+@media (max-width: 768px) {
+  .storefront-pulse-metrics { grid-template-columns: repeat(2, 1fr); }
+}
+.pulse-card {
+  background: rgba(14, 118, 110, 0.05);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+[data-theme='dark'] .pulse-card {
+  background: #192724;
+}
+.pulse-card.highlight {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+[data-theme='dark'] .pulse-card.highlight {
+  background: #1a2f29;
+}
+.pulse-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+.pulse-value {
+  font: 700 24px 'Space Grotesk', sans-serif;
+  color: var(--ink);
+}
+.pulse-card.highlight .pulse-value {
+  color: var(--teal);
+}
+.pulse-sub {
+  font-size: 11px;
+  color: var(--muted);
+}

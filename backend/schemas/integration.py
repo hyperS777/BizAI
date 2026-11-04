@@ -86,14 +86,14 @@ class StorefrontSimulationCreate(BaseModel):
     customer_email: EmailStr
     delivery_address: str = Field(min_length=8, max_length=500)
     items: List[StorefrontSimulationItem] = Field(min_length=1, max_length=30)
-    session_id: str = Field(min_length=16, max_length=80)
+    session_id: str = Field(min_length=4, max_length=80)
     discount_code: Optional[str] = Field(default=None, max_length=40)
     payment_method: Optional[str] = Field(default="demo_card", max_length=50)
 
 
 class StorefrontAnalyticsEventCreate(BaseModel):
-    event_id: str = Field(min_length=12, max_length=160)
-    session_id: str = Field(min_length=16, max_length=80)
+    event_id: str = Field(min_length=4, max_length=160)
+    session_id: str = Field(min_length=4, max_length=80)
     event_type: str
     product_id: str = Field(min_length=1, max_length=80)
     variant_id: Optional[str] = Field(default=None, max_length=80)

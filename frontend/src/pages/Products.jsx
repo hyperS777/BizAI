@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Package } from 'lucide-react';
+import { Package, RefreshCw } from 'lucide-react';
 import client from '../api/client';
 import { EmptyState, Modal, PageHeader } from '../components/ui';
 import { apiError, money } from '../utils/format';
@@ -17,6 +17,8 @@ export default function Products() {
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState(blank);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [syncing, setSyncing] = useState(false);
 
   const load = () => {
     client.get('/products', { params: { search: search || undefined, category_id: categoryId || undefined } })
@@ -29,6 +31,21 @@ export default function Products() {
   }, []);
 
   useEffect(() => { load(); }, [search, categoryId]);
+
+  const syncCatalog = async () => {
+    setSyncing(true);
+    setError('');
+    setNotice('');
+    try {
+      const { data } = await client.post('/storefront/sync-catalog');
+      setNotice(`Synced ${data.products_synced} live products and ${data.variants_synced} variants from REIHH!`);
+      load();
+    } catch (err) {
+      setError(apiError(err, 'Could not sync live catalog'));
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const save = async (event) => {
     event.preventDefault();
@@ -53,8 +70,17 @@ export default function Products() {
   return (
     <>
       <PageHeader eyebrow="Catalog" title="Products" subtitle="Selling price, cost, category and stock levels.">
-        {canEdit && <button className="primary-btn heading-btn" onClick={() => { setForm(blank); setModal(true); }}>Add product</button>}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {canEdit && (
+            <button className="outline-btn heading-btn" disabled={syncing} onClick={syncCatalog} title="Sync live collection feed from reihh.com">
+              <RefreshCw size={14} className={syncing ? 'spinner-icon' : ''} />
+              {syncing ? 'Syncing REIHH…' : 'Sync REIHH Catalog'}
+            </button>
+          )}
+          {canEdit && <button className="primary-btn heading-btn" onClick={() => { setForm(blank); setModal(true); }}>Add product</button>}
+        </div>
       </PageHeader>
+      {notice && <div className="notice success" style={{ background: '#eaf4f1', borderColor: 'var(--teal)', color: 'var(--teal-dark)' }}>{notice}</div>}
       <div className="toolbar">
         <input className="filter-input" placeholder="Search name or SKU" value={search} onChange={(e) => setSearch(e.target.value)} />
         <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>

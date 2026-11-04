@@ -650,7 +650,7 @@ def _catalog_variant(product_id: str, variant_id: str | None = None) -> tuple[di
 
 
 def record_storefront_event(db: Session, payload) -> dict:
-    allowed_events = {"product_view", "variant_selected", "add_to_cart", "checkout_started", "demo_checkout_started"}
+    allowed_events = {"product_view", "variant_selected", "add_to_cart", "checkout_started", "demo_checkout_started", "wishlist_add"}
     if payload.event_type not in allowed_events:
         raise ValueError("Unsupported storefront analytics event")
     if payload.source not in {"live", "demo"}:

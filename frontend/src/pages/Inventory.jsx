@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Package } from 'lucide-react';
+import { Package, RefreshCw } from 'lucide-react';
 import client from '../api/client';
 import { EmptyState, Modal, PageHeader } from '../components/ui';
 import { apiError, formatDate } from '../utils/format';
@@ -11,6 +11,8 @@ export default function Inventory() {
   const [products, setProducts] = useState([]);
   const [history, setHistory] = useState([]);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [syncing, setSyncing] = useState(false);
   const [adjust, setAdjust] = useState(null);
 
   const load = () => {
@@ -23,6 +25,21 @@ export default function Inventory() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const syncCatalog = async () => {
+    setSyncing(true);
+    setError('');
+    setNotice('');
+    try {
+      const { data } = await client.post('/storefront/sync-catalog');
+      setNotice(`Synced ${data.products_synced} live products and ${data.variants_synced} variants from REIHH!`);
+      load();
+    } catch (err) {
+      setError(apiError(err, 'Could not sync live catalog'));
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const saveAdjust = async (event) => {
     event.preventDefault();
@@ -41,7 +58,15 @@ export default function Inventory() {
 
   return (
     <>
-      <PageHeader eyebrow="Warehouse" title="Inventory" subtitle="Stock on hand, minimum levels, and movement history." />
+      <PageHeader eyebrow="Warehouse" title="Inventory" subtitle="Stock on hand, minimum levels, and movement history.">
+        {canEdit && (
+          <button className="outline-btn heading-btn" disabled={syncing} onClick={syncCatalog} title="Sync live collection feed from reihh.com">
+            <RefreshCw size={14} className={syncing ? 'spinner-icon' : ''} />
+            {syncing ? 'Syncing REIHH…' : 'Sync REIHH Catalog'}
+          </button>
+        )}
+      </PageHeader>
+      {notice && <div className="notice success" style={{ background: '#eaf4f1', borderColor: 'var(--teal)', color: 'var(--teal-dark)' }}>{notice}</div>}
       {error && <div className="notice error">{error}</div>}
       {products.length ? (
         <section className="panel table-panel inventory-table-panel">
