@@ -124,7 +124,7 @@ export default function Reports() {
           <select
             value={days}
             onChange={(e) => setDays(Number(e.target.value))}
-            style={{ border: '1px solid var(--line)', background: '#fff', color: 'var(--ink)', padding: '10px 12px', borderRadius: 6, fontSize: 13 }}
+            style={{ border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink)', padding: '10px 12px', borderRadius: 6, fontSize: 13 }}
           >
             {RANGE_OPTIONS.map((o) => (
               <option key={o.days} value={o.days}>{o.label}</option>

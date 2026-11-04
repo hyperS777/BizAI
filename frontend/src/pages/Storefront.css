@@ -20,7 +20,6 @@
 
 .storefront button {
   font-family: inherit;
-  color: inherit;
 }
 
 .storefront input,
@@ -351,7 +350,8 @@
   cursor: pointer;
   transition: background .18s, color .18s, border-color .18s;
 }
-.store-add-button:hover:not(:disabled) { border-color: var(--store-green); background: var(--store-green); color: #fff; }
+.store-add-button:hover:not(:disabled) { border-color: #18231f !important; background: #18231f !important; color: #fff !important; }
+.store-add-button:hover:not(:disabled) * { color: #fff !important; }
 .store-add-button:disabled { color: #92968f; cursor: not-allowed; }
 
 /* ── Trust strip ── */
@@ -496,17 +496,21 @@
   margin-top: 14px;
   padding: 14px 16px;
   border: 0;
-  background: var(--store-green);
-  color: #fff;
+  background: #18231f !important;
+  color: #ffffff !important;
   font-size: 12px;
   font-family: inherit;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   text-decoration: none;
   transition: background .18s;
+  letter-spacing: .02em;
 }
-.store-checkout-button:hover { background: #0f1814; }
-.store-checkout-button:disabled { background: #8a9690; cursor: not-allowed; }
+.store-checkout-button * {
+  color: #ffffff !important;
+}
+.store-checkout-button:hover { background: #2b3d36 !important; color: #ffffff !important; }
+.store-checkout-button:disabled { background: #8a9690 !important; color: #ffffff !important; cursor: not-allowed; }
 .store-continue-button {
   width: 100%;
   display: block;
@@ -828,8 +832,8 @@
   align-items: center;
   gap: 8px;
   padding: 12px 22px;
-  background: #18231f;
-  color: #fff;
+  background: #18231f !important;
+  color: #ffffff !important;
   border: 0;
   font-size: 11px;
   font-weight: 600;
@@ -837,6 +841,9 @@
   text-transform: uppercase;
   cursor: pointer;
   transition: background 0.2s ease;
+}
+.store-hero-btn * {
+  color: #ffffff !important;
 }
 
 .store-hero-btn:hover {
