@@ -123,7 +123,7 @@ export default function Layout() {
               onClick={() => setNoticeOpen((v) => !v)}
             >
               <Bell size={19} />
-              {unreadCount > 0 && <i style={{ position: 'absolute', width: 6, height: 6, background: 'var(--coral)', borderRadius: '50%', right: 1, top: 0, border: '1px solid #fff' }} />}
+              {unreadCount > 0 && <i style={{ position: 'absolute', width: 6, height: 6, background: 'var(--coral)', borderRadius: '50%', right: 1, top: 0, border: '1px solid var(--surface)' }} />}
             </button>
             <button className="profile profile-button" onClick={() => navigate('/profile')}>
               <span className="avatar">{user?.full_name?.slice(0, 1) || 'A'}</span>

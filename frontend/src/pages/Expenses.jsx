@@ -184,27 +184,16 @@ export default function Expenses() {
           <strong>{money(totalRealizedAllTime)}</strong>
           <small>{realizedExpenses.length} total paid entries</small>
         </article>
-        <article className="metric">
+        <article className="metric blue">
           <span>Upcoming Recurring Commitments</span>
-          <strong style={{ color: 'var(--teal)' }}>{money(totalScheduledAllTime)}</strong>
+          <strong>{money(totalScheduledAllTime)}</strong>
           <small>{scheduledExpenses.length} scheduled future entries</small>
         </article>
       </section>
 
       {/* Accounting Clarification Banner */}
-      <section style={{
-        padding: '10px 16px',
-        borderRadius: 8,
-        background: 'var(--panel-bg, #fcfbf7)',
-        border: '1px solid var(--border)',
-        marginBottom: 16,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        fontSize: 13,
-        color: 'var(--ink)',
-      }}>
-        <AlertCircle size={16} style={{ color: 'var(--teal)', flexShrink: 0 }} />
+      <section className="accounting-banner">
+        <AlertCircle size={17} />
         <span>
           <strong>Accounting Guardrail:</strong> Future recurring payments are tracked separately as scheduled commitments. They will <em>not</em> be deducted from your current net profit until their scheduled billing month arrives.
         </span>
@@ -214,13 +203,14 @@ export default function Expenses() {
       {monthlyTotals.length > 1 && (
         <section className="panel expense-chart-panel" style={{ marginBottom: 16 }}>
           <div className="expense-chart-heading">
-            <TrendingDown size={16} /> Realized monthly spend
+            <TrendingDown size={15} /> Realized monthly spend
           </div>
           <div className="expense-chart-bars">
             {monthlyTotals.slice(0, 6).reverse().map(([key, total]) => {
               const [yr, mo] = key.split('-');
               const label = new Date(Number(yr), Number(mo) - 1).toLocaleString('en-IN', { month: 'short' });
-              const pct = Math.max(4, Math.round((total / (monthlyTotals[0][1] || 1)) * 100));
+              const maxVal = Math.max(...monthlyTotals.map((m) => m[1]), 1);
+              const pct = Math.max(10, Math.round((total / maxVal) * 100));
               return (
                 <div className="expense-bar-group" key={key}>
                   <div className="expense-bar-wrap">
@@ -244,27 +234,24 @@ export default function Expenses() {
         gap: 12,
         marginBottom: 14,
       }}>
-        <div style={{ display: 'inline-flex', padding: 3, background: 'var(--panel-bg, #f0eee6)', borderRadius: 8, border: '1px solid var(--border)' }}>
+        <div className="segmented-control">
           <button
             type="button"
-            className={activeTab === 'realized' ? 'primary-btn' : 'text-btn'}
-            style={{ fontSize: 13, padding: '6px 14px', borderRadius: 6 }}
+            className={`segmented-btn ${activeTab === 'realized' ? 'active' : ''}`}
             onClick={() => setActiveTab('realized')}
           >
             Realized Spend ({realizedExpenses.length})
           </button>
           <button
             type="button"
-            className={activeTab === 'scheduled' ? 'primary-btn' : 'text-btn'}
-            style={{ fontSize: 13, padding: '6px 14px', borderRadius: 6 }}
+            className={`segmented-btn ${activeTab === 'scheduled' ? 'active' : ''}`}
             onClick={() => setActiveTab('scheduled')}
           >
             Scheduled Recurring ({scheduledExpenses.length})
           </button>
           <button
             type="button"
-            className={activeTab === 'all' ? 'primary-btn' : 'text-btn'}
-            style={{ fontSize: 13, padding: '6px 14px', borderRadius: 6 }}
+            className={`segmented-btn ${activeTab === 'all' ? 'active' : ''}`}
             onClick={() => setActiveTab('all')}
           >
             All Entries ({expenses.length})
@@ -319,33 +306,11 @@ export default function Expenses() {
                     <td>{formatDate(expense.date)}</td>
                     <td>
                       {isScheduled ? (
-                        <span
-                          className="status-pill"
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            background: '#eff6ff',
-                            color: '#1d4ed8',
-                            border: '1px solid #bfdbfe',
-                            fontSize: 11,
-                          }}
-                        >
+                        <span className="status-pill pending" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                           <Clock size={11} /> Scheduled
                         </span>
                       ) : (
-                        <span
-                          className="status-pill"
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            background: '#ecfdf5',
-                            color: '#065f46',
-                            border: '1px solid #a7f3d0',
-                            fontSize: 11,
-                          }}
-                        >
+                        <span className="status-pill confirmed" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                           <CheckCircle2 size={11} /> Realized
                         </span>
                       )}

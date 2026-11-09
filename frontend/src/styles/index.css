@@ -280,6 +280,63 @@ body{background:radial-gradient(circle at 90% 0%,rgba(14,118,110,.06),transparen
   transform: none;
 }
 
+[data-theme='dark'] .sidebar-note {
+  background: #192724 !important;
+  border: 1px solid #28413b !important;
+  color: #5eead4 !important;
+}
+[data-theme='dark'] .sidebar-note strong {
+  color: #e5eeeb !important;
+}
+[data-theme='dark'] .sidebar-note small {
+  color: #8da59f !important;
+}
+
+[data-theme='dark'] .modal-hint {
+  background: #182522 !important;
+  border-color: #2b3d39 !important;
+  color: #a3b8b3 !important;
+}
+
+[data-theme='dark'] .segmented-control {
+  background: #162220;
+  border-color: #2b3e39;
+}
+[data-theme='dark'] .segmented-btn {
+  color: #8fa5a0;
+}
+[data-theme='dark'] .segmented-btn:hover {
+  color: #e5eeeb;
+  background: rgba(255, 255, 255, 0.06);
+}
+[data-theme='dark'] .segmented-btn.active {
+  background: var(--teal);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(79, 192, 173, 0.3);
+}
+
+[data-theme='dark'] .accounting-banner {
+  background: #152724;
+  border-color: #26433d;
+  color: #cde5df;
+}
+[data-theme='dark'] .accounting-banner strong {
+  color: #6ee7b7;
+}
+[data-theme='dark'] .accounting-banner svg {
+  color: #5eead4;
+}
+
+[data-theme='dark'] .chat-avatar.assistant {
+  background: #1c2b28 !important;
+  border-color: #2f443f !important;
+  color: #5eead4 !important;
+}
+[data-theme='dark'] .delhivery-logistics-strip {
+  background: #162220 !important;
+  border-color: #2a3d38 !important;
+}
+
 /* Keep settings cards inside the content column on compact screens. */
 .main-area,
 .content,
@@ -844,50 +901,126 @@ body{background:radial-gradient(circle at 90% 0%,rgba(14,118,110,.06),transparen
    ══════════════════════════════════════════════════════════════ */
 
 .expense-chart-panel {
-  padding: 16px 20px;
+  padding: 18px 22px;
 }
 .expense-chart-heading {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: .06em;
+  letter-spacing: .08em;
   color: var(--muted);
-  margin-bottom: 14px;
+  margin-bottom: 18px;
 }
 .expense-chart-bars {
   display: flex;
   align-items: flex-end;
-  gap: 10px;
-  height: 100px;
+  gap: 28px;
+  height: 120px;
+  padding-bottom: 4px;
 }
 .expense-bar-group {
   display: flex;
   flex-direction: column;
   align-items: center;
-  flex: 1;
-  gap: 4px;
+  gap: 6px;
+  min-width: 68px;
 }
 .expense-bar-wrap {
-  flex: 1;
+  height: 76px;
+  width: 36px;
   display: flex;
   align-items: flex-end;
-  width: 100%;
-  min-height: 60px;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 5px;
+  position: relative;
+  overflow: hidden;
+}
+[data-theme='dark'] .expense-bar-wrap {
+  background: rgba(255, 255, 255, 0.06);
 }
 .expense-bar {
   width: 100%;
-  background: var(--coral, #ef4444);
-  opacity: .7;
-  border-radius: 3px 3px 0 0;
-  transition: height .3s ease;
-  min-height: 4px;
+  background: linear-gradient(180deg, var(--coral, #f87171) 0%, #db775c 100%);
+  border-radius: 4px 4px 0 0;
+  min-height: 8px;
+  transition: height .3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.expense-bar-group:hover .expense-bar { opacity: 1; }
-.expense-bar-group small { font-size: 10px; color: var(--muted); }
-.expense-bar-group span { font-size: 10px; font-weight: 600; }
+.expense-bar-group:hover .expense-bar { opacity: 1; filter: brightness(1.12); }
+.expense-bar-group small { font-size: 11px; color: var(--muted); font-weight: 600; }
+.expense-bar-group span { font-size: 11px; font-weight: 700; color: var(--ink); }
+
+.segmented-control {
+  display: inline-flex;
+  padding: 4px;
+  background: #eef3f1;
+  border: 1px solid #dbe6e2;
+  border-radius: 8px;
+  gap: 4px;
+}
+.segmented-btn {
+  border: 0;
+  background: transparent;
+  color: #4b635e;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+.segmented-btn:hover {
+  color: var(--teal-dark);
+  background: rgba(14, 118, 110, 0.08);
+}
+.segmented-btn.active {
+  background: var(--teal);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(14, 118, 110, 0.25);
+}
+
+.accounting-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  background: #f0f8f6;
+  border: 1px solid #d2eae3;
+  color: #173832;
+  margin-bottom: 16px;
+}
+.accounting-banner strong {
+  color: #0b453e;
+}
+.accounting-banner svg {
+  color: var(--teal);
+  flex-shrink: 0;
+}
+
+.chat-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.chat-avatar.user {
+  background: var(--teal);
+  color: #fff;
+}
+.chat-avatar.assistant {
+  background: var(--surface);
+  color: var(--teal);
+  border: 1px solid var(--line);
+}
 
 .expenses-filter-row {
   display: flex;

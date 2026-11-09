@@ -347,8 +347,6 @@ export default function DeliveryDemo() {
         <section className="delhivery-logistics-strip" style={{
           margin: '14px 0',
           padding: '12px 18px',
-          background: 'var(--panel-bg, #fff)',
-          border: '1px solid var(--border)',
           borderRadius: '10px',
           display: 'flex',
           justifyContent: 'space-between',
@@ -363,7 +361,7 @@ export default function DeliveryDemo() {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <strong style={{ fontSize: 14 }}>Delhivery Express Surface &amp; Air</strong>
-                <span style={{ fontSize: 11, background: '#eaf4f1', color: 'var(--teal)', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>Active AWB</span>
+                <span className="status-pill confirmed" style={{ fontSize: 11, padding: '2px 8px' }}>Active AWB</span>
               </div>
               <small style={{ color: 'var(--store-muted)', display: 'block', marginTop: 2, fontSize: 12 }}>
                 AWB Waybill: <strong style={{ color: 'var(--ink)' }}>#{delivery.tracking_number || '148392019482'}</strong> · Origin: REIHH Central Hub, Delhi NCR

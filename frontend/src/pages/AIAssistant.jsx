@@ -200,20 +200,7 @@ export default function AIAssistant() {
                   alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
                 }}
               >
-                <div
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: '50%',
-                    background: message.role === 'user' ? 'var(--teal)' : 'var(--panel-bg, #f4f3ec)',
-                    color: message.role === 'user' ? '#fff' : 'var(--teal)',
-                    border: '1px solid var(--border)',
-                    display: 'grid',
-                    placeItems: 'center',
-                    flexShrink: 0,
-                    marginTop: 2,
-                  }}
-                >
+                <div className={`chat-avatar ${message.role}`}>
                   {message.role === 'user' ? <User size={15} /> : <Bot size={15} />}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -233,7 +220,7 @@ export default function AIAssistant() {
           )}
           {busy && (
             <div className="chat-bubble assistant" style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--muted)' }}>
-              <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#f4f3ec', display: 'grid', placeItems: 'center', border: '1px solid var(--border)' }}>
+              <div className="chat-avatar assistant">
                 <Bot size={15} style={{ color: 'var(--teal)' }} />
               </div>
               <span className="spinner-icon" style={{ fontSize: 13 }}>Thinking & analyzing business records…</span>

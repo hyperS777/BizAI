@@ -13,6 +13,7 @@ from models.invoice import Invoice, InvoiceStatus
 from models.order import Order, OrderItem, OrderStatus
 from models.product import Product
 from models.user import User
+from scripts.seed import reset_and_seed
 from utils.permissions import require_manager
 
 router = APIRouter(prefix="/api/demo", tags=["demo"])
@@ -20,6 +21,16 @@ router = APIRouter(prefix="/api/demo", tags=["demo"])
 
 class DemoRequest(BaseModel):
     scenario: str = "showcase"
+
+
+@router.post("/reset-clean-data")
+def reset_clean_data(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_manager),
+):
+    """Wipes all demo data and re-seeds authentic REIHH apparel, orders, and expenses."""
+    reset_and_seed(db)
+    return {"ok": True, "message": "All demo data has been cleanly re-seeded according to current options."}
 
 
 @router.post("/simulate")
@@ -71,12 +82,12 @@ def simulate_business_data(
     db.add(OrderItem(order_id=order.id, product_id=product.id, quantity=2, unit_price=product.price, total_price=product.price * 2))
     if payload.scenario in ("order", "showcase"):
         db.add(Invoice(
-        invoice_number=f"INV-DEMO-{suffix}",
-        order_id=order.id,
-        status=InvoiceStatus.PAID.value,
-        total_amount=order.total_amount,
-        paid_amount=order.total_amount,
-        due_date=date.today() + timedelta(days=30),
-    ))
+            invoice_number=f"INV-DEMO-{suffix}",
+            order_id=order.id,
+            status=InvoiceStatus.PAID.value,
+            total_amount=order.total_amount,
+            paid_amount=order.total_amount,
+            due_date=date.today() + timedelta(days=30),
+        ))
     db.commit()
     return {"message": f"Synthetic {payload.scenario} data created", "customer_id": customer.id, "order_id": order.id}
