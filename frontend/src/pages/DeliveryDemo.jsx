@@ -19,22 +19,6 @@ const stages = [
   { id: 'delivered', label: 'Delivered', icon: CheckCircle2, emoji: '🏠' },
 ];
 
-/* Route nodes: Warehouse → Out for delivery → Customer */
-const routeNodes = [
-  { label: 'Warehouse', emoji: '🏭', id: 'warehouse' },
-  { label: 'Out for delivery', emoji: '🚚', id: 'out_for_delivery' },
-  { label: 'Customer', emoji: '🏠', id: 'customer_door' },
-];
-
-const statusToRouteIndex = {
-  ready_to_pack: 0,
-  packed: 0,
-  out_for_delivery: 1,
-  failed_delivery: 1,
-  delivered: 2,
-  returned_to_store: 0,
-};
-
 const nextStates = {
   ready_to_pack: [{ status: 'packed', label: 'Mark packed' }],
   packed: [{ status: 'out_for_delivery', label: 'Start delivery run' }],
@@ -246,7 +230,6 @@ export default function DeliveryDemo() {
     () => stages.findIndex((s) => s.id === delivery?.delivery_status),
     [delivery],
   );
-  const routeIndex = statusToRouteIndex[delivery?.delivery_status] ?? 0;
 
   const checkpointLog = delivery?.checkpoint_log || [];
   const isDelivered = delivery?.delivery_status === 'delivered';

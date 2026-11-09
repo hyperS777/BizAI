@@ -200,9 +200,9 @@
 /* ── Delivery stages timeline ── */
 .delivery-timeline {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 4px;
-  padding: 22px 4px 26px;
+  padding: 22px 14px 26px;
   background: var(--driver-card);
   border: 1px solid var(--driver-line);
   border-top: none;

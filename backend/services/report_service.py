@@ -40,12 +40,31 @@ def sales_between(db: Session, start: date, end: date):
 
 
 def get_dashboard_metrics(db: Session):
-    total_sales = float(db.query(func.coalesce(func.sum(Order.total_amount), 0)).filter(
-        Order.status != OrderStatus.CANCELLED.value
-    ).scalar() or 0)
+    today = date.today()
+
+    total_sales = float(
+        db.query(func.coalesce(func.sum(Order.total_amount), 0))
+        .filter(Order.status != OrderStatus.CANCELLED.value)
+        .scalar()
+        or 0
+    )
     total_orders = int(db.query(func.count(Order.id)).scalar() or 0)
     total_customers = int(db.query(func.count(Customer.id)).scalar() or 0)
-    total_expenses = float(db.query(func.coalesce(func.sum(Expense.amount), 0)).scalar() or 0)
+
+    # Incurred/realized expenses to date (future recurring commitments excluded from current profit)
+    realized_expenses = float(
+        db.query(func.coalesce(func.sum(Expense.amount), 0))
+        .filter(Expense.date <= today)
+        .scalar()
+        or 0
+    )
+    scheduled_expenses = float(
+        db.query(func.coalesce(func.sum(Expense.amount), 0))
+        .filter(Expense.date > today)
+        .scalar()
+        or 0
+    )
+
     cogs = float(
         db.query(func.coalesce(func.sum(OrderItem.quantity * Product.cost_price), 0))
         .select_from(OrderItem)
@@ -55,11 +74,19 @@ def get_dashboard_metrics(db: Session):
         .scalar()
         or 0
     )
-    profit = total_sales - total_expenses - cogs
-    total_products = int(db.query(func.count(Product.id)).scalar() or 0)
+
+    # Net profit strictly deducts realized spend and manufacturing costs
+    profit = total_sales - realized_expenses - cogs
+
+    total_products = int(
+        db.query(func.count(Product.id))
+        .filter(Product.is_active == True)
+        .scalar()
+        or 0
+    )
     low_stock_products = int(
         db.query(func.count(Product.id))
-        .filter(Product.stock_qty <= Product.min_stock_level)
+        .filter(Product.is_active == True, Product.stock_qty <= Product.min_stock_level)
         .scalar()
         or 0
     )
@@ -73,7 +100,11 @@ def get_dashboard_metrics(db: Session):
         )
         .join(OrderItem, OrderItem.product_id == Product.id)
         .join(Order, Order.id == OrderItem.order_id)
-        .filter(Order.status != OrderStatus.CANCELLED.value)
+        .filter(
+            Order.status != OrderStatus.CANCELLED.value,
+            Product.is_active == True,
+            OrderItem.total_price > 0,
+        )
         .group_by(Product.id, Product.name)
         .order_by(func.sum(OrderItem.total_price).desc())
         .limit(5)
@@ -84,7 +115,9 @@ def get_dashboard_metrics(db: Session):
             "product_id": row.id,
             "name": row.name,
             "total_quantity": int(row.qty or 0),
+            "qty": int(row.qty or 0),
             "total_revenue": float(row.revenue or 0),
+            "revenue": float(row.revenue or 0),
         }
         for row in top_rows
     ]
@@ -109,7 +142,6 @@ def get_dashboard_metrics(db: Session):
     month_sales, month_orders = sales_between(db, start, end)
     prev_sales, prev_orders = sales_between(db, prev_start, prev_end)
 
-    today = date.today()
     daily_sales, daily_orders = sales_between(db, today, today)
 
     bottom_rows = (
@@ -121,7 +153,11 @@ def get_dashboard_metrics(db: Session):
         )
         .join(OrderItem, OrderItem.product_id == Product.id)
         .join(Order, Order.id == OrderItem.order_id)
-        .filter(Order.status != OrderStatus.CANCELLED.value)
+        .filter(
+            Order.status != OrderStatus.CANCELLED.value,
+            Product.is_active == True,
+            OrderItem.total_price > 0,
+        )
         .group_by(Product.id, Product.name)
         .order_by(func.sum(OrderItem.total_price).asc())
         .limit(5)
@@ -132,7 +168,9 @@ def get_dashboard_metrics(db: Session):
             "product_id": row.id,
             "name": row.name,
             "total_quantity": int(row.qty or 0),
+            "qty": int(row.qty or 0),
             "total_revenue": float(row.revenue or 0),
+            "revenue": float(row.revenue or 0),
         }
         for row in bottom_rows
     ]
@@ -151,7 +189,9 @@ def get_dashboard_metrics(db: Session):
         },
         "revenue_profit": {
             "revenue": total_sales,
-            "expenses": total_expenses,
+            "expenses": realized_expenses,
+            "scheduled_expenses": scheduled_expenses,
+            "cogs": cogs,
             "profit": profit,
         },
         "inventory_summary": {
@@ -195,7 +235,11 @@ def get_top_products(db: Session, limit: int = 10):
         )
         .join(OrderItem, OrderItem.product_id == Product.id)
         .join(Order, Order.id == OrderItem.order_id)
-        .filter(Order.status != OrderStatus.CANCELLED.value)
+        .filter(
+            Order.status != OrderStatus.CANCELLED.value,
+            Product.is_active == True,
+            OrderItem.total_price > 0,
+        )
         .group_by(Product.id, Product.name, Product.sku)
         .order_by(func.sum(OrderItem.total_price).desc())
         .limit(limit)
@@ -207,7 +251,9 @@ def get_top_products(db: Session, limit: int = 10):
             "name": r.name,
             "sku": r.sku,
             "total_quantity": int(r.total_quantity or 0),
+            "qty": int(r.total_quantity or 0),
             "total_revenue": float(r.total_revenue or 0),
+            "revenue": float(r.total_revenue or 0),
         }
         for r in rows
     ]
@@ -241,6 +287,7 @@ def get_customer_activity(db: Session, limit: int = 10):
 
 
 def get_expense_summary(db: Session, start_date=None, end_date=None):
+    today = date.today()
     q = db.query(
         Expense.category,
         func.coalesce(func.sum(Expense.amount), 0).label("total"),
@@ -250,10 +297,27 @@ def get_expense_summary(db: Session, start_date=None, end_date=None):
         q = q.filter(Expense.date >= start_date)
     if end_date:
         q = q.filter(Expense.date <= end_date)
+    else:
+        # Default to realized expenses up to today so upcoming recurring schedules do not inflate spend
+        q = q.filter(Expense.date <= today)
+
     rows = q.group_by(Expense.category).order_by(func.sum(Expense.amount).desc()).all()
-    total_all = float(db.query(func.coalesce(func.sum(Expense.amount), 0)).scalar() or 0)
+    realized_total = float(
+        db.query(func.coalesce(func.sum(Expense.amount), 0))
+        .filter(Expense.date <= today)
+        .scalar()
+        or 0
+    )
+    scheduled_total = float(
+        db.query(func.coalesce(func.sum(Expense.amount), 0))
+        .filter(Expense.date > today)
+        .scalar()
+        or 0
+    )
     return {
-        "total": total_all,
+        "total": realized_total,
+        "realized_total": realized_total,
+        "scheduled_total": scheduled_total,
         "by_category": [
             {"category": r.category or "Uncategorized", "total": float(r.total or 0), "count": int(r.count or 0)}
             for r in rows
@@ -265,7 +329,7 @@ def build_business_snapshot(db: Session) -> dict:
     metrics = get_dashboard_metrics(db)
     low_items = (
         db.query(Product)
-        .filter(Product.stock_qty <= Product.min_stock_level)
+        .filter(Product.is_active == True, Product.stock_qty <= Product.min_stock_level)
         .order_by(Product.stock_qty.asc())
         .limit(8)
         .all()

@@ -5,6 +5,7 @@ Pluggable AI assistant grounded in live business records with multi-turn convers
 from datetime import datetime
 import json
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -19,6 +20,16 @@ logger = logging.getLogger("bizai.ai")
 
 def _format_inr(val: float) -> str:
     return f"INR {val:,.0f}"
+
+
+def _sanitize_input(query: str) -> tuple[str, set[str]]:
+    """Clean query string by removing surrounding brackets, quotes, and punctuation."""
+    # Strip leading/trailing brackets, braces, parentheses, quotes
+    clean = re.sub(r'^[\[\(\{<"\']+|[\]\)\}>"\']+$', '', query).strip()
+    # Normalize for keyword matching
+    norm = re.sub(r'[^a-zA-Z0-9\s]', ' ', clean).lower()
+    words = set(norm.split())
+    return clean.lower(), words
 
 
 def _fallback_conversational_answer(
@@ -39,30 +50,25 @@ def _fallback_conversational_answer(
     low_stock = snapshot.get("low_stock", [])
     outstanding = snapshot.get("outstanding_payments", 0.0)
 
-    q = query.strip().lower()
-    words = set(q.replace("?", "").replace("!", "").replace(",", "").replace(".", "").split())
+    q, words = _sanitize_input(query)
 
-    # Get previous turns for multi-turn understanding
-    last_assistant_msg = ""
-    last_user_msg = ""
-    if conversation_history:
-        for msg in reversed(conversation_history):
-            role = msg.get("role")
-            text = msg.get("text") or msg.get("content") or ""
-            if not last_assistant_msg and role in ("assistant", "model"):
-                last_assistant_msg = text
-            elif not last_user_msg and role == "user":
-                last_user_msg = text
-            if last_assistant_msg and last_user_msg:
-                break
+    # 1. Greetings & casual check-ins (e.g. "[hello", "hi", "how u doing", "how are you", "what's up")
+    greeting_phrases = [
+        "good morning", "good afternoon", "good evening", "how are you", "how u doing",
+        "how are u", "hows it going", "how's it going", "how do you do", "who are you",
+        "what can you do", "whats up", "what's up", "wassup",
+    ]
+    greeting_words = {"hello", "hi", "hey", "hola", "help", "greetings", "yo", "sup", "namaste"}
 
-    # 1. Greetings & conversational introductions
-    if (
-        any(g in q for g in ["good morning", "good afternoon", "good evening", "how are you", "who are you", "what can you do"])
-        or (words & {"hello", "hi", "hey", "hola", "help", "greetings"})
-    ):
+    if any(g in q for g in greeting_phrases) or (words & greeting_words):
+        is_check_in = any(x in q for x in ["how are you", "how u doing", "how are u", "hows it going", "how's it going", "whats up", "what's up", "sup"])
+        opener = (
+            "Hello! I'm doing great, thank you for asking! Everything is running smoothly at REIHH Studio.\n\n"
+            if is_check_in
+            else "Hello! I am **BizAI**, your intelligent business co-pilot for REIHH Studio.\n\n"
+        )
         return (
-            "Hello! I am **BizAI**, your intelligent business co-pilot for REIHH Studio.\n\n"
+            f"{opener}"
             "I have real-time access to your live orders, catalog stock, customer ledger, Delhivery shipments, and profit figures. Here are a few things you can ask me:\n"
             "* **'What products should I buy / restock?'** — Get priority reorder recommendations.\n"
             "* **'How are sales this month compared to last month?'** — View growth trends.\n"
@@ -86,13 +92,20 @@ def _fallback_conversational_answer(
         rev = _format_inr(profit.get("revenue", 0))
         exp = _format_inr(profit.get("expenses", 0))
         cogs = _format_inr(profit.get("cogs", 0))
+        sched_exp = profit.get("scheduled_expenses", 0)
+
+        sched_line = (
+            f" (plus {_format_inr(sched_exp)} in upcoming recurring commitments kept separate)"
+            if sched_exp > 0
+            else ""
+        )
 
         return (
             "Let me break down our business figures in simple, direct terms:\n\n"
             f"1. **Total Sales ({total_s})**: The gross amount generated across {sales.get('total_orders', 0)} customer orders.\n"
-            f"2. **Net Profit ({prof})**: The actual money kept after subtracting the garment manufacturing cost ({cogs}) and operational expenses ({exp}) from total revenue ({rev}).\n"
-            f"3. **Inventory Reorders ({len(low_stock)} items low)**: Certain pieces (like those in our low-stock list) are running close to zero units in the Delhi warehouse. If not reordered, prospective buyers will see 'Sold out'.\n\n"
-            "Would you like me to show you the **exact restock recommendation list**, or drill down into **customer purchase history**?"
+            f"2. **Net Profit ({prof})**: The actual money kept after subtracting garment manufacturing cost ({cogs}) and realized operational spend ({exp}{sched_line}) from total revenue ({rev}).\n"
+            f"3. **Inventory Status**: We actively monitor our 40 apparel items so bestselling pieces never run out in Delhi.\n\n"
+            "Would you like me to show you the **restock recommendation list**, or drill down into **customer purchase history**?"
         )
 
     # 3. Purchasing / Restocking Advice: "what products should i buy?", "what to stock?", "purchase advice"
@@ -105,33 +118,50 @@ def _fallback_conversational_answer(
         or "stock up" in q
         or ("which" in q and "buy" in q)
         or ("recommend" in q and "product" in q)
+        or ("suggest" in q and "buy" in q)
     ):
         advice_parts = []
         if low_stock:
             advice_parts.append("### [Restock Priority] Urgent Restock Recommendations (Operations POV):")
-            advice_parts.append("These garments are running critically low in your Delhi fulfillment center:")
+            advice_parts.append("These garments are running low in your Delhi fulfillment center:")
             for item in low_stock[:4]:
                 current = item.get("stock_qty", 0)
-                min_lvl = item.get("min_stock_level", 2)
+                min_lvl = item.get("min_stock_level", 4)
                 suggested_reorder = max(min_lvl * 4, 25)
                 advice_parts.append(
                     f"* **{item['name']}** (SKU: `{item['sku']}`): **{current} units left** (Safety min: {min_lvl}) -> *Recommend reordering at least {suggested_reorder} units*."
                 )
         else:
             advice_parts.append("### [Inventory Status] Warehouse Stock Level:")
-            advice_parts.append("All products currently meet or exceed minimum safety stock thresholds.")
+            advice_parts.append(
+                "Good news! All active pieces in the REIHH collection (Womenswear, Menswear, Outerwear, Denim) "
+                "currently meet or exceed safety stock thresholds in the Delhi fulfillment center. No urgent reorders required today."
+            )
 
-        if top_products:
+        # Sales demand view
+        valid_top = [
+            p for p in top_products
+            if (p.get("total_quantity") or p.get("qty", 0)) > 0
+        ]
+
+        if valid_top:
             advice_parts.append("\n### [Customer Demand] Top-Selling Pieces (Sales POV):")
-            advice_parts.append("If you are looking at customer favorites with the highest commercial turnover:")
-            for p in top_products[:3]:
-                rev = _format_inr(p.get("revenue", 0))
-                qty = p.get("qty", 0)
+            advice_parts.append("If you want to restock based on customer favorite pieces with highest turnover:")
+            for p in valid_top[:3]:
+                qty = p.get("total_quantity") or p.get("qty", 0)
+                rev = _format_inr(p.get("total_revenue") or p.get("revenue", 0))
                 advice_parts.append(f"* **{p['name']}**: {qty} units sold ({rev} gross revenue).")
+            top_name = valid_top[0]["name"]
+            advice_parts.append(
+                f"\n**Actionable Advice**: Prioritize keeping a safety buffer for customer favorites like the *{top_name}* "
+                "to maintain order momentum during high-traffic campaigns."
+            )
+        else:
+            advice_parts.append(
+                "\n**Actionable Advice**: Catalog inventory is healthy. Focus marketing efforts on the *Arden Grey Wash Jacket* "
+                "and *Alba Straight Fit Denim* sets to drive initial collection volume."
+            )
 
-        advice_parts.append(
-            "\n**Actionable Advice**: Prioritize reordering high-velocity pieces like the *Arden Grey Wash Jacket* before running targeted promotions."
-        )
         return "\n".join(advice_parts)
 
     # 4. Courtesy / Closings
@@ -142,14 +172,14 @@ def _fallback_conversational_answer(
         )
 
     # 5. Delivery & Delhivery Logistics Queries
-    if any(w in q for w in ["delhivery", "courier", "dispatch", "shipment", "transit", "shipping", "carrier"]):
+    if any(w in q for w in ["delhivery", "courier", "dispatch", "shipment", "transit", "shipping", "carrier", "delivery status"]):
         return (
             "### [Logistics] Delhivery Express Integration Overview:\n\n"
             "* **Default Fulfillment Hub**: REIHH Studio Central Warehouse, Delhi NCR.\n"
             "* **Integrated Carrier**: **Delhivery Surface & Express** with automated 12-digit waybills (`148...`).\n"
             "* **Live Tracking**: Each order generates a direct tracking link (`https://www.delhivery.com/track/package/...`) along with an interactive Leaflet route simulator for delivery agents.\n"
-            "* **Proof of Delivery**: Instant tax invoices (PDF) are unlocked automatically upon doorstep delivery.\n\n"
-            "You can test live delivery dispatch in the **Orders** tab or open the **Delivery Agent POV**."
+            "* **WhatsApp Updates**: Customers receive instant WhatsApp dispatch updates with live waybills and tax invoice PDFs upon delivery.\n\n"
+            "You can test live dispatch directly in the **Orders** tab or open the **Delivery Agent POV**."
         )
 
     # 6. Low stock specifically
@@ -164,20 +194,22 @@ def _fallback_conversational_answer(
 
     # 7. Product Rankings: best vs slowest selling
     if "least" in q or "worst" in q or "slowest" in q:
-        if not bottom_products:
-            return "There is not yet enough order distribution to rank slowest-selling items."
+        valid_bottom = [p for p in bottom_products if (p.get("total_revenue") or p.get("revenue", 0)) > 0]
+        if not valid_bottom:
+            return "All catalog pieces currently have balanced demand across orders."
         lines = "\n".join(
-            f"* **{item['name']}**: {_format_inr(item.get('total_revenue', 0))} in sales"
-            for item in bottom_products[:3]
+            f"* **{item['name']}**: {_format_inr(item.get('total_revenue') or item.get('revenue', 0))} in sales"
+            for item in valid_bottom[:3]
         )
-        return f"### [Trends] Least-Selling Products by Revenue:\n\n{lines}\n\n*Consider running a 15% discount code to stimulate interest in these pieces.*"
+        return f"### [Trends] Least-Selling Products by Revenue:\n\n{lines}\n\n*Consider running a 15% promotional discount to stimulate sales for these pieces.*"
 
     if "best" in q or "fastest" in q or "top" in q or "selling" in q:
-        if not top_products:
-            return "No sales recorded yet to establish top rankings."
+        valid_top = [p for p in top_products if (p.get("total_quantity") or p.get("qty", 0)) > 0]
+        if not valid_top:
+            return "Customer demand is currently registering initial orders across new apparel collections."
         lines = "\n".join(
-            f"* **{item['name']}**: {item.get('qty', 0)} units sold ({_format_inr(item.get('revenue', 0))})"
-            for item in top_products[:4]
+            f"* **{item['name']}**: {item.get('total_quantity') or item.get('qty', 0)} units sold ({_format_inr(item.get('total_revenue') or item.get('revenue', 0))})"
+            for item in valid_top[:4]
         )
         return f"### [Top Sellers] Top-Performing REIHH Products:\n\n{lines}"
 
@@ -198,14 +230,21 @@ def _fallback_conversational_answer(
         tot_s = _format_inr(sales.get("total_sales", 0))
         tot_p = _format_inr(profit.get("profit", 0))
         tot_e = _format_inr(profit.get("expenses", 0))
+        sched = _format_inr(profit.get("scheduled_expenses", 0))
         cogs = _format_inr(profit.get("cogs", 0))
         margin_pct = (profit.get("profit", 0) / sales.get("total_sales", 1) * 100) if sales.get("total_sales", 0) > 0 else 0
+
+        recurring_note = (
+            f"\n* **Upcoming Recurring Commitments**: {sched} scheduled across future months (kept separate from current profit)."
+            if profit.get("scheduled_expenses", 0) > 0
+            else ""
+        )
 
         return (
             f"### [Financials] Financial Performance Summary:\n\n"
             f"* **Total Revenue**: {tot_s} across {sales.get('total_orders', 0)} orders.\n"
             f"* **Cost of Goods Sold (COGS)**: {cogs}.\n"
-            f"* **Operational Expenses**: {tot_e}.\n"
+            f"* **Realized Operational Expenses**: {tot_e}.{recurring_note}\n"
             f"* **Estimated Net Profit**: **{tot_p}** (Net Margin: **{margin_pct:.1f}%**).\n"
             f"* **Outstanding Balances**: {_format_inr(outstanding)} due from customers.\n\n"
             "Your business maintains a healthy margin above 35% on apparel."
@@ -223,11 +262,14 @@ def _fallback_conversational_answer(
 
     # 11. Expenses breakdown
     if "expense" in q or "spend" in q:
-        tot_e = _format_inr(metrics.get("total_expenses", 0) or profit.get("expenses", 0))
+        tot_e = _format_inr(profit.get("expenses", 0) or metrics.get("total_expenses", 0))
+        sched = _format_inr(profit.get("scheduled_expenses", 0))
+        sched_note = f" (plus {sched} in upcoming recurring commitments)" if profit.get("scheduled_expenses", 0) > 0 else ""
         return (
             f"### [Expenses] Expense Overview:\n\n"
-            f"Total recorded business expenses: **{tot_e}**.\n"
-            "Check the **Expenses** tab for a detailed month-by-month breakdown of rent, salaries, marketing, and logistics."
+            f"Realized business expenses to date: **{tot_e}**{sched_note}.\n"
+            "Future recurring entries are kept separate and only deducted as their billing months arrive. "
+            "Check the **Expenses** tab for a detailed month-by-month breakdown of rent, logistics, and utilities."
         )
 
     # 12. Monthly comparisons
@@ -270,7 +312,10 @@ def _summary_from_snapshot(snapshot: dict) -> str:
         trend = f"Sales {'increased' if change >= 0 else 'decreased'} by {abs(change):.1f}% this month."
     else:
         trend = f"This month has recorded {_format_inr(current)} in sales."
-    best = f" {top[0]['name']} is the top revenue generator." if top else ""
+    best = ""
+    valid_top = [p for p in top if (p.get("total_quantity") or p.get("qty", 0)) > 0]
+    if valid_top:
+        best = f" {valid_top[0]['name']} is the top revenue generator."
     restock = ""
     if low:
         names = ", ".join(item["name"] for item in low[:3])
@@ -284,7 +329,6 @@ def _ask_model(
     conversation_history: Optional[List[Dict[str, Any]]] = None,
 ) -> Optional[str]:
     """Calls Groq or Gemini if keys are configured."""
-    # 1. Try Groq
     if settings.GROQ_API_KEY:
         try:
             from groq import Groq
@@ -295,11 +339,12 @@ def _ask_model(
                 {
                     "role": "system",
                     "content": (
-                        "You are BizAI, a friendly, razor-sharp business advisor for REIHH Studio. "
+                        "You are BizAI, a friendly, razor-sharp business advisor for REIHH Studio (luxury Indian apparel). "
                         "You have full multi-turn conversational memory. Answer questions naturally, conversationally, "
                         "and ground all business numbers strictly in the provided JSON snapshot. "
+                        "When greeted (e.g. 'hello', 'how u doing'), reply warmly and conversationally without dumping raw stats. "
                         "When the user asks 'what products should I buy?' or 'what should I stock?', analyze low-stock items "
-                        "and top-selling products to give an actionable reorder recommendation. "
+                        "and top-selling apparel pieces to give an actionable reorder recommendation. "
                         "When the user asks 'what do you mean?', clarify the previous points simply. "
                         "Use Markdown formatting with bold text and bullet points."
                     ),
