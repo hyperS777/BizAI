@@ -18,7 +18,7 @@ from models.expense import Expense
 from models.integration import IntegrationEvent, StorefrontAnalyticsEvent, StorefrontSimulation
 from models.invoice import Invoice, InvoiceStatus
 from models.order import Order, OrderItem, OrderStatus
-from models.product import Category, Product
+from models.product import Category, Product, ProductVariant
 from models.user import Role, User
 from services.storefront_service import sync_all_reihh_catalog
 from utils.security import get_password_hash
@@ -44,6 +44,11 @@ def reset_and_seed(db: SessionLocal = None):
         db.query(OrderItem).delete()
         db.query(Order).delete()
         db.query(Expense).delete()
+        # Completely remove obsolete demo products (office supplies)
+        db.query(ProductVariant).filter(
+            ProductVariant.product_id.in_(db.query(Product.id).filter(Product.shopify_product_id.is_(None)))
+        ).delete(synchronize_session=False)
+        db.query(Product).filter(Product.shopify_product_id.is_(None)).delete(synchronize_session=False)
         db.commit()
 
         # 2. Roles
@@ -244,12 +249,20 @@ def reset_and_seed(db: SessionLocal = None):
 
 
 def seed_data():
-    """Initial boot seeder that ensures basic data exists without wiping if already populated."""
+    """Initial boot seeder that ensures basic data exists and auto-cleans old dummy data."""
     db = SessionLocal()
     try:
         user_count = db.query(User).count()
         order_count = db.query(Order).count()
-        if user_count == 0 or order_count == 0:
+        # Automatically wipe obsolete dummy office equipment if present
+        has_stale_dummy_data = (
+            db.query(Product)
+            .filter(Product.sku.in_(["FU-DESK-02", "EL-HUB-02", "OS-PEN-04", "RH-DESK-01"]))
+            .first()
+            is not None
+        )
+        if user_count == 0 or order_count == 0 or has_stale_dummy_data:
+            logger.info("Stale or missing database records detected on boot — auto-resetting with clean REIHH data.")
             reset_and_seed(db)
     finally:
         db.close()
