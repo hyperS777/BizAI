@@ -409,7 +409,7 @@ export default function DeliveryDemo() {
           })}
         </section>
 
-                {/* WhatsApp notification action */}
+        {/* WhatsApp notification action */}
         <div style={{ margin: '14px 0 6px' }}>
           <a
             className="delivery-whatsapp-btn"

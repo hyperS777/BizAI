@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, ChevronRight, Moon, Sparkles, Sun, RotateCcw } from 'lucide-react';
+import { Check, ChevronRight, Moon, RotateCcw, Sparkles, Sun } from 'lucide-react';
 import client from '../api/client';
 import { PageHeader } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
@@ -80,7 +80,7 @@ export function Settings() {
       await client.post('/demo/reset-clean-data');
       setMessage('Workspace reset complete: Clean authentic REIHH catalog, orders, and expenses generated successfully.');
     } catch (err) {
-      setError(apiError(err, 'Could not reset demo data'));
+      setError(apiError(err, 'Could not reset workspace demo data'));
     } finally {
       setBusy(false);
     }
@@ -116,7 +116,7 @@ export function Settings() {
             <div className="simulator-icon"><Sparkles size={24} /></div>
             <h2>Clean Demo Data</h2>
             <p className="muted">Wipe test clutter and refresh the workspace with clean authentic REIHH fashion records.</p>
-            
+
             <button
               type="button"
               className="outline-btn"
@@ -154,4 +154,5 @@ export function Settings() {
     </>
   );
 }
+
 export default Settings;

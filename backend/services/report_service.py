@@ -337,6 +337,41 @@ def build_business_snapshot(db: Session) -> dict:
     outstanding = float(
         db.query(func.coalesce(func.sum(Customer.outstanding_balance), 0)).scalar() or 0
     )
+
+    # Enrich: recent orders with customer names and item summaries
+    recent_orders_q = (
+        db.query(Order, Customer.name.label("customer_name"))
+        .join(Customer, Customer.id == Order.customer_id)
+        .order_by(Order.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    recent_orders_detail = []
+    for o, cust_name in recent_orders_q:
+        items_q = (
+            db.query(OrderItem.quantity, Product.name.label("product_name"))
+            .join(Product, Product.id == OrderItem.product_id)
+            .filter(OrderItem.order_id == o.id)
+            .all()
+        )
+        items_summary = ", ".join(
+            f"{item.quantity}x {item.product_name}" for item in items_q[:3]
+        )
+        recent_orders_detail.append({
+            "order_number": o.order_number,
+            "customer": cust_name,
+            "status": o.status,
+            "total": float(o.total_amount or 0),
+            "date": o.created_at.strftime("%d %b %Y") if o.created_at else "N/A",
+            "items_summary": items_summary or "No items",
+        })
+
+    # Enrich: top customers by lifetime spend
+    top_customers = get_customer_activity(db, limit=5)
+
+    # Enrich: expense breakdown by category (realized only)
+    expense_summary = get_expense_summary(db)
+
     return {
         "metrics": metrics,
         "low_stock": [
@@ -349,4 +384,7 @@ def build_business_snapshot(db: Session) -> dict:
             for p in low_items
         ],
         "outstanding_payments": outstanding,
+        "recent_orders_detail": recent_orders_detail,
+        "top_customers": top_customers,
+        "expense_breakdown": expense_summary.get("by_category", []),
     }

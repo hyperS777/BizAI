@@ -43,12 +43,12 @@ export default function Layout() {
   useEffect(() => {
     client.get('/notifications')
       .then((res) => setNotifications(res.data?.items || []))
-      .catch(() => {}); // Silent — notifications are best-effort
+      .catch(() => { }); // Silent — notifications are best-effort
     // Refresh every 2 minutes
     const interval = setInterval(() => {
       client.get('/notifications')
         .then((res) => setNotifications(res.data?.items || []))
-        .catch(() => {});
+        .catch(() => { });
     }, 120_000);
     return () => clearInterval(interval);
   }, []);

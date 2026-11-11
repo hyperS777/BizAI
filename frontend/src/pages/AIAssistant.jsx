@@ -5,12 +5,12 @@ import { PageHeader } from '../components/ui';
 import { apiError } from '../utils/format';
 
 const defaultPrompts = [
+  'What was the latest order?',
   'What products should I buy / restock?',
-  'Which products are selling the fastest?',
+  'Who are our best customers?',
   'How were sales this month compared to last month?',
   'Break down our net profit and expenses.',
   'What is our delivery status with Delhivery?',
-  'Give me a summary of this month\'s performance.',
 ];
 
 /** Simple markdown-like formatter for bolding, bullet points, and headers */
@@ -91,7 +91,7 @@ export default function AIAssistant() {
   useEffect(() => {
     try {
       localStorage.setItem('bizai_chat_history', JSON.stringify(messages));
-    } catch {}
+    } catch { }
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
@@ -200,58 +200,58 @@ export default function AIAssistant() {
                   alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
                 }}
               >
-                <div className={`chat-avatar ${message.role}`}>
-                  {message.role === 'user' ? <User size={15} /> : <Bot size={15} />}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 3, color: 'var(--muted)' }}>
-                    {message.role === 'user' ? 'You' : 'BizAI Assistant'}
-                  </span>
-                  <div className="chat-bubble-content">
-                    {message.role === 'assistant' ? (
-                      <FormattedMessage text={message.text} />
-                    ) : (
-                      <span style={{ whiteSpace: 'pre-wrap' }}>{message.text}</span>
-                    )}
+                  <div className={`chat-avatar ${message.role}`}>
+                    {message.role === 'user' ? <User size={15} /> : <Bot size={15} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 3, color: 'var(--muted)' }}>
+                      {message.role === 'user' ? 'You' : 'BizAI Assistant'}
+                    </span>
+                    <div className="chat-bubble-content">
+                      {message.role === 'assistant' ? (
+                        <FormattedMessage text={message.text} />
+                      ) : (
+                        <span style={{ whiteSpace: 'pre-wrap' }}>{message.text}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+                ))
           )}
-          {busy && (
-            <div className="chat-bubble assistant" style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--muted)' }}>
-              <div className="chat-avatar assistant">
-                <Bot size={15} style={{ color: 'var(--teal)' }} />
-              </div>
-              <span className="spinner-icon" style={{ fontSize: 13 }}>Thinking & analyzing business records…</span>
-            </div>
+                {busy && (
+                  <div className="chat-bubble assistant" style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--muted)' }}>
+                      <div className="chat-avatar assistant">
+                        <Bot size={15} style={{ color: 'var(--teal)' }} />
+                      </div>
+                      <span className="spinner-icon" style={{ fontSize: 13 }}>Thinking & analyzing business records…</span>
+                    </div>
           )}
-          <div ref={chatBottomRef} />
-        </div>
+                    <div ref={chatBottomRef} />
+                  </div>
 
         {/* Chat Input Form */}
-        <form
-          className="chat-form"
-          style={{ marginTop: 16, display: 'flex', gap: 8 }}
-          onSubmit={(e) => { e.preventDefault(); ask(); }}
-        >
-          <input
-            style={{ flex: 1, padding: '11px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ask a question (e.g. 'What products should I buy / restock?', 'what do you mean?')"
-            disabled={busy}
-          />
-          <button
-            className="primary-btn"
-            disabled={busy || !query.trim()}
-            type="submit"
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 20px' }}
-          >
-            {busy ? 'Thinking…' : <><span>Ask</span> <Send size={14} /></>}
-          </button>
-        </form>
-      </section>
+                <form
+                  className="chat-form"
+                  style={{ marginTop: 16, display: 'flex', gap: 8 }}
+                  onSubmit={(e) => { e.preventDefault(); ask(); }}
+                >
+                  <input
+                    style={{ flex: 1, padding: '11px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }}
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Ask a question (e.g. 'What products should I buy / restock?', 'what do you mean?')"
+                    disabled={busy}
+                  />
+                  <button
+                    className="primary-btn"
+                    disabled={busy || !query.trim()}
+                    type="submit"
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 20px' }}
+                  >
+                    {busy ? 'Thinking…' : <><span>Ask</span> <Send size={14} /></>}
+                  </button>
+                </form>
+              </section>
     </>
-  );
+        );
 }
