@@ -43,6 +43,9 @@ def _sanitize_input(query: str) -> tuple[str, str, set[str]]:
     norm = re.sub(r'\bprof?i[t]?s?\b', 'profit', norm)
     norm = re.sub(r'\bexpens[e3]s?\b', 'expense', norm)
     norm = re.sub(r'\brest[o0]ck\b', 'restock', norm)
+    norm = re.sub(r'\breven[u0]e?s?\b', 'revenue', norm)
+    norm = re.sub(r'\binvoic[e3]s?\b', 'invoice', norm)
+    norm = re.sub(r'\bdisc[o0]unt?s?\b', 'discount', norm)
 
     words = set(norm.split())
     return clean.lower(), norm, words
@@ -183,6 +186,7 @@ def _fallback_conversational_answer(
     order_counts = snapshot.get("order_status_counts", {})
     top_customers = snapshot.get("top_customers", [])
     expense_breakdown = snapshot.get("expense_breakdown", [])
+    outstanding = snapshot.get("outstanding_payments", 0)
 
     clean, q_norm, words = _sanitize_input(query)
 
@@ -255,22 +259,39 @@ def _fallback_conversational_answer(
                 f"* **Shipping Destination**: {ord_rec.shipping_address or (ord_rec.customer.address if ord_rec.customer else 'Delhi, India')}\n"
             )
 
-    # 4. Customer profile lookup (e.g. "who is Amber Abbas?", "orders of Amber", "tell me about customer Ramji")
-    if db and any(w in q_norm for w in ["who is", "customer", "client", "buyer", "orders of", "spent"]):
+    # 4. Customer profile / specific customer orders lookup
+    if db:
+        matched_customer = None
         for c in db.query(CustomerModel).all():
-            if c.name and c.name.lower() in q_norm:
-                c_orders = db.query(OrderModel).filter(OrderModel.customer_id == c.id).order_by(OrderModel.created_at.desc()).all()
-                orders_line = ", ".join(f"`{o.order_number}` (INR {o.total_amount:,.0f})" for o in c_orders[:4]) or "No orders yet"
-                return (
-                    f"### Customer Dossier: {c.name}\n\n"
-                    f"* **Client Tier**: **{c.tier or 'Regular'}**\n"
-                    f"* **Contact**: {c.email or 'No email'} · {c.phone or 'No phone'}\n"
-                    f"* **Lifetime Orders**: {len(c_orders)} orders\n"
-                    f"* **Recent Orders**: {orders_line}\n"
-                    f"* **Outstanding Balance**: INR {c.outstanding_balance or 0:,.0f}\n"
-                    f"* **Delivery Address**: {c.address or 'Delhi NCR, India'}\n"
-                    f"* **Notes & Fit**: {c.notes or 'No special fit preferences on file'}\n"
-                )
+            if c.name and len(c.name.strip()) >= 3:
+                parts = [p.lower() for p in c.name.strip().split() if len(p) >= 3]
+                if c.name.lower() in q_norm or any(part in words for part in parts):
+                    matched_customer = c
+                    break
+
+        if matched_customer:
+            c_orders = (
+                db.query(OrderModel)
+                .filter(OrderModel.customer_id == matched_customer.id)
+                .order_by(OrderModel.created_at.desc())
+                .all()
+            )
+            orders_lines = []
+            for o in c_orders[:4]:
+                items = db.query(OrderItemModel).filter(OrderItemModel.order_id == o.id).all()
+                items_str = ", ".join(f"{it.quantity}x {it.product.name if it.product else 'Garment'}" for it in items)
+                orders_lines.append(f"* `{o.order_number}`: {o.status.upper()} | INR {o.total_amount:,.0f} | {items_str or 'Apparel'}")
+            orders_block = "\n".join(orders_lines) or "* No orders placed yet."
+            return (
+                f"### Customer Dossier: {matched_customer.name}\n\n"
+                f"* **Client Tier**: **{matched_customer.tier or 'Regular'}**\n"
+                f"* **Contact**: {matched_customer.email or 'No email'} · {matched_customer.phone or 'No phone'}\n"
+                f"* **Lifetime Orders**: **{len(c_orders)} orders**\n"
+                f"* **Outstanding Balance**: INR {matched_customer.outstanding_balance or 0:,.0f}\n"
+                f"* **Delivery Address**: {matched_customer.address or 'Delhi NCR, India'}\n"
+                f"* **Notes & Fit**: {matched_customer.notes or 'No special fit preferences on file'}\n\n"
+                f"**Recent Orders**:\n{orders_block}"
+            )
 
     # 5. Greetings & check-ins
     greeting_phrases = [
@@ -285,13 +306,45 @@ def _fallback_conversational_answer(
             "* **'What was the first order?'** — Origin order and earliest customer\n"
             "* **'What was the latest order?'** — Real-time recent sale and courier status\n"
             "* **'What products should I restock?'** — Safety stock reorder recommendations\n"
-            "* **'Break down our net profit and expenses.'** — Realized vs scheduled cash flow\n"
+            "* **'What is our total revenue and profit?'** — Commercial turnover and gross margins\n"
             "* **'What is our delivery status with Delhivery?'** — Dispatch & in-transit pulse\n"
             "* **'What products do we sell?'** — Overview of active garment collections\n\n"
             "How can I assist your business decisions today?"
         )
 
-    # 6. Product catalog overview ("what products do we sell", "catalog", "garments", "collection")
+    # 6. Total Revenue & Sales Turnover
+    if any(phrase in q_norm for phrase in ["how much revenue", "total revenue", "total sales", "gross sales", "sales turnover", "how much did we make", "overall sales", "total turnover", "revenue"]):
+        total_s = sales.get("total_sales", 0)
+        total_o = sales.get("total_orders", 0)
+        aov = (total_s / total_o) if total_o > 0 else 0
+        monthly_s = sales.get("monthly_sales", 0)
+        prev_monthly_s = sales.get("previous_month_sales", 0)
+        p = profit.get("profit", 0)
+        return (
+            f"### Revenue & Commercial Turnover (REIHH Studio)\n\n"
+            f"* **Gross Lifetime Revenue**: **INR {total_s:,.0f}** across **{total_o} completed orders**\n"
+            f"* **Average Order Value (AOV)**: **INR {aov:,.0f}** per order\n"
+            f"* **Current Month Revenue**: **INR {monthly_s:,.0f}** (vs INR {prev_monthly_s:,.0f} prior month)\n"
+            f"* **Net Estimated Profit**: **INR {p:,.0f}** (after COGS and operating expenses)\n\n"
+            f"You can view complete revenue charts and downloadable CSV statements in the **Reports** section."
+        )
+
+    # 7. Order volume / pipeline count
+    if any(phrase in q_norm for phrase in ["how many order", "total orders", "order count", "number of order"]):
+        total_o = sales.get("total_orders", 0)
+        delivered = order_counts.get("delivered", 0)
+        shipped = order_counts.get("shipped", 0)
+        pending = order_counts.get("confirmed", 0) + order_counts.get("pending", 0)
+        return (
+            f"### Order Volume & Pipeline\n\n"
+            f"* **Total Lifetime Orders**: **{total_o} orders**\n"
+            f"* **Delivered**: **{delivered}** orders safely fulfilled\n"
+            f"* **In Transit (Delhivery)**: **{shipped}** shipments currently out for delivery\n"
+            f"* **Awaiting Dispatch**: **{pending}** orders ready for warehouse pick & pack\n\n"
+            f"You can filter orders by status or print shipping manifests in the **Orders** section."
+        )
+
+    # 8. Product catalog overview ("what products do we sell", "catalog", "garments", "collection")
     if any(w in q_norm for w in ["what products", "list products", "catalog", "show products", "all products", "what clothes", "garments", "apparel", "collection"]):
         if all_products:
             lines = [f"* **{p['name']}** (SKU: `{p['sku']}`) — INR {p['price']:,.0f} | Stock: {p['stock_qty']} units" for p in all_products[:10]]
@@ -301,7 +354,7 @@ def _fallback_conversational_answer(
                 f"\n\nIncludes Womenswear, Menswear, Denim & Tailored Outerwear. You can edit sizing variants, upload high-res images, and update compare-at MRP prices in the **Products** section."
             )
 
-    # 7. Restocking & Inventory priorities
+    # 9. Restocking & Inventory priorities
     if any(w in q_norm for w in ["restock", "buy", "purchase", "reorder", "low stock", "safety stock"]):
         if low_stock:
             lines = [
@@ -319,7 +372,7 @@ def _fallback_conversational_answer(
             "Good news! All active pieces in the REIHH collection currently meet or exceed safety stock thresholds in the Delhi fulfillment center. No urgent reorders are required today."
         )
 
-    # 8. Best sellers & top products
+    # 10. Best sellers & top products
     if any(w in q_norm for w in ["best seller", "top seller", "top product", "fastest", "popular", "selling fastest", "highest sales"]):
         if top_products:
             lines = [
@@ -333,7 +386,7 @@ def _fallback_conversational_answer(
             )
         return "Sales turnover is still accumulating. Check back once more orders are completed."
 
-    # 9. Profit & Expenses Breakdown
+    # 11. Profit & Expenses Breakdown
     if any(w in q_norm for w in ["profit", "cogs", "margin", "expense", "spend", "net profit", "costs", "financial"]):
         total_s = sales.get("total_sales", 0)
         p = profit.get("profit", 0)
@@ -352,7 +405,38 @@ def _fallback_conversational_answer(
             f"\n\n*Note: Future scheduled recurring payments are tracked separately and do not distort current profit figures.*"
         )
 
-    # 10. Delhivery shipping & Logistics pulse
+    # 12. Invoices & Receivables / Outstanding
+    if any(w in q_norm for w in ["invoice", "unpaid", "receivable", "due", "balance", "outstanding"]):
+        return (
+            f"### Invoices & Receivables Overview\n\n"
+            f"* **Outstanding Receivables**: **INR {outstanding:,.0f}** pending customer settlement\n"
+            f"* **GST Invoicing**: 18% standard integrated GST computed automatically on B2B & retail invoices\n"
+            f"* **Payment Channels**: ICICI Bank Transfer, UPI (`reihh.studio@icici`), and Cash on Delivery\n\n"
+            f"You can view, download PDFs, or record payment receipts in the **Invoices** section."
+        )
+
+    # 13. Discount codes / coupons
+    if any(w in q_norm for w in ["discount", "coupon", "promo", "voucher", "reihh10"]):
+        return (
+            f"### Active Promotions & Discount Codes\n\n"
+            f"* **`REIHH10`**: 10% off storewide on all luxury apparel pieces\n"
+            f"* **`WELCOME`**: INR 500 flat welcome credit for new registered clients\n"
+            f"* **`DEMO20`**: 20% promotional discount for VIP and demo checkout runs\n\n"
+            f"Discount codes are auto-applied during storefront checkout and deducted before GST calculations."
+        )
+
+    # 14. Studio location / brand headquarters
+    if any(phrase in q_norm for phrase in ["where are we", "warehouse location", "studio location", "address", "headquarters", "where is reihh", "brand location", "about reihh"]):
+        return (
+            f"### REIHH Studio Brand & Operations Headquarters\n\n"
+            f"* **Atelier & Design HQ**: Okhla Industrial Area Phase III, New Delhi 110020, India\n"
+            f"* **Fulfillment Warehouse**: Central Delhi DC with integrated Delhivery Surface/Air express pickup\n"
+            f"* **Official Website**: [reihh.com](https://reihh.com)\n"
+            f"* **Currency & Tax**: Indian Rupee (`INR / ₹`), GSTIN verified\n"
+            f"* **Specialization**: Luxury contemporary silhouettes, structured tailoring, bespoke womenswear and menswear."
+        )
+
+    # 15. Delhivery shipping & Logistics pulse
     if any(w in q_norm for w in ["delhivery", "shipping", "courier", "delivery", "track", "dispatch", "awb"]):
         delivered = order_counts.get("delivered", 0)
         shipped = order_counts.get("shipped", 0)
@@ -367,7 +451,7 @@ def _fallback_conversational_answer(
             f"You can download and print official Delhivery packing slips with scannable barcodes directly from the **Orders** section."
         )
 
-    # 11. Customer count & VIPs
+    # 16. Customer count & VIPs
     if any(w in q_norm for w in ["how many customer", "customers", "vip", "client", "who buys", "best customer"]):
         lines = [f"* **{c['name']}** ({c.get('tier', 'VIP')}): {c['order_count']} orders (INR {c['total_spent']:,.0f} lifetime spend)" for c in top_customers[:5]]
         return (

@@ -15,10 +15,11 @@ const THREADS = [
 
 const defaultPromptsByThread = {
   general: [
+    'What was the first order?',
     'What was the latest order?',
     'Give me a summary of this month\'s performance.',
     'Who are our best customers by lifetime spend?',
-    'What is our delivery status with Delhivery?',
+    'Where is REIHH Studio located?',
   ],
   inventory: [
     'What products should I buy / restock?',
@@ -27,10 +28,10 @@ const defaultPromptsByThread = {
     'Draft priority replenishment quantities.',
   ],
   financials: [
+    'What is our total revenue and turnover?',
     'Break down our net profit and expenses.',
-    'How were sales this month compared to last month?',
     'What is our gross profit margin after COGS?',
-    'Are recurring commitments inflating current spend?',
+    'Show outstanding receivables and unpaid invoices.',
   ],
   fulfillment: [
     'What is our delivery status with Delhivery?',
