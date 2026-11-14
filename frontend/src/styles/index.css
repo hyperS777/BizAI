@@ -234,18 +234,25 @@ button {
 
 .sidebar {
   width: 244px;
-  background: #fff;
+  background: var(--surface);
   border-right: 1px solid var(--line);
-  padding: 28px 16px 18px;
+  padding: 18px 14px 14px;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0
+  flex-shrink: 0;
+  height: 100vh;
+  box-sizing: border-box;
 }
 
-.sidebar nav {
-  display: grid;
-  gap: 5px;
-  margin-top: 52px
+.sidebar nav,
+.sidebar .shopify-nav {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  margin-top: 0 !important;
+  overflow-y: auto !important;
+  flex: 1 1 auto !important;
+  padding: 2px 0 !important;
 }
 
 .nav-item {
@@ -2671,7 +2678,7 @@ body {
 }
 
 .funnel-container {
-  background: var(--card-bg, #fff);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 20px;
@@ -2704,10 +2711,70 @@ body {
 
 .funnel-bar-track {
   height: 20px;
-  background: var(--bg-hover, #f0f2f1);
+  background: var(--surface-hover);
   border-radius: 4px;
   overflow: hidden;
   position: relative;
+}
+
+[data-theme='dark'] .funnel-container {
+  background: var(--surface) !important;
+  border-color: var(--line) !important;
+  color: var(--ink) !important;
+}
+
+[data-theme='dark'] .funnel-title,
+[data-theme='dark'] .funnel-label,
+[data-theme='dark'] .funnel-count {
+  color: var(--ink) !important;
+}
+
+[data-theme='dark'] .funnel-bar-track {
+  background: #1c2c29 !important;
+}
+
+[data-theme='dark'] .sim-expanded-row td {
+  background: var(--surface-hover) !important;
+}
+
+[data-theme='dark'] .sim-status-badge {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: var(--ink) !important;
+}
+
+[data-theme='dark'] .sim-status-ready_to_pack {
+  background: rgba(26, 86, 219, 0.22) !important;
+  color: #93c5fd !important;
+}
+
+[data-theme='dark'] .sim-status-packed {
+  background: rgba(13, 115, 72, 0.22) !important;
+  color: #86efac !important;
+}
+
+[data-theme='dark'] .sim-status-picked_up {
+  background: rgba(146, 64, 14, 0.22) !important;
+  color: #fde047 !important;
+}
+
+[data-theme='dark'] .sim-status-out_for_delivery {
+  background: rgba(3, 105, 161, 0.22) !important;
+  color: #7dd3fc !important;
+}
+
+[data-theme='dark'] .sim-status-delivered {
+  background: rgba(21, 128, 61, 0.22) !important;
+  color: #86efac !important;
+}
+
+[data-theme='dark'] .sim-status-failed_delivery {
+  background: rgba(185, 28, 28, 0.22) !important;
+  color: #fca5a5 !important;
+}
+
+[data-theme='dark'] .sim-status-returned_to_store {
+  background: rgba(75, 85, 99, 0.22) !important;
+  color: #cbd5e1 !important;
 }
 
 .funnel-bar-fill {

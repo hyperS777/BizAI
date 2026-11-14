@@ -15,17 +15,17 @@ const THREADS = [
 
 const defaultPromptsByThread = {
   general: [
+    'What is expected to perform good next month?',
     'What was the first order?',
     'What was the latest order?',
     'Give me a summary of this month\'s performance.',
     'Who are our best customers by lifetime spend?',
-    'Where is REIHH Studio located?',
   ],
   inventory: [
+    'What is expected to perform good next month?',
     'What products should I buy / restock?',
     'Which products are low in stock right now?',
     'Which garments have the highest velocity?',
-    'Draft priority replenishment quantities.',
   ],
   financials: [
     'What is our total revenue and turnover?',

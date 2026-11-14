@@ -29,7 +29,7 @@ function FunnelBar({ stage, count, pct, prevPct, color = '#203a2b' }) {
         />
       </div>
       <span className="funnel-count">{count.toLocaleString('en-IN')}</span>
-      <span className="funnel-pct" style={{ color: pct > 50 ? '#2d6e43' : pct > 20 ? '#7a5e20' : '#8a3d2c' }}>
+      <span className="funnel-pct" style={{ color: pct > 50 ? 'var(--teal)' : pct > 20 ? 'var(--yellow)' : 'var(--coral)' }}>
         {pct}%
       </span>
     </div>
@@ -281,7 +281,7 @@ export default function Integrations() {
                     stage={row.stage}
                     count={row.count}
                     pct={row.pct}
-                    color={i === 0 ? '#203a2b' : i === 1 ? '#2d6e43' : i === 2 ? '#4a8a5e' : i === 3 ? '#6ba77b' : '#9bccaa'}
+                    color={i === 0 ? '#0e766e' : i === 1 ? '#0d9488' : i === 2 ? '#14b8a6' : i === 3 ? '#2dd4bf' : '#5eead4'}
                   />
                 ))}
               </div>

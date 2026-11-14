@@ -21,17 +21,17 @@ const navGroups = [
     ],
   },
   {
+    title: 'Co-Pilot AI',
+    items: [
+      { label: 'AI Advisor', to: '/ai', icon: Sparkles },
+    ],
+  },
+  {
     title: 'Finances & P&L',
     items: [
       { label: 'Invoices', to: '/invoices', icon: CircleDollarSign, roles: ['admin', 'manager', 'accountant'] },
       { label: 'Expenses', to: '/expenses', icon: Receipt, roles: ['admin', 'manager', 'accountant'] },
       { label: 'Reports', to: '/reports', icon: FileBarChart, roles: ['admin', 'manager', 'accountant'] },
-    ],
-  },
-  {
-    title: 'Co-Pilot AI',
-    items: [
-      { label: 'AI Advisor', to: '/ai', icon: Sparkles, roles: ['admin', 'manager', 'accountant'] },
     ],
   },
   {

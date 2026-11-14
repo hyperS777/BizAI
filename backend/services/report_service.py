@@ -497,6 +497,20 @@ def build_business_snapshot(db: Session) -> dict:
         for r in all_orders_q
     ]
 
+    # Enrich: Storefront visitor engagement & conversion funnel signals
+    storefront_funnel = {}
+    storefront_top_viewed = []
+    try:
+        from services.storefront_service import get_storefront_analytics
+        sf_data = get_storefront_analytics(db, days=30)
+        storefront_funnel = sf_data.get("totals", {})
+        storefront_top_viewed = [
+            {"product_title": p.get("product_title"), "views": p.get("views", 0), "carts": p.get("carts", 0)}
+            for p in sf_data.get("products", [])[:6]
+        ]
+    except Exception:
+        pass
+
     return {
         "metrics": metrics,
         "low_stock": [
@@ -516,4 +530,6 @@ def build_business_snapshot(db: Session) -> dict:
         "all_orders_brief": all_orders_brief,
         "top_customers": top_customers,
         "expense_breakdown": expense_summary.get("by_category", []),
+        "storefront_funnel": storefront_funnel,
+        "storefront_top_viewed": storefront_top_viewed,
     }
