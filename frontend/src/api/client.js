@@ -5,9 +5,16 @@ const API_URL = rawUrl.endsWith('/api') ? rawUrl : `${rawUrl}/api`;
 
 const client = axios.create({
   baseURL: API_URL,
-  timeout: 10000,
+  timeout: 60000, // 60s timeout to allow for Render free-tier cold starts
   headers: { 'Content-Type': 'application/json' },
 });
+
+/** Fire-and-forget background warmup ping to wake up free-tier cloud instances early */
+export function warmupApi() {
+  try {
+    fetch(`${API_URL}/health`, { method: 'GET', keepalive: true }).catch(() => {});
+  } catch {}
+}
 
 client.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');

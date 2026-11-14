@@ -111,6 +111,7 @@ def root():
     return {"message": "Welcome to BizAI API"}
 
 
+@app.get("/health")
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "service": "bizai-api"}

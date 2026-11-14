@@ -1,5 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { warmupApi } from './api/client';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -31,6 +33,10 @@ function ProtectedLayout() {
 }
 
 export default function App() {
+  useEffect(() => {
+    warmupApi();
+  }, []);
+
   return (
     <AuthProvider>
       <Routes>

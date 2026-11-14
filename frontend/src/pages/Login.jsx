@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Box, Check, ChevronRight, Eye, EyeOff } from 'lucide-react';
+import { Box, Check, ChevronRight, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { warmupApi } from '../api/client';
 import { apiError } from '../utils/format';
 
 export default function Login() {
@@ -10,21 +11,37 @@ export default function Login() {
   const [form, setForm] = useState({ email: 'admin@bizai.com', password: 'admin123' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [isWakingUp, setIsWakingUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    warmupApi();
+  }, []);
 
   if (user && !loading) return <Navigate to="/" replace />;
 
   const submit = async (event) => {
     event.preventDefault();
     setBusy(true);
+    setIsWakingUp(false);
     setError('');
+
+    // If request takes longer than 3.5 seconds, notify user that free-tier cloud is cold-starting
+    const wakeTimer = setTimeout(() => {
+      setIsWakingUp(true);
+    }, 3500);
+
     try {
       await login(form.email, form.password);
+      clearTimeout(wakeTimer);
       navigate('/');
     } catch (err) {
-      setError(apiError(err, 'Unable to sign in. Check that the API is running.'));
+      clearTimeout(wakeTimer);
+      setError(apiError(err, 'Server is still waking up from free-tier sleep. Please click Sign in again.'));
     } finally {
+      clearTimeout(wakeTimer);
       setBusy(false);
+      setIsWakingUp(false);
     }
   };
 
@@ -55,6 +72,24 @@ export default function Login() {
             <span className="password-field"><input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} type={showPassword ? 'text' : 'password'} required /><button type="button" className="password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></span>
           </label>
           {error && <p className="error">{error}</p>}
+          {isWakingUp && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '10px 12px',
+              borderRadius: 6,
+              background: 'rgba(14, 118, 110, 0.1)',
+              border: '1px solid rgba(14, 118, 110, 0.25)',
+              fontSize: 12,
+              color: 'var(--teal)',
+              lineHeight: 1.4,
+              marginBottom: 4,
+            }}>
+              <Loader2 size={16} className="spin-animation" style={{ flexShrink: 0 }} />
+              <span>Free-tier cloud server is spinning up from sleep (~30s). Please hold on a moment…</span>
+            </div>
+          )}
           <button className="primary-btn" disabled={busy}>
             {busy ? 'Signing in…' : 'Sign in'} <ChevronRight size={17} />
           </button>
