@@ -587,7 +587,7 @@ export default function Orders() {
             </label>
 
             {/* Line Items with Variant Selector */}
-            <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
+            <div style={{ background: 'var(--panel-alt)', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <strong style={{ fontSize: 13 }}>Line Items &amp; Garments</strong>
                 <button type="button" className="text-btn" onClick={addLine}>+ Add Product Line</button>
@@ -597,7 +597,7 @@ export default function Orders() {
                 const selectedProd = products.find((p) => String(p.id) === String(item.product_id));
                 const variants = selectedProd?.variants || [];
                 return (
-                  <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 70px 100px 24px', gap: 6, alignItems: 'center', marginBottom: 8, background: '#fff', padding: 8, borderRadius: 6, border: '1px solid #e2e8f0' }}>
+                  <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 70px 100px 24px', gap: 6, alignItems: 'center', marginBottom: 8, background: 'var(--surface)', padding: 8, borderRadius: 6, border: '1px solid var(--line)' }}>
                     <select
                       value={item.product_id}
                       onChange={(e) => handleProductSelect(index, e.target.value)}
@@ -695,7 +695,7 @@ export default function Orders() {
             </div>
 
             {/* Pricing Summary */}
-            <div style={{ background: '#f1f5f9', padding: 12, borderRadius: 6, fontSize: 13 }}>
+            <div style={{ background: 'var(--panel-alt)', padding: 12, borderRadius: 6, fontSize: 13, border: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                 <span>Subtotal:</span>
                 <span>{money(subtotal)}</span>
@@ -712,7 +712,7 @@ export default function Orders() {
                   <span>+{money(form.shipping_amount)}</span>
                 </div>
               )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 15, paddingTop: 6, borderTop: '1px solid #cbd5e1' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 15, paddingTop: 6, borderTop: '1px solid var(--line)' }}>
                 <span>Total Due:</span>
                 <span style={{ color: 'var(--teal)' }}>{money(grandTotal)}</span>
               </div>

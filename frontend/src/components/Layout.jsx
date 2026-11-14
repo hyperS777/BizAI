@@ -1,27 +1,48 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle, Bell, Box, Check, CircleDollarSign, ClipboardList, FileBarChart,
+  AlertTriangle, Bell, Check, CircleDollarSign, ClipboardList, FileBarChart,
   LayoutDashboard, LogOut, Menu, Moon, Package, Receipt, Search, Settings,
-  ShoppingBag, Sparkles, Sun, UserRound, Users, Warehouse, X,
+  ShoppingBag, Sparkles, Sun, UserRound, Users, Warehouse, X, ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import client from '../api/client';
+import CommandPalette from './CommandPalette';
 
-const navItems = [
-  { label: 'Dashboard', to: '/', icon: LayoutDashboard },
-  { label: 'Customers', to: '/customers', icon: Users },
-  { label: 'Products', to: '/products', icon: Package },
-  { label: 'Inventory', to: '/inventory', icon: Warehouse },
-  { label: 'Orders', to: '/orders', icon: ClipboardList },
-  { label: 'Customer preview', to: '/store', icon: ShoppingBag },
-  { label: 'Invoices', to: '/invoices', icon: CircleDollarSign, roles: ['admin', 'manager', 'accountant'] },
-  { label: 'Expenses', to: '/expenses', icon: Receipt, roles: ['admin', 'manager', 'accountant'] },
-  { label: 'Reports', to: '/reports', icon: FileBarChart, roles: ['admin', 'manager', 'accountant'] },
-  { label: 'AI Assistant', to: '/ai', icon: Sparkles, roles: ['admin', 'manager', 'accountant'] },
-  { label: 'Integrations', to: '/integrations', icon: Settings, roles: ['admin', 'manager'] },
-  { label: 'Users', to: '/users', icon: UserRound, roles: ['admin'] },
-  { label: 'Settings', to: '/settings', icon: Settings },
+const navGroups = [
+  {
+    title: 'Core Operations',
+    items: [
+      { label: 'Dashboard', to: '/', icon: LayoutDashboard },
+      { label: 'Orders', to: '/orders', icon: ClipboardList },
+      { label: 'Products', to: '/products', icon: Package },
+      { label: 'Inventory', to: '/inventory', icon: Warehouse },
+      { label: 'Customers', to: '/customers', icon: Users },
+    ],
+  },
+  {
+    title: 'Finances & P&L',
+    items: [
+      { label: 'Invoices', to: '/invoices', icon: CircleDollarSign, roles: ['admin', 'manager', 'accountant'] },
+      { label: 'Expenses', to: '/expenses', icon: Receipt, roles: ['admin', 'manager', 'accountant'] },
+      { label: 'Reports', to: '/reports', icon: FileBarChart, roles: ['admin', 'manager', 'accountant'] },
+    ],
+  },
+  {
+    title: 'Co-Pilot AI',
+    items: [
+      { label: 'AI Advisor', to: '/ai', icon: Sparkles, roles: ['admin', 'manager', 'accountant'] },
+    ],
+  },
+  {
+    title: 'Channels & Settings',
+    items: [
+      { label: 'Online Store', to: '/store', icon: ShoppingBag },
+      { label: 'Integrations', to: '/integrations', icon: Settings, roles: ['admin', 'manager'] },
+      { label: 'Settings', to: '/settings', icon: Settings },
+      { label: 'Users & Roles', to: '/users', icon: UserRound, roles: ['admin'] },
+    ],
+  },
 ];
 
 export default function Layout() {
@@ -29,22 +50,20 @@ export default function Layout() {
   const [open, setOpen] = useState(false);
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
-  const [query, setQuery] = useState('');
+  const [commandOpen, setCommandOpen] = useState(false);
   const [dark, setDark] = useState(() => localStorage.getItem('bizai-theme') === 'dark');
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Initialise dark mode from localStorage on mount
   useEffect(() => {
     if (dark) document.documentElement.dataset.theme = 'dark';
-  }, []);
+    else document.documentElement.dataset.theme = 'light';
+  }, [dark]);
 
-  // Load real notifications from backend
   useEffect(() => {
     client.get('/notifications')
       .then((res) => setNotifications(res.data?.items || []))
-      .catch(() => { }); // Silent — notifications are best-effort
-    // Refresh every 2 minutes
+      .catch(() => { });
     const interval = setInterval(() => {
       client.get('/notifications')
         .then((res) => setNotifications(res.data?.items || []))
@@ -60,103 +79,135 @@ export default function Layout() {
     document.documentElement.dataset.theme = next ? 'dark' : 'light';
   };
 
-  const visibleNav = navItems.filter((item) => !item.roles || item.roles.includes(role));
-  const currentPage = visibleNav.find((item) => item.to === location.pathname)?.label || 'Workspace';
-
-  const searchInputRef = useRef(null);
-
-  // Global Ctrl+K / Cmd+K shortcut
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        searchInputRef.current?.focus();
+        setCommandOpen((v) => !v);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const search = (event) => {
-    event.preventDefault();
-    const value = query.trim();
-    if (!value) return;
-    const lower = value.toLowerCase();
-    if (lower.startsWith('ord') || lower.startsWith('#') || !isNaN(value)) {
-      navigate(`/orders?q=${encodeURIComponent(value.replace('#', ''))}`);
-    } else if (location.pathname.startsWith('/customers')) {
-      navigate(`/customers?q=${encodeURIComponent(value)}`);
-    } else if (location.pathname.startsWith('/orders')) {
-      navigate(`/orders?q=${encodeURIComponent(value)}`);
-    } else {
-      navigate(`/products?q=${encodeURIComponent(value)}`);
-    }
-  };
-
+  const allNavItems = navGroups.flatMap((g) => g.items);
+  const currentPage = allNavItems.find((item) => item.to === location.pathname)?.label || 'Workspace';
   const unreadCount = notifications.length;
 
   return (
     <div className="app-shell">
+      <CommandPalette
+        isOpen={commandOpen}
+        onClose={() => setCommandOpen(false)}
+        onToggleTheme={toggleTheme}
+        dark={dark}
+      />
+
       <aside className={open ? 'sidebar open' : 'sidebar'}>
-        <div className="brand-mark"><Box size={20} /> BIZAI</div>
-        <button className="close-nav" onClick={() => setOpen(false)}><X size={20} /></button>
-        <nav>
-          {visibleNav.map(({ label, to, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}
-              onClick={() => setOpen(false)}
-            >
-              <Icon size={18} />
-              {label}
-            </NavLink>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="sidebar-note">
-            <Sparkles size={17} />
-            <span><strong>Workspace status</strong><small>Connected to live data</small></span>
+        <div className="brand-header">
+          <div className="brand-mark">
+            <img src="/reihh-logo.png" alt="REIHH" className="reihh-brand-logo" />
+            <span className="brand-sub-badge">HQ</span>
           </div>
-          <button className="nav-item" onClick={() => { logout(); navigate('/login'); }}>
-            <LogOut size={18} /> Sign out
+          <button className="close-nav" onClick={() => setOpen(false)} aria-label="Close sidebar">
+            <X size={18} />
+          </button>
+        </div>
+
+        <nav className="shopify-nav">
+          {navGroups.map((group) => {
+            const filteredItems = group.items.filter((item) => !item.roles || item.roles.includes(role));
+            if (!filteredItems.length) return null;
+            return (
+              <div key={group.title} className="nav-group-section">
+                <div className="nav-group-title">{group.title}</div>
+                {filteredItems.map(({ label, to, icon: Icon }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={to === '/'}
+                    className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}
+                    onClick={() => setOpen(false)}
+                  >
+                    <Icon size={17} className="nav-icon" />
+                    <span>{label}</span>
+                  </NavLink>
+                ))}
+              </div>
+            );
+          })}
+        </nav>
+
+        <div className="sidebar-bottom">
+          <div className="sidebar-sync-pill">
+            <span className="sync-pulse-dot" />
+            <div className="sync-info">
+              <span className="sync-title">REIHH Live Sync</span>
+              <span className="sync-desc">Catalog · Stock · Delhivery</span>
+            </div>
+          </div>
+          <button className="nav-item signout-btn" onClick={() => { logout(); navigate('/login'); }}>
+            <LogOut size={16} /> Sign out
           </button>
         </div>
       </aside>
+
       <div className="main-area">
         <header className="topbar">
           <button className="menu-btn" onClick={() => setOpen(true)}><Menu size={21} /></button>
-          <form className="search" onSubmit={search} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-            <Search size={17} />
-            <input
-              ref={searchInputRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search products, orders, customers (Ctrl+K)…"
-            />
-          </form>
-          <div className="current-page"><span>Workspace</span><strong>{currentPage}</strong></div>
+
+          <div
+            className="search shopify-spotlight-trigger"
+            onClick={() => setCommandOpen(true)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setCommandOpen(true); }}
+          >
+            <Search size={16} className="spotlight-search-icon" />
+            <span className="spotlight-placeholder">Search products, orders, customers…</span>
+            <kbd className="spotlight-kbd">⌘K</kbd>
+          </div>
+
+          <div className="current-page">
+            <span>Workspace</span>
+            <strong>{currentPage}</strong>
+          </div>
+
           <div className="topbar-actions">
+            <a
+              href="/store"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="storefront-quick-link"
+              title="Open customer storefront in new tab"
+            >
+              <ExternalLink size={14} />
+              <span>Storefront</span>
+            </a>
+
             <button className="icon-btn" aria-label={dark ? 'Use light mode' : 'Use dark mode'} onClick={toggleTheme}>
-              <>{dark ? <Sun size={19} /> : <Moon size={19} />}</>
+              {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
+
             <button
               className="icon-btn"
               aria-label={`Notifications${unreadCount ? ` (${unreadCount})` : ''}`}
               onClick={() => setNoticeOpen((v) => !v)}
             >
-              <Bell size={19} />
-              {unreadCount > 0 && <i style={{ position: 'absolute', width: 6, height: 6, background: 'var(--coral)', borderRadius: '50%', right: 1, top: 0, border: '1px solid var(--surface)' }} />}
+              <Bell size={18} />
+              {unreadCount > 0 && <i className="notif-badge-dot" />}
             </button>
+
             <button className="profile profile-button" onClick={() => navigate('/profile')}>
               <span className="avatar">{user?.full_name?.slice(0, 1) || 'A'}</span>
               <span className="profile-name">
-                {user?.full_name || 'User'}
-                <small>{user?.role?.name || 'Staff'}</small>
+                {user?.full_name || 'System Admin'}
+                <small>{user?.role?.name || role || 'Admin'}</small>
               </span>
             </button>
+
             <span className="live-status"><i /> Live</span>
+
             {noticeOpen && (
               <div className="notification-popover">
                 <strong>Notifications {unreadCount > 0 && <span style={{ color: 'var(--coral)', fontSize: 12 }}>({unreadCount})</span>}</strong>
@@ -182,6 +233,7 @@ export default function Layout() {
             )}
           </div>
         </header>
+
         <main className="content">
           <Outlet />
         </main>

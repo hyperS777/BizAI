@@ -162,7 +162,14 @@ export default function Inventory() {
           >
             <AlertTriangle size={13} />
             {lowOnly ? 'Showing low stock only' : 'Filter: Low stock items'}
-            <span style={{ background: lowOnly ? '#ef4444' : '#e5e7eb', color: lowOnly ? '#fff' : '#374151', padding: '1px 6px', borderRadius: 10, fontSize: 11 }}>
+            <span style={{
+              background: lowOnly ? '#ef4444' : 'var(--surface-hover)',
+              color: lowOnly ? '#fff' : 'var(--ink)',
+              border: lowOnly ? 'none' : '1px solid var(--border)',
+              padding: '1px 6px',
+              borderRadius: 10,
+              fontSize: 11
+            }}>
               {lowStockCount}
             </span>
           </button>

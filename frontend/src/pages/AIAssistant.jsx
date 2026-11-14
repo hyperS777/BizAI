@@ -288,7 +288,13 @@ export default function AIAssistant() {
             <span>{t.icon}</span>
             <span>{t.title}</span>
             {(threadsData[t.id] || []).length > 0 && (
-              <span style={{ fontSize: 10, background: activeThread === t.id ? 'rgba(255,255,255,0.25)' : '#e5e7eb', padding: '1px 5px', borderRadius: 8 }}>
+              <span style={{
+                fontSize: 10,
+                background: activeThread === t.id ? 'rgba(255,255,255,0.25)' : 'var(--surface-hover)',
+                color: activeThread === t.id ? '#fff' : 'var(--muted)',
+                padding: '1px 6px',
+                borderRadius: 8
+              }}>
                 {threadsData[t.id].length}
               </span>
             )}

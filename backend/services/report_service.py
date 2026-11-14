@@ -429,6 +429,74 @@ def build_business_snapshot(db: Session) -> dict:
     # Enrich: expense breakdown by category (realized only)
     expense_summary = get_expense_summary(db)
 
+    # Enrich: first order ever recorded
+    first_order_q = (
+        db.query(Order, Customer.name.label("customer_name"))
+        .join(Customer, Customer.id == Order.customer_id)
+        .order_by(Order.created_at.asc())
+        .first()
+    )
+    first_order_detail = None
+    if first_order_q:
+        fo, fo_cust = first_order_q
+        fo_items_q = (
+            db.query(OrderItem.quantity, Product.name.label("product_name"))
+            .join(Product, Product.id == OrderItem.product_id)
+            .filter(OrderItem.order_id == fo.id)
+            .all()
+        )
+        fo_items_summary = ", ".join(f"{item.quantity}x {item.product_name}" for item in fo_items_q[:3])
+        first_order_detail = {
+            "order_number": fo.order_number,
+            "customer": fo_cust,
+            "status": fo.status,
+            "total": float(fo.total_amount or 0),
+            "date": fo.created_at.strftime("%d %b %Y") if fo.created_at else "N/A",
+            "items_summary": fo_items_summary or "No items",
+        }
+
+    # Enrich: full active product catalog
+    all_products_q = (
+        db.query(Product)
+        .filter(Product.is_active == True)
+        .order_by(Product.name.asc())
+        .all()
+    )
+    all_products_catalog = [
+        {
+            "name": p.name,
+            "sku": p.sku,
+            "price": float(p.price or 0),
+            "cost_price": float(p.cost_price or 0),
+            "stock_qty": int(p.stock_qty or 0),
+            "min_stock_level": int(p.min_stock_level or 0),
+        }
+        for p in all_products_q
+    ]
+
+    # Enrich: order status counts
+    status_counts_rows = db.query(Order.status, func.count(Order.id)).group_by(Order.status).all()
+    order_status_counts = {str(r[0]): int(r[1]) for r in status_counts_rows}
+
+    # Enrich: all orders summary list for full database lookups
+    all_orders_q = (
+        db.query(Order.order_number, Customer.name.label("customer_name"), Order.total_amount, Order.status, Order.created_at)
+        .join(Customer, Customer.id == Order.customer_id)
+        .order_by(Order.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    all_orders_brief = [
+        {
+            "order_number": r[0],
+            "customer": r[1],
+            "total": float(r[2] or 0),
+            "status": r[3],
+            "date": r[4].strftime("%d %b %Y") if r[4] else "N/A",
+        }
+        for r in all_orders_q
+    ]
+
     return {
         "metrics": metrics,
         "low_stock": [
@@ -442,6 +510,10 @@ def build_business_snapshot(db: Session) -> dict:
         ],
         "outstanding_payments": outstanding,
         "recent_orders_detail": recent_orders_detail,
+        "first_order_detail": first_order_detail,
+        "all_products_catalog": all_products_catalog,
+        "order_status_counts": order_status_counts,
+        "all_orders_brief": all_orders_brief,
         "top_customers": top_customers,
         "expense_breakdown": expense_summary.get("by_category", []),
     }

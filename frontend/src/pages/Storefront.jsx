@@ -1066,7 +1066,10 @@ export default function Storefront() {
           <a href="/integrations" target="_blank" rel="noreferrer">Merchant Analytics</a>
           <a href="/orders" target="_blank" rel="noreferrer">Orders</a>
         </div>
-        <a href="/store/demo" className="store-wordmark">REIHH<span>STUDIO</span></a>
+        <a href="/store/demo" className="store-wordmark" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <img src="/reihh-logo.png" alt="REIHH" style={{ height: 24, width: 'auto', filter: 'brightness(0)' }} />
+          <span>STUDIO</span>
+        </a>
         <button className="store-cart-button" onClick={() => { setDrawerTab('bag');
     setCartOpen(true); if (checkoutStep !== 0 && checkoutStep !== 3) setCheckoutStep(0); }}>
           <div className="cart-btn-inner">

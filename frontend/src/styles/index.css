@@ -7,6 +7,7 @@
   --surface: #fff;
   --surface-hover: #f1f5f3;
   --border: #e4eae7;
+  --panel-alt: #f8fafc;
   --line: #e4eae7;
   --teal: #0e766e;
   --teal-dark: #095b55;
@@ -1451,7 +1452,10 @@ select {
   --muted: #9aacaa;
   --paper: #101918;
   --surface: #172422;
-  --line: #2b3d39
+  --surface-hover: #213330;
+  --border: #2b3d39;
+  --panel-alt: #1c2b28;
+  --line: #2b3d39;
 }
 
 [data-theme='dark'] .sidebar,
@@ -2177,6 +2181,9 @@ body {
   --muted: #9aa9a5;
   --paper: #101514;
   --surface: #181e1d;
+  --surface-hover: #222b2a;
+  --border: #303a37;
+  --panel-alt: #1d2524;
   --line: #303a37;
   --teal: #4fc0ad;
   --teal-dark: #2d8f80;
@@ -3486,6 +3493,44 @@ body {
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.reihh-brand-logo {
+  height: 24px;
+  width: auto;
+  max-width: 140px;
+  object-fit: contain;
+  filter: brightness(0);
+  transition: filter 0.15s ease;
+}
+
+[data-theme='dark'] .reihh-brand-logo {
+  filter: brightness(1);
+}
+
+.brand-sub-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(14, 118, 110, 0.1);
+  color: var(--teal);
+  border: 1px solid rgba(14, 118, 110, 0.2);
+  line-height: 1;
+}
+
+[data-theme='dark'] .brand-sub-badge {
+  background: rgba(79, 192, 173, 0.15);
+  color: #5eead4;
+  border-color: rgba(79, 192, 173, 0.3);
+}
+
+[data-theme='dark'] .notice {
+  background: #2b1714;
+  border-color: #4a241e;
+  color: #fca5a5;
 }
 
 /* 3. Grouped Shopify Navigation */

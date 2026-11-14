@@ -293,7 +293,7 @@ export default function Invoices() {
               />
             </label>
 
-            <div style={{ background: '#f8fafc', padding: 10, borderRadius: 6, fontSize: 12, color: 'var(--muted)' }}>
+            <div style={{ background: 'var(--panel-alt)', border: '1px solid var(--border)', padding: 10, borderRadius: 6, fontSize: 12, color: 'var(--muted)' }}>
               GST Note: Automatically computes 18% GST (9% CGST + 9% SGST) breakdown and issues an official tax invoice.
             </div>
 
@@ -308,7 +308,7 @@ export default function Invoices() {
       {paymentModal && (
         <Modal title={`Record Payment · #${paymentModal.invoice_number}`} onClose={() => setPaymentModal(null)}>
           <form className="stack-form" onSubmit={handleRecordPayment}>
-            <div style={{ background: '#f8fafc', padding: 10, borderRadius: 6, marginBottom: 10 }}>
+            <div style={{ background: 'var(--panel-alt)', border: '1px solid var(--border)', padding: 10, borderRadius: 6, marginBottom: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
                 <span>Invoice Total:</span>
                 <strong>{money(paymentModal.total_amount)}</strong>

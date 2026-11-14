@@ -1,6 +1,6 @@
 """
 Pluggable AI assistant grounded in live business records with multi-turn conversational context.
-Supports Gemini (primary), Groq (secondary), and a rich rule-based fallback.
+Supports Gemini (primary), Groq (secondary), and a rich intelligent business NLP engine.
 """
 
 from datetime import datetime
@@ -14,6 +14,10 @@ from sqlalchemy.orm import Session
 from config import settings
 from models.ai_query import AIQuery
 from models.user import User
+from models.integration import AppSetting
+from models.order import Order as OrderModel, OrderItem as OrderItemModel
+from models.customer import Customer as CustomerModel
+from models.product import Product as ProductModel
 from services.report_service import build_business_snapshot
 
 logger = logging.getLogger("bizai.ai")
@@ -23,31 +27,59 @@ def _format_inr(val: float) -> str:
     return f"INR {val:,.0f}"
 
 
-def _sanitize_input(query: str) -> tuple[str, set[str]]:
-    """Clean query string by removing surrounding brackets, quotes, and punctuation."""
+def _sanitize_input(query: str) -> tuple[str, str, set[str]]:
+    """Clean query string and apply fuzzy typo normalization."""
     clean = re.sub(r'^[\[\(\{<"\'\s]+|[\]\)\}<>"\'\s]+$', '', query).strip()
     norm = re.sub(r'[^a-zA-Z0-9\s]', ' ', clean).lower()
+    
+    # Fuzzy typo corrections for high-frequency business terms
+    norm = re.sub(r'\borde+r+s?\b', 'order', norm)
+    norm = re.sub(r'\b(frst|firts|firstt|1st)\b', 'first', norm)
+    norm = re.sub(r'\b(latst|lastt|newst)\b', 'latest', norm)
+    norm = re.sub(r'\bcust[o0]?m[e3]r?s?\b', 'customer', norm)
+    norm = re.sub(r'\bpr[o0]d[u0]ct?s?\b', 'product', norm)
+    norm = re.sub(r'\bdelhiv[e3]ry\b', 'delhivery', norm)
+    norm = re.sub(r'\bshipp?in[g]?\b', 'shipping', norm)
+    norm = re.sub(r'\bprof?i[t]?s?\b', 'profit', norm)
+    norm = re.sub(r'\bexpens[e3]s?\b', 'expense', norm)
+    norm = re.sub(r'\brest[o0]ck\b', 'restock', norm)
+
     words = set(norm.split())
-    return clean.lower(), words
+    return clean.lower(), norm, words
 
 
 def _build_system_prompt(snapshot: dict) -> str:
-    """Build a rich system prompt with live business data for the LLM."""
+    """Build a rich system prompt with full business database context for the LLM."""
     metrics = snapshot.get("metrics", {})
     sales = metrics.get("sales_summary", {})
     profit = metrics.get("revenue_profit", {})
     top_products = metrics.get("top_products", [])
     low_stock = snapshot.get("low_stock", [])
     recent_orders = snapshot.get("recent_orders_detail", [])
+    first_order = snapshot.get("first_order_detail")
+    all_products = snapshot.get("all_products_catalog", [])
+    order_counts = snapshot.get("order_status_counts", {})
     top_customers = snapshot.get("top_customers", [])
     expense_breakdown = snapshot.get("expense_breakdown", [])
     outstanding = snapshot.get("outstanding_payments", 0)
 
-    # Build human-readable data sections
-    orders_text = "\n".join(
+    # First and latest order strings
+    first_order_text = (
+        f"Order #{first_order['order_number']} | Customer: {first_order['customer']} | "
+        f"Total: INR {first_order['total']:,.0f} | Date: {first_order['date']} | Status: {first_order['status'].upper()} | "
+        f"Items: {first_order['items_summary']}"
+        if first_order else "No first order on record."
+    )
+
+    recent_orders_text = "\n".join(
         f"  - {o['order_number']} | {o['customer']} | {o['status'].upper()} | INR {o['total']:,.0f} | {o['date']} | {o['items_summary']}"
-        for o in recent_orders[:8]
+        for o in recent_orders[:10]
     ) or "  No recent orders."
+
+    products_text = "\n".join(
+        f"  - {p['name']} (SKU: {p['sku']}): INR {p['price']:,.0f} (Stock: {p['stock_qty']} units)"
+        for p in all_products[:25]
+    ) or "  No catalog data."
 
     top_products_text = "\n".join(
         f"  - {p['name']}: {p.get('total_quantity', 0)} units sold, INR {p.get('total_revenue', 0):,.0f} revenue"
@@ -55,63 +87,78 @@ def _build_system_prompt(snapshot: dict) -> str:
     ) or "  No sales data yet."
 
     low_stock_text = "\n".join(
-        f"  - {item['name']} (SKU: {item['sku']}): {item['stock_qty']} left (min: {item['min_stock_level']})"
-        for item in low_stock[:5]
-    ) or "  All items above safety stock."
+        f"  - {item['name']} (SKU: {item['sku']}): {item['stock_qty']} left (min safety buffer: {item['min_stock_level']})"
+        for item in low_stock[:6]
+    ) or "  All active items meet or exceed safety stock thresholds."
 
     customers_text = "\n".join(
-        f"  - {c['name']}: {c['order_count']} orders, INR {c['total_spent']:,.0f} lifetime spend"
-        for c in top_customers[:5]
+        f"  - {c['name']} ({c.get('tier', 'Regular')}): {c['order_count']} orders, INR {c['total_spent']:,.0f} lifetime spend"
+        for c in top_customers[:6]
     ) or "  No customer data."
 
     expense_text = "\n".join(
-        f"  - {e['category']}: INR {e['total']:,.0f} ({e['count']} entries)"
+        f"  - {e['category']}: INR {e['total']:,.0f} ({e['count']} transactions)"
         for e in expense_breakdown[:6]
     ) or "  No expense data."
 
-    return f"""You are BizAI, the intelligent business co-pilot for REIHH Studio — a premium Indian fashion and apparel brand.
+    status_text = ", ".join(f"{k.capitalize()}: {v}" for k, v in order_counts.items()) or "Synchronized"
 
-You have LIVE access to their business database. Answer questions conversationally, helpfully, and accurately using ONLY the data below. Be friendly and concise. Use markdown formatting (bold, bullet points, headers).
+    return f"""You are BizAI, the intelligent business co-pilot and commercial advisor for REIHH Studio — a luxury Indian fashion and apparel house based in New Delhi.
 
-When someone greets you (hi, hello, how are you), respond warmly and conversationally — do NOT dump statistics. When they ask general questions, give a helpful, natural answer. When they ask specific business questions, ground your answer in the data below.
+You have LIVE access to the entire business database (orders, catalog, inventory, expenses, customer ledger, Delhivery courier tracking, profit & loss). Answer questions conversationally, helpfully, and accurately using the live data below. You know everything about the site and business operations.
 
-=== LIVE BUSINESS DATA ===
+=== LIVE BUSINESS DATABASE SNAPSHOT ===
 
-FINANCIAL OVERVIEW:
-- Total Revenue: INR {sales.get('total_sales', 0):,.0f} across {sales.get('total_orders', 0)} orders
+BRAND: REIHH Studio (HQ: Okhla Phase III, New Delhi)
+CHANNEL: Luxury Womenswear, Menswear, Premium Denim & Tailored Outerwear
+
+FINANCIAL PERFORMANCE:
+- Total Sales: INR {sales.get('total_sales', 0):,.0f} across {sales.get('total_orders', 0)} orders
 - This Month Sales: INR {sales.get('monthly_sales', 0):,.0f} ({sales.get('monthly_orders', 0)} orders)
-- Last Month Sales: INR {sales.get('previous_month_sales', 0):,.0f}
+- Previous Month Sales: INR {sales.get('previous_month_sales', 0):,.0f}
 - Net Profit: INR {profit.get('profit', 0):,.0f}
-- COGS: INR {profit.get('cogs', 0):,.0f}
-- Realized Expenses: INR {profit.get('expenses', 0):,.0f}
-- Scheduled Future Expenses: INR {profit.get('scheduled_expenses', 0):,.0f} (not deducted from profit yet)
+- Cost of Goods Sold (COGS): INR {profit.get('cogs', 0):,.0f}
+- Realized Operating Expenses: INR {profit.get('expenses', 0):,.0f}
+- Upcoming Scheduled Recurring Commitments: INR {profit.get('scheduled_expenses', 0):,.0f} (tracked separately, not deducted from current profit)
 - Outstanding Receivables: INR {outstanding:,.0f}
-- Customers: {sales.get('total_customers', 0)}
+- Total Customers: {sales.get('total_customers', 0)}
 
-TOP SELLING PRODUCTS:
+FIRST EVER ORDER RECORDED:
+{first_order_text}
+
+RECENT ORDERS (newest first):
+{recent_orders_text}
+
+ORDER STATUSES: {status_text}
+
+TOP REVENUE GENERATING GARMENTS:
 {top_products_text}
+
+ACTIVE APPAREL CATALOG:
+{products_text}
 
 LOW STOCK ALERTS:
 {low_stock_text}
 
-RECENT 10 ORDERS (newest first):
-{orders_text}
-
-TOP CUSTOMERS BY SPEND:
+TOP VIP & WHOLESALE CUSTOMERS:
 {customers_text}
 
-EXPENSE BREAKDOWN (realized only):
+OPERATING EXPENSES (REALIZED):
 {expense_text}
 
-FULFILLMENT: Delhivery Express courier integration. Orders can be tracked at https://www.delhivery.com/track/package/[waybill]
-=== END LIVE DATA ===
+COURIER / LOGISTICS:
+- Partner: Delhivery Express (Air & Surface)
+- Packing Slips: Formal warehouse packing slips with scannable Delhivery AWB barcodes are auto-generated.
+- Tracking portal: https://www.delhivery.com/track/package/[waybill]
+=== END DATABASE SNAPSHOT ===
 
-Rules:
-1. Never invent numbers not in the data above.
-2. If asked something not in the data, say so honestly and suggest what you CAN help with.
-3. For greetings/casual chat, respond naturally and warmly.
-4. Format numbers in Indian Rupee style (INR X,XX,XXX).
-5. Be concise — avoid walls of text unless explicitly asked for a report.
+GUIDELINES:
+1. Always ground your facts in the database numbers above. Never invent fake revenue or non-existent orders.
+2. For greetings ("hi", "hello"), reply with warm sophistication and suggest 3 high-impact questions.
+3. If asked about the first order, cite the exact order number, customer name, date, items, and total from the first order data above.
+4. If asked about logistics, summarize Delhivery delivery statuses and tracking.
+5. If asked for business or marketing advice, provide strategic, apparel-focused insights (pricing, safety buffer restocking, margin optimization).
+6. Use markdown formatting (bolding, headers, bullet points).
 """
 
 
@@ -119,354 +166,232 @@ def _fallback_conversational_answer(
     query: str,
     snapshot: dict,
     conversation_history: Optional[List[Dict[str, Any]]] = None,
+    db: Optional[Session] = None,
 ) -> str:
     """
-    Rich rule-based NLP engine. Covers 20+ intent categories.
-    Used when no LLM key is configured.
+    Rich intelligent fallback NLP engine.
+    Comprehensive coverage across orders, customers, catalog, finances, logistics, and business strategy.
     """
     metrics = snapshot.get("metrics", {})
     sales = metrics.get("sales_summary", {})
     profit = metrics.get("revenue_profit", {})
     top_products = metrics.get("top_products", [])
-    bottom_products = metrics.get("bottom_products", [])
     low_stock = snapshot.get("low_stock", [])
-    outstanding = snapshot.get("outstanding_payments", 0.0)
     recent_orders = snapshot.get("recent_orders_detail", [])
+    first_order = snapshot.get("first_order_detail")
+    all_products = snapshot.get("all_products_catalog", [])
+    order_counts = snapshot.get("order_status_counts", {})
     top_customers = snapshot.get("top_customers", [])
     expense_breakdown = snapshot.get("expense_breakdown", [])
 
-    q, words = _sanitize_input(query)
+    clean, q_norm, words = _sanitize_input(query)
 
-    # --- 1. Greetings & casual check-ins ---
-    greeting_phrases = [
-        "good morning", "good afternoon", "good evening", "how are you", "how u doing",
-        "how are u", "hows it going", "how's it going", "how do you do", "who are you",
-        "what can you do", "whats up", "what's up", "wassup",
-    ]
-    greeting_words = {"hello", "hi", "hey", "hola", "help", "greetings", "yo", "sup", "namaste"}
+    # 1. First order / earliest order (handles typos like "ordeer", "frst")
+    if (
+        "first order" in q_norm
+        or "earliest order" in q_norm
+        or "initial order" in q_norm
+        or "oldest order" in q_norm
+        or "order 1" in q_norm
+        or "order #1" in q_norm
+        or "first sale" in q_norm
+        or "first purchase" in q_norm
+        or (("first" in q_norm or "earliest" in q_norm or "initial" in q_norm or "oldest" in q_norm) and "order" in q_norm)
+        or "who made the first" in q_norm
+        or "who placed the first" in q_norm
+        or "who was the first customer" in q_norm
+    ):
+        if first_order:
+            return (
+                f"### First Order Recorded (REIHH Studio)\n\n"
+                f"* **Order #**: `{first_order['order_number']}`\n"
+                f"* **Customer**: **{first_order['customer']}**\n"
+                f"* **Status**: {first_order['status'].upper()}\n"
+                f"* **Total Value**: INR {first_order['total']:,.0f}\n"
+                f"* **Date**: {first_order['date']}\n"
+                f"* **Items Purchased**: {first_order['items_summary']}\n\n"
+                f"This was the very first commercial order booked into REIHH's operations! Would you like details on subsequent orders or customer history?"
+            )
+        return "No orders have been recorded in the database yet."
 
-    if any(g in q for g in greeting_phrases) or (words & greeting_words):
-        is_check_in = any(x in q for x in ["how are you", "how u doing", "how are u", "hows it going", "how's it going", "whats up", "what's up", "sup"])
-        opener = (
-            "Hey! I'm doing great, thanks for asking! Business is running.\n\n"
-            if is_check_in
-            else "Hello! I'm **BizAI**, your business co-pilot for REIHH Studio.\n\n"
-        )
-        return (
-            f"{opener}"
-            "I have live access to your orders, inventory, customers, expenses, and Delhivery shipments. Try asking:\n"
-            "* **'What was the latest order?'** — Order details with customer and items\n"
-            "* **'Which products should I restock?'** — Priority reorder list\n"
-            "* **'How are sales this month?'** — Revenue and growth trends\n"
-            "* **'Who are our best customers?'** — Customer rankings\n"
-            "* **'Break down our expenses.'** — Financial health check\n\n"
-            "What would you like to know?"
-        )
-
-    # --- 2. Multiple / recent orders list ("recent orders", "show orders", "list orders", "all orders") ---
-    if (("show" in q or "list" in q or "all" in q) and "order" in q) or "recent orders" in q or "last orders" in q:
-        if not recent_orders:
-            return "No orders have been placed yet."
-        lines = []
-        for o in recent_orders[:6]:
-            lines.append(f"* **{o['order_number']}** — {o['customer']} — {o['status'].upper()} — INR {o['total']:,.0f} ({o['date']})")
-        return f"### Recent Orders\n\n" + "\n".join(lines) + "\n\nView the full list in the **Orders** tab."
-
-    # --- 3. Single latest / last order query ("latest order", "last order", "newest order") ---
-    if any(phrase in q for phrase in ["latest order", "last order", "most recent order", "recent order", "newest order", "first order", "what was the order"]):
+    # 2. Latest order / most recent order
+    if (
+        "latest order" in q_norm
+        or "last order" in q_norm
+        or "newest order" in q_norm
+        or "most recent order" in q_norm
+        or (("latest" in q_norm or "newest" in q_norm) and "order" in q_norm)
+    ):
         if recent_orders:
             o = recent_orders[0]
             return (
-                f"### Most Recent Order\n\n"
-                f"* **Order #**: {o['order_number']}\n"
-                f"* **Customer**: {o['customer']}\n"
+                f"### Most Recent Order (REIHH Studio)\n\n"
+                f"* **Order #**: `{o['order_number']}`\n"
+                f"* **Customer**: **{o['customer']}**\n"
                 f"* **Status**: {o['status'].upper()}\n"
-                f"* **Total**: INR {o['total']:,.0f}\n"
+                f"* **Total Amount**: INR {o['total']:,.0f}\n"
                 f"* **Date**: {o['date']}\n"
                 f"* **Items**: {o['items_summary']}\n\n"
-                f"Want to see more recent orders or the full order list?"
+                f"You can view tracking or print Delhivery packing slips in the **Orders** section."
             )
         return "No orders found in the database yet."
 
-    # --- 4. Order count / orders summary ---
-    if any(phrase in q for phrase in ["how many orders", "total orders", "order count", "orders summary", "number of orders"]):
-        total_o = sales.get("total_orders", 0)
-        m_orders = sales.get("monthly_orders", 0)
-        m_sales = _format_inr(sales.get("monthly_sales", 0))
+    # 3. Direct Order lookup by order number (e.g. ORD-REIHH-010, #ORD-..., ORD-...)
+    ord_match = re.search(r'\b(ORD-[A-Z0-9-]+)\b', query, re.IGNORECASE)
+    if ord_match and db:
+        ord_num = ord_match.group(1).upper()
+        ord_rec = db.query(OrderModel).filter(OrderModel.order_number == ord_num).first()
+        if ord_rec:
+            items = db.query(OrderItemModel).filter(OrderItemModel.order_id == ord_rec.id).all()
+            items_str = ", ".join(f"{it.quantity}x {it.product.name if it.product else 'Garment'}" for it in items)
+            return (
+                f"### Order Details: {ord_rec.order_number}\n\n"
+                f"* **Customer**: {ord_rec.customer.name if ord_rec.customer else 'Guest'}\n"
+                f"* **Status**: {ord_rec.status.upper()}\n"
+                f"* **Total**: INR {ord_rec.total_amount:,.0f}\n"
+                f"* **Items**: {items_str or 'No items'}\n"
+                f"* **Date**: {ord_rec.created_at.strftime('%d %b %Y, %I:%M %p') if ord_rec.created_at else 'N/A'}\n"
+                f"* **Carrier**: {ord_rec.tracking_company or 'Delhivery Express'} ({ord_rec.tracking_number or 'AWB pending'})\n"
+                f"* **Shipping Destination**: {ord_rec.shipping_address or (ord_rec.customer.address if ord_rec.customer else 'Delhi, India')}\n"
+            )
+
+    # 4. Customer profile lookup (e.g. "who is Amber Abbas?", "orders of Amber", "tell me about customer Ramji")
+    if db and any(w in q_norm for w in ["who is", "customer", "client", "buyer", "orders of", "spent"]):
+        for c in db.query(CustomerModel).all():
+            if c.name and c.name.lower() in q_norm:
+                c_orders = db.query(OrderModel).filter(OrderModel.customer_id == c.id).order_by(OrderModel.created_at.desc()).all()
+                orders_line = ", ".join(f"`{o.order_number}` (INR {o.total_amount:,.0f})" for o in c_orders[:4]) or "No orders yet"
+                return (
+                    f"### Customer Dossier: {c.name}\n\n"
+                    f"* **Client Tier**: **{c.tier or 'Regular'}**\n"
+                    f"* **Contact**: {c.email or 'No email'} · {c.phone or 'No phone'}\n"
+                    f"* **Lifetime Orders**: {len(c_orders)} orders\n"
+                    f"* **Recent Orders**: {orders_line}\n"
+                    f"* **Outstanding Balance**: INR {c.outstanding_balance or 0:,.0f}\n"
+                    f"* **Delivery Address**: {c.address or 'Delhi NCR, India'}\n"
+                    f"* **Notes & Fit**: {c.notes or 'No special fit preferences on file'}\n"
+                )
+
+    # 5. Greetings & check-ins
+    greeting_phrases = [
+        "good morning", "good afternoon", "good evening", "how are you", "how u doing",
+        "how are u", "hows it going", "how's it going", "who are you", "what can you do", "whats up",
+    ]
+    greeting_words = {"hello", "hi", "hey", "namaste", "help", "greetings"}
+    if any(g in q_norm for g in greeting_phrases) or (words & greeting_words):
         return (
-            f"### Orders Overview\n\n"
-            f"* **Lifetime Orders**: {total_o} placed\n"
-            f"* **This Month**: {m_orders} orders totaling {m_sales}\n"
-            f"* **Fulfillment**: Synchronized with Delhivery Express\n"
+            "Hello! I am **BizAI**, your intelligent business co-pilot for REIHH Studio.\n\n"
+            "I have live database access to your complete apparel catalog, customer ledger, Delhivery courier dispatches, and profit margins. Here are specific things you can ask me:\n"
+            "* **'What was the first order?'** — Origin order and earliest customer\n"
+            "* **'What was the latest order?'** — Real-time recent sale and courier status\n"
+            "* **'What products should I restock?'** — Safety stock reorder recommendations\n"
+            "* **'Break down our net profit and expenses.'** — Realized vs scheduled cash flow\n"
+            "* **'What is our delivery status with Delhivery?'** — Dispatch & in-transit pulse\n"
+            "* **'What products do we sell?'** — Overview of active garment collections\n\n"
+            "How can I assist your business decisions today?"
         )
 
-    # --- 5. Order status / what order is ... ---
-    order_num_match = re.search(r'\b(ord[-\s]?\d+|#?\d{3,})\b', q)
-    if order_num_match and "order" in q:
-        num = order_num_match.group(1).replace(" ", "").upper()
-        matched = next((o for o in recent_orders if num in o["order_number"].upper()), None)
-        if matched:
-            o = matched
+    # 6. Product catalog overview ("what products do we sell", "catalog", "garments", "collection")
+    if any(w in q_norm for w in ["what products", "list products", "catalog", "show products", "all products", "what clothes", "garments", "apparel", "collection"]):
+        if all_products:
+            lines = [f"* **{p['name']}** (SKU: `{p['sku']}`) — INR {p['price']:,.0f} | Stock: {p['stock_qty']} units" for p in all_products[:10]]
             return (
-                f"### Order {o['order_number']}\n\n"
-                f"* **Customer**: {o['customer']}\n"
-                f"* **Status**: {o['status'].upper()}\n"
-                f"* **Total**: INR {o['total']:,.0f}\n"
-                f"* **Date**: {o['date']}\n"
-                f"* **Items**: {o['items_summary']}\n"
+                f"### REIHH Studio Active Collection ({len(all_products)} Styles)\n\n"
+                + "\n".join(lines) +
+                f"\n\nIncludes Womenswear, Menswear, Denim & Tailored Outerwear. You can edit sizing variants, upload high-res images, and update compare-at MRP prices in the **Products** section."
             )
-        return f"I couldn't find an order matching '{num}' in recent records. Check the **Orders** tab for the full list."
 
-    # --- 6. Purchasing / Restocking ---
-    if (
-        (("what" in q or "which" in q or "suggest" in q) and "buy" in q)
-        or "should i buy" in q
-        or "should we buy" in q
-        or "restock" in q
-        or "reorder" in q
-        or "stock up" in q
-        or ("recommend" in q and "product" in q)
-    ):
-        advice_parts = []
+    # 7. Restocking & Inventory priorities
+    if any(w in q_norm for w in ["restock", "buy", "purchase", "reorder", "low stock", "safety stock"]):
         if low_stock:
-            advice_parts.append("### Urgent Restock Recommendations")
-            advice_parts.append("These items are running low in your Delhi fulfillment center:")
-            for item in low_stock[:4]:
-                current = item.get("stock_qty", 0)
-                min_lvl = item.get("min_stock_level", 4)
-                suggested = max(min_lvl * 4, 25)
-                advice_parts.append(
-                    f"* **{item['name']}** (SKU: `{item['sku']}`): {current} units left (min: {min_lvl}) — *Reorder at least {suggested} units*"
-                )
-        else:
-            advice_parts.append("### Inventory Status")
-            advice_parts.append("All REIHH pieces currently meet safety stock thresholds. No urgent reorders required today.")
-
-        valid_top = [p for p in top_products if (p.get("total_quantity") or 0) > 0]
-        if valid_top:
-            advice_parts.append("\n### Top-Selling Products (Demand-Based Restock)")
-            for p in valid_top[:3]:
-                qty = p.get("total_quantity", 0)
-                rev = _format_inr(p.get("total_revenue", 0))
-                advice_parts.append(f"* **{p['name']}**: {qty} units sold ({rev})")
-            advice_parts.append(f"\n**Recommendation**: Keep buffer stock for **{valid_top[0]['name']}** to sustain momentum.")
-        else:
-            advice_parts.append("\n**Tip**: Focus marketing on the *Arden Grey Wash Jacket* and *Alba Straight Fit Denim* to drive initial collection volume.")
-
-        return "\n".join(advice_parts)
-
-    # --- 7. Specific product query ---
-    if ("product" in q or "item" in q or "stock" in q or "inventory" in q) and not any(x in q for x in ["buy", "restock", "reorder"]):
-        # Low stock check
-        if "low" in q or "out of" in q or "running out" in q:
-            if not low_stock:
-                return "All products are above their safety stock thresholds right now."
-            items_text = "\n".join(
-                f"* **{item['name']}**: {item['stock_qty']} in stock (min: {item['min_stock_level']})"
-                for item in low_stock
-            )
-            return f"### {len(low_stock)} Low-Stock Alert(s)\n\n{items_text}"
-
-        # General inventory question
-        total_prods = metrics.get("inventory_summary", {}).get("total_products", 0)
-        low_count = metrics.get("inventory_summary", {}).get("low_stock_products", 0)
-        return (
-            f"### Inventory Overview\n\n"
-            f"* **Active Products**: {total_prods} in catalog\n"
-            f"* **Low Stock**: {low_count} items below safety level\n"
-            f"* **Fulfillment Hub**: REIHH Studio, Delhi NCR\n\n"
-            "Ask me which products to restock or view top sellers!"
-        )
-
-    # --- 8. Best / top / fastest selling ---
-    if any(w in q for w in ["best", "fastest", "top sell", "selling", "popular", "most sold"]) and "customer" not in q:
-        valid_top = [p for p in top_products if (p.get("total_quantity") or 0) > 0]
-        if not valid_top:
-            return "Sales data is still accumulating — no best sellers to rank yet. Check back after more orders come in."
-        lines = "\n".join(
-            f"* **{item['name']}**: {item.get('total_quantity', 0)} units ({_format_inr(item.get('total_revenue', 0))})"
-            for item in valid_top[:4]
-        )
-        return f"### Top-Performing REIHH Products\n\n{lines}"
-
-    # --- 9. Worst / slowest selling ---
-    if any(w in q for w in ["least", "worst", "slowest", "not selling", "low sales"]):
-        valid_bottom = [p for p in bottom_products if (p.get("total_revenue") or 0) > 0]
-        if not valid_bottom:
-            return "All catalog pieces currently show balanced demand across orders."
-        lines = "\n".join(
-            f"* **{item['name']}**: {_format_inr(item.get('total_revenue', 0))} in sales"
-            for item in valid_bottom[:3]
-        )
-        return f"### Least-Selling Products by Revenue\n\n{lines}\n\n*Consider a 15% promotional discount to stimulate these lines.*"
-
-    # --- 10. Revenue & Profit ---
-    if any(phrase in q for phrase in ["sales", "revenue", "profit", "margin", "earnings", "how much money", "how much have", "income", "financial"]):
-        tot_s = _format_inr(sales.get("total_sales", 0))
-        tot_p = _format_inr(profit.get("profit", 0))
-        tot_e = _format_inr(profit.get("expenses", 0))
-        sched = _format_inr(profit.get("scheduled_expenses", 0))
-        cogs = _format_inr(profit.get("cogs", 0))
-        margin_pct = (profit.get("profit", 0) / max(sales.get("total_sales", 1), 1)) * 100
-
-        recurring_note = (
-            f"\n* **Upcoming Recurring**: {sched} scheduled (kept separate until billing date)"
-            if profit.get("scheduled_expenses", 0) > 0
-            else ""
-        )
-
-        return (
-            f"### Financial Performance Summary\n\n"
-            f"* **Total Revenue**: {tot_s} across {sales.get('total_orders', 0)} orders\n"
-            f"* **COGS**: {cogs}\n"
-            f"* **Realized Expenses**: {tot_e}{recurring_note}\n"
-            f"* **Estimated Net Profit**: **{tot_p}** (Net Margin: **{margin_pct:.1f}%**)\n"
-            f"* **Outstanding Receivables**: {_format_inr(outstanding)}\n"
-        )
-
-    # --- 11. Monthly comparison ---
-    if any(phrase in q for phrase in ["compared", "last month", "this month", "month over month", "growth", "change"]):
-        current = sales.get("monthly_sales", 0)
-        previous = sales.get("previous_month_sales", 0)
-        if previous <= 0:
-            return f"This month has recorded {_format_inr(current)} in sales across {sales.get('monthly_orders', 0)} orders. No prior month baseline available yet."
-        change = ((current - previous) / previous) * 100
-        direction = "increased" if change >= 0 else "decreased"
-        return (
-            f"### Month-over-Month Sales\n\n"
-            f"Sales **{direction} by {abs(change):.1f}%** this month.\n"
-            f"* **This Month**: {_format_inr(current)} ({sales.get('monthly_orders', 0)} orders)\n"
-            f"* **Last Month**: {_format_inr(previous)} ({sales.get('previous_month_orders', 0)} orders)\n"
-        )
-
-    # --- 12. Customer queries ---
-    if any(w in words for w in ["customer", "customers", "clients", "crm", "buyer", "buyers"]):
-        cust_count = sales.get("total_customers", 0)
-        if any(phrase in q for phrase in ["best customer", "top customer", "biggest customer", "most spent", "who bought most"]):
-            if top_customers:
-                lines = "\n".join(
-                    f"* **{c['name']}**: {c['order_count']} orders — INR {c['total_spent']:,.0f} lifetime"
-                    for c in top_customers[:5]
-                )
-                return f"### Top Customers by Lifetime Spend\n\n{lines}"
-            return "No customer purchase data found yet."
-
-        if top_customers:
-            best = top_customers[0]
+            lines = [
+                f"* **{item['name']}** (SKU: `{item['sku']}`): **{item['stock_qty']} units left** (Safety min: {item['min_stock_level']}) -> *Recommend reordering at least {item['min_stock_level'] * 2} units*."
+                for item in low_stock[:5]
+            ]
             return (
-                f"### Customer Base Overview\n\n"
-                f"* **Total Customers**: {cust_count}\n"
-                f"* **Top Customer**: {best['name']} — INR {best['total_spent']:,.0f} lifetime ({best['order_count']} orders)\n"
-                f"* **Outstanding Receivables**: {_format_inr(outstanding)}\n"
-                "* **Updates**: Customers receive WhatsApp alerts on dispatch with live tracking links\n"
+                f"### [Restock Priority] Urgent Warehouse Reorders\n\n"
+                f"The following garments are running below safety stock thresholds in your Delhi fulfillment center:\n\n"
+                + "\n".join(lines) +
+                f"\n\n**Actionable Advice**: Generate an automated Purchase Order draft in the **Inventory** tab to restock before marketing campaigns."
             )
         return (
-            f"### Customer Base\n\n"
-            f"* **Total Registered**: {cust_count} customers\n"
-            f"* **Outstanding Receivables**: {_format_inr(outstanding)}\n"
+            "### [Inventory Status] Warehouse Stock Level\n\n"
+            "Good news! All active pieces in the REIHH collection currently meet or exceed safety stock thresholds in the Delhi fulfillment center. No urgent reorders are required today."
         )
 
-    # --- 13. Expense breakdown ---
-    if any(w in q for w in ["expense", "spend", "spending", "cost", "costs", "overhead"]):
-        tot_e = _format_inr(profit.get("expenses", 0))
-        sched = _format_inr(profit.get("scheduled_expenses", 0))
-        sched_note = f" (plus {sched} in upcoming recurring commitments)" if profit.get("scheduled_expenses", 0) > 0 else ""
-
-        lines = ""
-        if expense_breakdown:
-            lines = "\n" + "\n".join(
-                f"* **{e['category']}**: INR {e['total']:,.0f} ({e['count']} entries)"
-                for e in expense_breakdown[:6]
+    # 8. Best sellers & top products
+    if any(w in q_norm for w in ["best seller", "top seller", "top product", "fastest", "popular", "selling fastest", "highest sales"]):
+        if top_products:
+            lines = [
+                f"* **{p['name']}**: {p.get('total_quantity', 0)} units sold (INR {p.get('total_revenue', 0):,.0f} gross revenue)"
+                for p in top_products[:5] if p.get('total_revenue', 0) > 0
+            ]
+            return (
+                f"### Top-Selling Customer Favorites (Commercial Turnover)\n\n"
+                + "\n".join(lines) +
+                f"\n\n**Strategic Advice**: Prioritize maintaining continuous fabric and stitching buffers for your high-turnover pieces to prevent stockouts."
             )
+        return "Sales turnover is still accumulating. Check back once more orders are completed."
 
+    # 9. Profit & Expenses Breakdown
+    if any(w in q_norm for w in ["profit", "cogs", "margin", "expense", "spend", "net profit", "costs", "financial"]):
+        total_s = sales.get("total_sales", 0)
+        p = profit.get("profit", 0)
+        c = profit.get("cogs", 0)
+        e = profit.get("expenses", 0)
+        margin_pct = (p / total_s * 100) if total_s > 0 else 0
+        cats = [f"* **{item['category']}**: INR {item['total']:,.0f}" for item in expense_breakdown[:5]]
         return (
-            f"### Expense Breakdown\n\n"
-            f"Realized expenses to date: **{tot_e}**{sched_note}\n"
-            f"{lines}\n\n"
-            "Future recurring entries are only deducted as their billing dates arrive."
+            f"### Financial Performance & Margin Breakdown\n\n"
+            f"* **Gross Sales**: INR {total_s:,.0f}\n"
+            f"* **Manufacturing Cost (COGS)**: INR {c:,.0f}\n"
+            f"* **Operating Expenses (Realized)**: INR {e:,.0f}\n"
+            f"* **Net Estimated Profit**: **INR {p:,.0f}** ({margin_pct:.1f}% net margin)\n\n"
+            f"**Major Incurred Spend Categories**:\n"
+            + "\n".join(cats) +
+            f"\n\n*Note: Future scheduled recurring payments are tracked separately and do not distort current profit figures.*"
         )
 
-    # --- 14. Delivery & Delhivery Logistics ---
-    if any(w in q for w in ["delhivery", "courier", "dispatch", "shipment", "transit", "shipping", "carrier", "delivery status", "track"]):
-        shipped = sum(1 for o in recent_orders if o.get("status") == "shipped")
-        delivered = sum(1 for o in recent_orders if o.get("status") == "delivered")
+    # 10. Delhivery shipping & Logistics pulse
+    if any(w in q_norm for w in ["delhivery", "shipping", "courier", "delivery", "track", "dispatch", "awb"]):
+        delivered = order_counts.get("delivered", 0)
+        shipped = order_counts.get("shipped", 0)
+        pending = order_counts.get("confirmed", 0) + order_counts.get("pending", 0)
         return (
-            f"### Delhivery Logistics Overview\n\n"
-            f"* **Carrier**: Delhivery Surface & Express with 12-digit waybills\n"
-            f"* **Hub**: REIHH Studio Central Warehouse, Delhi NCR\n"
-            f"* **Recent Shipped**: {shipped} orders in transit\n"
-            f"* **Recent Delivered**: {delivered} orders completed\n"
-            f"* **Tracking**: Each order generates a live link at delhivery.com\n"
-            f"* **Customer Notifications**: WhatsApp dispatch alerts with invoice PDF on delivery\n\n"
-            "Test live dispatch from the **Orders** tab or view the **Delivery Agent POV**."
+            f"### Delhivery Fulfillment Logistics Pulse\n\n"
+            f"* **Delivered**: **{delivered} orders completed**\n"
+            f"* **In Transit (Out for Delivery)**: **{shipped} shipments** across Delhi NCR\n"
+            f"* **Awaiting Dispatch**: **{pending} orders** pending label print\n"
+            f"* **Fulfillment Hub**: Okhla Phase III, New Delhi\n"
+            f"* **Carrier**: Delhivery Express Surface & Air\n\n"
+            f"You can download and print official Delhivery packing slips with scannable barcodes directly from the **Orders** section."
         )
 
-    # --- 15. Performance summary ---
-    if any(w in q for w in ["summary", "performance", "overview", "dashboard", "snapshot", "report", "how are we doing", "how is business"]):
-        return _summary_from_snapshot(snapshot)
-
-    # --- 16. Clarification / follow-up ---
-    if any(phrase in q for phrase in ["what do you mean", "what do u mean", "clarify", "i don't understand", "explain that", "tell me more", "meaning", "elaborate"]):
-        total_s = _format_inr(sales.get("total_sales", 0))
-        prof = _format_inr(profit.get("profit", 0))
-        rev = _format_inr(profit.get("revenue", 0))
-        exp = _format_inr(profit.get("expenses", 0))
-        cogs = _format_inr(profit.get("cogs", 0))
+    # 11. Customer count & VIPs
+    if any(w in q_norm for w in ["how many customer", "customers", "vip", "client", "who buys", "best customer"]):
+        lines = [f"* **{c['name']}** ({c.get('tier', 'VIP')}): {c['order_count']} orders (INR {c['total_spent']:,.0f} lifetime spend)" for c in top_customers[:5]]
         return (
-            "Let me break this down simply:\n\n"
-            f"1. **Total Sales ({total_s})**: Gross amount across {sales.get('total_orders', 0)} customer orders\n"
-            f"2. **COGS ({cogs})**: Manufacturing / garment cost of goods sold\n"
-            f"3. **Expenses ({exp})**: Realized operational costs (rent, logistics, etc.)\n"
-            f"4. **Net Profit ({prof})**: What remains after COGS and expenses are deducted from revenue ({rev})\n\n"
-            "Want me to show the **restock list**, **expense breakdown**, or **customer ranking**?"
+            f"### Customer Portfolio & VIP Concierge\n\n"
+            f"Total Client Base: **{sales.get('total_customers', 0)} registered customers**.\n\n"
+            f"**Top Customer Accounts by Lifetime Spend**:\n"
+            + "\n".join(lines) +
+            f"\n\nView client fit notes and manage VIP/Wholesale tiers in the **Customers** tab."
         )
 
-    # --- 17. Courtesy / Closings ---
-    if any(w in words for w in ["thanks", "thank", "bye", "goodbye", "cya", "cheers"]) or "thank you" in q:
-        return (
-            "You're welcome! I'm here 24/7 — monitoring inventory, tracking Delhivery orders, and keeping your profit figures sharp. "
-            "Let me know whenever you need an update!"
-        )
-
-    # --- 18. What can you do / help ---
-    if any(phrase in q for phrase in ["what can you", "what do you", "capabilities", "features", "what can i ask"]):
-        return (
-            "### What I Can Help With\n\n"
-            "* **Orders** — Latest order, order status, recent orders list\n"
-            "* **Inventory** — Low stock alerts, restock recommendations, catalog overview\n"
-            "* **Sales & Profit** — Revenue, margins, month-over-month growth\n"
-            "* **Customers** — Top customers, outstanding balances, CRM overview\n"
-            "* **Expenses** — Category breakdown, realized vs scheduled\n"
-            "* **Delivery** — Delhivery tracking, shipment status\n\n"
-            "Just ask in plain English — I understand business questions naturally!"
-        )
-
-    # --- 19. Profit specifically ---
-    if "profit" in words or "loss" in words or "net" in words:
-        prof = profit.get("profit", 0)
-        direction = "profit" if prof >= 0 else "loss"
-        return (
-            f"### Net {direction.title()} Position\n\n"
-            f"* **Net Profit**: {_format_inr(prof)}\n"
-            f"* **Revenue**: {_format_inr(profit.get('revenue', 0))}\n"
-            f"* **COGS**: {_format_inr(profit.get('cogs', 0))}\n"
-            f"* **Realized Expenses**: {_format_inr(profit.get('expenses', 0))}\n"
-        )
-
-    # --- 20. Contextual fallback - still better than a stat dump ---
+    # 12. Contextual default summary
     total_o = sales.get("total_orders", 0)
     tot_s = _format_inr(sales.get("total_sales", 0))
-    latest = f" Latest order: **{recent_orders[0]['order_number']}** from {recent_orders[0]['customer']}." if recent_orders else ""
+    latest = f" Most recent order: **{recent_orders[0]['order_number']}** from {recent_orders[0]['customer']}." if recent_orders else ""
+    first = f" First order: **{first_order['order_number']}** from {first_order['customer']}." if first_order else ""
 
     return (
-        f"I'm not sure exactly what you're asking, but here's a quick snapshot: "
-        f"**{total_o} orders**, **{tot_s} in revenue**.{latest}\n\n"
-        "Try asking:\n"
-        "* 'What was the latest order?'\n"
-        "* 'Which products should I restock?'\n"
-        "* 'Who are our best customers?'\n"
-        "* 'How are sales this month?'\n"
-        "* 'What can you do?'"
+        f"Based on REIHH Studio's live database: **{total_o} orders** totaling **{tot_s} in sales**, with **INR {profit.get('profit', 0):,.0f} net profit**.{first}{latest}\n\n"
+        "Here are specific questions you can ask me:\n"
+        "1. *'What was the first order?'*\n"
+        "2. *'What products should I restock?'*\n"
+        "3. *'How is our Delhivery shipping performing?'*\n"
+        "4. *'Which items are our top sellers?'*\n"
+        "5. *'Break down our net profit and expenses.'*"
     )
 
 
@@ -504,20 +429,21 @@ def _ask_gemini(
     query: str,
     snapshot: dict,
     conversation_history: Optional[List[Dict[str, Any]]] = None,
+    api_key: Optional[str] = None,
 ) -> Optional[str]:
     """Call Google Gemini API for conversational AI responses."""
-    if not settings.GEMINI_API_KEY:
+    key = api_key or settings.GEMINI_API_KEY
+    if not key:
         return None
     try:
         import google.generativeai as genai
 
-        genai.configure(api_key=settings.GEMINI_API_KEY)
+        genai.configure(api_key=key)
         model = genai.GenerativeModel(
             model_name="gemini-1.5-flash",
             system_instruction=_build_system_prompt(snapshot),
         )
 
-        # Build conversation history
         history = []
         if conversation_history:
             for msg in conversation_history[-8:]:
@@ -538,14 +464,16 @@ def _ask_groq(
     query: str,
     snapshot: dict,
     conversation_history: Optional[List[Dict[str, Any]]] = None,
+    api_key: Optional[str] = None,
 ) -> Optional[str]:
     """Call Groq API for conversational AI responses."""
-    if not settings.GROQ_API_KEY:
+    key = api_key or settings.GROQ_API_KEY
+    if not key:
         return None
     try:
         from groq import Groq
 
-        client = Groq(api_key=settings.GROQ_API_KEY)
+        client = Groq(api_key=key)
         messages = [
             {
                 "role": "system",
@@ -576,9 +504,22 @@ def _ask_model(
     query: str,
     snapshot: dict,
     conversation_history: Optional[List[Dict[str, Any]]] = None,
+    db: Optional[Session] = None,
 ) -> Optional[str]:
-    """Try Gemini first, then Groq, then return None for rule-based fallback."""
-    return _ask_gemini(query, snapshot, conversation_history) or _ask_groq(query, snapshot, conversation_history)
+    """Check API keys from settings and DB, then try Gemini, then Groq."""
+    gemini_key = settings.GEMINI_API_KEY
+    groq_key = settings.GROQ_API_KEY
+    if db:
+        if not gemini_key:
+            row = db.query(AppSetting).filter(AppSetting.key == "gemini_api_key").first()
+            if row and row.value:
+                gemini_key = row.value.strip()
+        if not groq_key:
+            row = db.query(AppSetting).filter(AppSetting.key == "groq_api_key").first()
+            if row and row.value:
+                groq_key = row.value.strip()
+
+    return _ask_gemini(query, snapshot, conversation_history, api_key=gemini_key) or _ask_groq(query, snapshot, conversation_history, api_key=groq_key)
 
 
 def answer_query(
@@ -589,8 +530,8 @@ def answer_query(
 ) -> AIQuery:
     snapshot = build_business_snapshot(db)
     response_text = (
-        _ask_model(query, snapshot, conversation_history)
-        or _fallback_conversational_answer(query, snapshot, conversation_history)
+        _ask_model(query, snapshot, conversation_history, db=db)
+        or _fallback_conversational_answer(query, snapshot, conversation_history, db=db)
     )
     record = AIQuery(
         user_id=user.id,

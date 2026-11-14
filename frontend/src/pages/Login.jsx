@@ -48,9 +48,12 @@ export default function Login() {
   return (
     <main className="login-page">
       <section className="login-art">
-        <div className="brand-mark"><Box size={20} /> BIZAI</div>
+        <div className="brand-mark">
+          <img src="/reihh-logo.png" alt="REIHH" style={{ height: 28, width: 'auto', filter: 'brightness(1)' }} />
+          <span style={{ fontSize: 11, letterSpacing: '0.12em', opacity: 0.8, textTransform: 'uppercase', borderLeft: '1px solid rgba(255,255,255,0.3)', paddingLeft: 8 }}>OS</span>
+        </div>
         <div>
-          <p className="eyebrow">Reihh business operations</p>
+          <p className="eyebrow">REIHH STUDIO COMMERCE OS</p>
           <h1>Make every decision count.</h1>
           <p className="login-copy">Customers, stock, orders, invoices and AI insights in one workspace.</p>
         </div>
@@ -61,7 +64,7 @@ export default function Login() {
       </section>
       <section className="login-form-wrap">
         <form className="login-form" onSubmit={submit}>
-          <span className="mobile-brand"><Box size={18} /> BIZAI</span>
+          <span className="mobile-brand"><img src="/reihh-logo.png" alt="REIHH" className="reihh-brand-logo" style={{ height: 22, width: 'auto' }} /></span>
           <p className="eyebrow">Welcome back</p>
           <h2>Sign in to your workspace</h2>
           <p className="muted">Sign in to access your business workspace.</p>
