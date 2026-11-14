@@ -20,6 +20,8 @@ class Customer(Base):
     company = Column(String(200), nullable=True)
     gstin = Column(String(20), nullable=True)
     tags = Column(String(255), nullable=True)
+    tier = Column(String(30), default="Regular")
+    billing_address = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
     accepts_marketing = Column(Boolean, default=False)
     outstanding_balance = Column(Float, default=0.0)

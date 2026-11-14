@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.order import OrderStatus
 from models.user import User
-from schemas.order import OrderCreate, OrderResponse, OrderStatusUpdate
-from services.order_service import get_orders, get_order, create_order, update_order_status
+from fastapi.responses import Response
+from schemas.order import OrderCreate, OrderResponse, OrderStatusUpdate, OrderUpdate
+from services.order_service import get_orders, get_order, create_order, update_order_status, update_order
+from utils.pdf import build_packing_slip_pdf
 from utils.permissions import require_staff, require_employee, require_manager
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
@@ -59,3 +61,34 @@ def change_order_status(
     if db_order is None:
         raise HTTPException(status_code=404, detail="Order not found")
     return db_order
+
+
+@router.put("/{order_id}", response_model=OrderResponse)
+def update_existing_order(
+    order_id: int,
+    payload: OrderUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_manager),
+):
+    db_order = update_order(db, order_id, payload)
+    if db_order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return db_order
+
+
+@router.get("/{order_id}/packing-slip")
+def download_order_packing_slip(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff),
+):
+    db_order = get_order(db, order_id)
+    if db_order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    pdf_bytes = build_packing_slip_pdf(db_order)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="packing-slip-{db_order.order_number}.pdf"'},
+    )
+

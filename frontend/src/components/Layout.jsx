@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, Bell, Box, Check, CircleDollarSign, ClipboardList, FileBarChart,
@@ -63,11 +63,34 @@ export default function Layout() {
   const visibleNav = navItems.filter((item) => !item.roles || item.roles.includes(role));
   const currentPage = visibleNav.find((item) => item.to === location.pathname)?.label || 'Workspace';
 
+  const searchInputRef = useRef(null);
+
+  // Global Ctrl+K / Cmd+K shortcut
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const search = (event) => {
     event.preventDefault();
     const value = query.trim();
     if (!value) return;
-    navigate(`/customers?q=${encodeURIComponent(value)}`);
+    const lower = value.toLowerCase();
+    if (lower.startsWith('ord') || lower.startsWith('#') || !isNaN(value)) {
+      navigate(`/orders?q=${encodeURIComponent(value.replace('#', ''))}`);
+    } else if (location.pathname.startsWith('/customers')) {
+      navigate(`/customers?q=${encodeURIComponent(value)}`);
+    } else if (location.pathname.startsWith('/orders')) {
+      navigate(`/orders?q=${encodeURIComponent(value)}`);
+    } else {
+      navigate(`/products?q=${encodeURIComponent(value)}`);
+    }
   };
 
   const unreadCount = notifications.length;
@@ -104,12 +127,13 @@ export default function Layout() {
       <div className="main-area">
         <header className="topbar">
           <button className="menu-btn" onClick={() => setOpen(true)}><Menu size={21} /></button>
-          <form className="search" onSubmit={search}>
+          <form className="search" onSubmit={search} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <Search size={17} />
             <input
+              ref={searchInputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search customers"
+              placeholder="Search products, orders, customers (Ctrl+K)…"
             />
           </form>
           <div className="current-page"><span>Workspace</span><strong>{currentPage}</strong></div>

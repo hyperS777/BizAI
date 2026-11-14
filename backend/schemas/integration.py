@@ -43,6 +43,18 @@ class SettingsUpdate(BaseModel):
     store_channel: Optional[str] = None
     store_currency: Optional[str] = None
     cancel_lock_after: Optional[str] = None
+    company_name: Optional[str] = None
+    legal_name: Optional[str] = None
+    company_address: Optional[str] = None
+    company_gstin: Optional[str] = None
+    support_email: Optional[str] = None
+    support_phone: Optional[str] = None
+    logo_url: Optional[str] = None
+    razorpay_key_id: Optional[str] = None
+    razorpay_key_secret: Optional[str] = None
+    delhivery_api_key: Optional[str] = None
+    groq_api_key: Optional[str] = None
+    gemini_api_key: Optional[str] = None
 
 
 class DiscountPayload(BaseModel):

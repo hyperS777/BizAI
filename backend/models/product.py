@@ -41,6 +41,7 @@ class Product(Base):
     option1_name = Column(String(50), default="Color")
     option2_name = Column(String(50), default="Size")
     image_url = Column(String(500), nullable=True)
+    gallery_urls = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

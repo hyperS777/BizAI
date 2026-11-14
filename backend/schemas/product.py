@@ -78,6 +78,7 @@ class ProductBase(BaseModel):
     option1_name: Optional[str] = "Color"
     option2_name: Optional[str] = "Size"
     image_url: Optional[str] = None
+    gallery_urls: Optional[str] = None
     is_active: Optional[bool] = True
 
 
@@ -101,6 +102,7 @@ class ProductUpdate(BaseModel):
     option1_name: Optional[str] = None
     option2_name: Optional[str] = None
     image_url: Optional[str] = None
+    gallery_urls: Optional[str] = None
     is_active: Optional[bool] = None
     variants: Optional[List[VariantUpsert]] = None
 

@@ -21,6 +21,7 @@ def get_invoice(db: Session, invoice_id: int) -> Optional[Invoice]:
             joinedload(Invoice.order).joinedload(Order.customer),
             joinedload(Invoice.order).joinedload(Order.items).joinedload(OrderItem.product),
             joinedload(Invoice.order).joinedload(Order.items).joinedload(OrderItem.variant),
+            joinedload(Invoice.customer),
             joinedload(Invoice.payments),
         )
         .filter(Invoice.id == invoice_id)
@@ -33,6 +34,7 @@ def get_invoices(
 ) -> List[Invoice]:
     query = db.query(Invoice).options(
         joinedload(Invoice.order).joinedload(Order.customer),
+        joinedload(Invoice.customer),
         joinedload(Invoice.payments),
     )
     if status:
@@ -105,6 +107,66 @@ def generate_invoice_from_order(
     return db_invoice
 
 
+def create_standalone_invoice(
+    db: Session,
+    customer_id: Optional[int],
+    total_amount: float,
+    due_date: Optional[date] = None,
+    payment_method: Optional[str] = "bank_transfer",
+    taxable_amount: Optional[float] = None,
+    cgst: Optional[float] = None,
+    sgst: Optional[float] = None,
+    igst: Optional[float] = None,
+    notes: Optional[str] = None,
+    commit: bool = True,
+) -> Invoice:
+    if total_amount <= 0:
+        raise HTTPException(status_code=400, detail="Invoice amount must be greater than zero")
+
+    invoice_number = f"INV-{uuid.uuid4().hex[:8].upper()}"
+    taxable = taxable_amount or round(total_amount / 1.18, 2)
+    tax_diff = total_amount - taxable
+    c_tax = cgst or round(tax_diff / 2, 2)
+    s_tax = sgst or c_tax
+
+    db_invoice = Invoice(
+        invoice_number=invoice_number,
+        public_token=secrets.token_urlsafe(36),
+        order_id=None,
+        customer_id=customer_id,
+        status=InvoiceStatus.SENT.value,
+        total_amount=round(total_amount, 2),
+        paid_amount=0.0,
+        due_date=due_date or (date.today() + timedelta(days=15)),
+        payment_method=payment_method,
+        taxable_amount=taxable,
+        cgst=c_tax,
+        sgst=s_tax,
+        igst=igst or 0.0,
+        notes=notes,
+    )
+    db.add(db_invoice)
+    db.flush()
+    if customer_id:
+        from models.customer import Customer
+        customer = db.query(Customer).filter(Customer.id == customer_id).first()
+        if customer:
+            customer.outstanding_balance = round((customer.outstanding_balance or 0) + total_amount, 2)
+
+    emit_event(
+        db,
+        "invoice.created",
+        "invoice",
+        db_invoice.id,
+        {"invoice_number": invoice_number, "total": total_amount},
+    )
+    if commit:
+        db.commit()
+        return get_invoice(db, db_invoice.id)
+    return db_invoice
+
+
+
 def void_invoice(db: Session, order_id: int, commit: bool = False) -> Optional[Invoice]:
     invoice = db.query(Invoice).options(joinedload(Invoice.order).joinedload(Order.customer)).filter(
         Invoice.order_id == order_id
@@ -143,7 +205,7 @@ def record_payment(
     applied = min(amount, remaining)
     invoice.paid_amount = round((invoice.paid_amount or 0) + applied, 2)
     db.add(Payment(invoice_id=invoice.id, amount=applied, method=method or "manual", notes=notes))
-    customer = invoice.order.customer if invoice.order else None
+    customer = (invoice.order.customer if invoice.order else None) or invoice.customer
     if customer:
         customer.outstanding_balance = max(0.0, round((customer.outstanding_balance or 0) - applied, 2))
     _refresh_invoice_status(invoice)

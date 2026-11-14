@@ -1,8 +1,11 @@
 """Products and inventory API."""
 
+import csv
+import io
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -21,6 +24,7 @@ from services.product_service import (
     get_product,
     create_product,
     update_product,
+    delete_product,
     get_low_stock_products,
     get_categories,
     create_category,
@@ -87,6 +91,77 @@ def create_new_product(
     return create_product(db, product)
 
 
+@router.get("/export")
+def export_products_csv(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff),
+):
+    products = get_products(db, limit=1000)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "Name", "SKU", "Category", "Price", "CostPrice", "CompareAtPrice", "Stock", "MinStock", "Vendor", "ProductType", "Tags", "Description", "ImageURL"])
+    for p in products:
+        cat_name = p.category.name if p.category else ""
+        writer.writerow([
+            p.id, p.name, p.sku, cat_name, p.price, p.cost_price,
+            p.compare_at_price or "", p.stock_qty, p.min_stock_level,
+            p.vendor or "", p.product_type or "", p.tags or "",
+            (p.description or "").replace("\n", " "), p.image_url or ""
+        ])
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="products.csv"'},
+    )
+
+
+@router.post("/import")
+async def import_products_csv(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_manager),
+):
+    content = await file.read()
+    text = content.decode("utf-8", errors="replace")
+    reader = csv.DictReader(io.StringIO(text))
+    created_count = 0
+    from models.product import Product
+    for row in reader:
+        sku = (row.get("SKU") or row.get("sku") or "").strip()
+        name = (row.get("Name") or row.get("name") or "").strip()
+        if not sku or not name:
+            continue
+        price = float(row.get("Price") or row.get("price") or 0.0)
+        cost = float(row.get("CostPrice") or row.get("cost_price") or 0.0)
+        stock = int(float(row.get("Stock") or row.get("stock_qty") or 0))
+        min_stock = int(float(row.get("MinStock") or row.get("min_stock_level") or 5))
+
+        existing = db.query(Product).filter(Product.sku == sku).first()
+        if existing:
+            existing.price = price
+            existing.cost_price = cost
+            existing.stock_qty = stock
+            existing.is_active = True
+        else:
+            db_p = Product(
+                name=name,
+                sku=sku,
+                price=price,
+                cost_price=cost,
+                stock_qty=stock,
+                min_stock_level=min_stock,
+                vendor=row.get("Vendor") or "Reihh",
+                description=row.get("Description") or "",
+                tags=row.get("Tags") or "",
+                image_url=row.get("ImageURL") or "",
+                is_active=True,
+            )
+            db.add(db_p)
+            created_count += 1
+    db.commit()
+    return {"ok": True, "created_or_updated": created_count}
+
+
 @router.get("/{product_id}", response_model=ProductResponse)
 def read_product(
     product_id: int,
@@ -127,9 +202,22 @@ def adjust_stock(
             reason=payload.reason,
             notes=payload.notes,
             user_id=current_user.id,
+            variant_id=payload.variant_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if db_product is None:
         raise HTTPException(status_code=404, detail="Product not found")
     return get_product(db, product_id)
+
+
+@router.delete("/{product_id}")
+def delete_existing_product(
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_manager),
+):
+    if not delete_product(db, product_id):
+        raise HTTPException(status_code=404, detail="Product not found")
+    return {"ok": True, "message": "Product removed or archived"}
+

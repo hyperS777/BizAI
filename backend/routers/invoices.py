@@ -9,8 +9,11 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.invoice import Invoice, InvoiceStatus
 from models.user import User
-from schemas.invoice import InvoiceUpdate, InvoiceResponse
-from services.invoice_service import get_invoices, get_invoice, generate_invoice_from_order, update_invoice
+from schemas.invoice import InvoiceUpdate, InvoiceResponse, InvoiceCreate
+from services.invoice_service import (
+    get_invoices, get_invoice, generate_invoice_from_order, update_invoice,
+    create_standalone_invoice, record_payment
+)
 from utils.pdf import build_invoice_pdf
 from utils.permissions import require_accountant, require_staff
 
@@ -44,6 +47,49 @@ def download_customer_invoice(token: str, db: Session = Depends(get_db)):
             "X-Robots-Tag": "noindex, nofollow",
         },
     )
+
+
+@router.post("", response_model=InvoiceResponse)
+def create_standalone_invoice_endpoint(
+    payload: InvoiceCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_accountant),
+):
+    if payload.order_id:
+        inv = generate_invoice_from_order(db, payload.order_id, due_date=payload.due_date)
+        if not inv:
+            raise HTTPException(status_code=404, detail="Order not found")
+        return inv
+    return create_standalone_invoice(
+        db,
+        customer_id=payload.customer_id,
+        total_amount=payload.total_amount,
+        due_date=payload.due_date,
+        payment_method=payload.payment_method,
+        taxable_amount=payload.taxable_amount,
+        cgst=payload.cgst,
+        sgst=payload.sgst,
+        igst=payload.igst,
+        notes=payload.notes,
+    )
+
+
+@router.post("/{invoice_id}/payments", response_model=InvoiceResponse)
+def record_invoice_payment_endpoint(
+    invoice_id: int,
+    payload: InvoiceUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_accountant),
+):
+    db_invoice = get_invoice(db, invoice_id)
+    if not db_invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    amount = payload.payment_amount or payload.paid_amount or 0.0
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Payment amount must be greater than zero")
+    record_payment(db, db_invoice, amount, method=payload.method or "manual", notes=payload.notes)
+    db.commit()
+    return get_invoice(db, invoice_id)
 
 
 @router.post("/from-order/{order_id}", response_model=InvoiceResponse)

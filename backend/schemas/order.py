@@ -88,11 +88,17 @@ class OrderBase(BaseModel):
 class OrderCreate(OrderBase):
     items: List[OrderItemCreate]
     discount_code: Optional[str] = None
+    shipping_address: Optional[str] = None
+    shipping_amount: Optional[float] = 0.0
 
 
 class OrderUpdate(BaseModel):
     status: Optional[OrderStatus] = None
     notes: Optional[str] = None
+    shipping_address: Optional[str] = None
+    shipping_amount: Optional[float] = None
+    tracking_company: Optional[str] = None
+    tracking_number: Optional[str] = None
 
 
 class OrderStatusUpdate(BaseModel):

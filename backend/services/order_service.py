@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from models.customer import Customer
 from models.order import ALLOWED_TRANSITIONS, Order, OrderItem, OrderStatus
 from models.product import Product, ProductVariant
-from schemas.order import OrderCreate
+from schemas.order import OrderCreate, OrderUpdate
 from services.integration_service import apply_discount, bump_discount_usage, emit_event, get_setting, setting_enabled
 from services.invoice_service import generate_invoice_from_order, void_invoice
 from services.product_service import update_stock
@@ -77,9 +77,13 @@ def create_order(db: Session, order: OrderCreate, user_id: int) -> Order:
         raise HTTPException(status_code=400, detail="An order must include at least one item")
 
     order_number = f"ORD-{uuid.uuid4().hex[:8].upper()}"
+    shipping_addr = order.shipping_address or (customer.address if customer else None)
+    shipping_amt = float(order.shipping_amount or 0.0)
     db_order = Order(
         order_number=order_number,
         customer_id=order.customer_id,
+        shipping_address=shipping_addr,
+        shipping_amount=shipping_amt,
         notes=order.notes,
         created_by=user_id,
         status=OrderStatus.PENDING.value,
@@ -130,7 +134,7 @@ def create_order(db: Session, order: OrderCreate, user_id: int) -> Order:
     db_order.subtotal_amount = round(subtotal, 2)
     db_order.discount_code = code
     db_order.discount_amount = discount_amount
-    db_order.total_amount = round(max(subtotal - discount_amount, 0), 2)
+    db_order.total_amount = round(max(subtotal - discount_amount, 0) + shipping_amt, 2)
     if code:
         bump_discount_usage(db, code)
 
@@ -236,3 +240,19 @@ def update_order_status(db: Session, order_id: int, status: OrderStatus) -> Opti
 
     db.commit()
     return get_order(db, order_id)
+
+
+def update_order(db: Session, order_id: int, order_update: OrderUpdate) -> Optional[Order]:
+    db_order = get_order(db, order_id)
+    if not db_order:
+        return None
+    data = order_update.model_dump(exclude_unset=True)
+    status = data.pop("status", None)
+    for key, value in data.items():
+        setattr(db_order, key, value)
+    if status is not None:
+        db.commit()
+        return update_order_status(db, order_id, status)
+    db.commit()
+    return get_order(db, order_id)
+

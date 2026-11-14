@@ -137,6 +137,14 @@ async def receive_delivery_location(request: Request, db: Session = Depends(get_
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.get("/settings")
+def get_integration_settings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_integration_reader),
+):
+    return list_settings(db)
+
+
 @router.patch("/settings")
 def update_integration_settings(
     payload: SettingsUpdate,

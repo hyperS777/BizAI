@@ -8,9 +8,11 @@ class CustomerBase(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    billing_address: Optional[str] = None
     company: Optional[str] = None
     gstin: Optional[str] = None
     tags: Optional[str] = None
+    tier: Optional[str] = "Regular"
     notes: Optional[str] = None
     accepts_marketing: Optional[bool] = False
 
@@ -24,9 +26,11 @@ class CustomerUpdate(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    billing_address: Optional[str] = None
     company: Optional[str] = None
     gstin: Optional[str] = None
     tags: Optional[str] = None
+    tier: Optional[str] = None
     notes: Optional[str] = None
     accepts_marketing: Optional[bool] = None
 

@@ -1,16 +1,36 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Receipt, TrendingDown, Calendar, RefreshCcw, Plus, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Receipt, TrendingDown, Calendar, RefreshCcw, Plus, Clock, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import client from '../api/client';
 import { EmptyState, Modal, PageHeader } from '../components/ui';
 import { apiError, formatDate, money } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 const CATEGORIES = [
   'Rent', 'Salaries', 'Utilities', 'Supplies', 'Marketing',
   'Transport', 'Maintenance', 'Software', 'Other',
 ];
 
-const blank = { description: '', amount: '', category: '', date: new Date().toISOString().slice(0, 10) };
+const PAYMENT_MODES = [
+  { id: 'bank_transfer', label: 'Bank Transfer (NEFT/RTGS)' },
+  { id: 'upi', label: 'UPI / QR Code' },
+  { id: 'cash', label: 'Cash' },
+  { id: 'credit_card', label: 'Credit / Corporate Card' },
+  { id: 'cheque', label: 'Cheque' },
+];
+
+const blank = {
+  description: '',
+  amount: '',
+  category: '',
+  vendor: '',
+  payment_mode: 'bank_transfer',
+  receipt_url: '',
+  vendor_gstin: '',
+  gst_amount: '',
+  date: new Date().toISOString().slice(0, 10),
+  notes: '',
+};
 const blankRecurring = {
   description: '',
   amount: '',
@@ -22,6 +42,7 @@ const blankRecurring = {
 
 export default function Expenses() {
   const { can } = useAuth();
+  const toast = useToast();
   const canEdit = can(['admin', 'manager', 'accountant']);
   const [expenses, setExpenses] = useState([]);
   const [error, setError] = useState('');
@@ -34,6 +55,7 @@ export default function Expenses() {
   const [activeTab, setActiveTab] = useState('realized'); // 'realized' | 'scheduled' | 'all'
   const [recurringBusy, setRecurringBusy] = useState(false);
   const [recurringSuccess, setRecurringSuccess] = useState('');
+  const [bannerDismissed, setBannerDismissed] = useState(() => localStorage.getItem('bizai_hide_expense_banner') === '1');
 
   const load = () => {
     client.get('/expenses')
@@ -46,14 +68,24 @@ export default function Expenses() {
   const save = async (event) => {
     event.preventDefault();
     try {
-      const payload = { ...form, amount: Number(form.amount) };
-      if (form.id) await client.put(`/expenses/${form.id}`, payload);
-      else await client.post('/expenses', payload);
+      const payload = {
+        ...form,
+        amount: Number(form.amount),
+        gst_amount: form.gst_amount ? Number(form.gst_amount) : 0,
+      };
+      if (form.id) {
+        await client.put(`/expenses/${form.id}`, payload);
+        toast?.success('Expense updated');
+      } else {
+        await client.post('/expenses', payload);
+        toast?.success(`Recorded ${money(payload.amount)} for ${payload.category || 'expense'}`);
+      }
       setModal(false);
       setForm(blank);
       load();
     } catch (err) {
       setError(apiError(err, 'Could not save expense'));
+      toast?.error(apiError(err, 'Could not save expense'));
     }
   };
 
@@ -67,12 +99,15 @@ export default function Expenses() {
         amount: Number(recurringForm.amount),
         months: Number(recurringForm.months),
       });
-      setRecurringSuccess(`Scheduled ${data.length} ${recurringForm.frequency} expense entries. Only the current month's entry will deduct from immediate profit.`);
+      const msg = `Scheduled ${data.length} recurring entries. Only current month deducts from immediate profit.`;
+      setRecurringSuccess(msg);
+      toast?.success(msg);
       setRecurringForm(blankRecurring);
       load();
-      setTimeout(() => { setRecurringModal(false); setRecurringSuccess(''); }, 2400);
+      setTimeout(() => { setRecurringModal(false); setRecurringSuccess(''); }, 2000);
     } catch (err) {
       setError(apiError(err, 'Could not create recurring expenses'));
+      toast?.error(apiError(err, 'Could not schedule recurring expenses'));
     } finally {
       setRecurringBusy(false);
     }
@@ -82,9 +117,11 @@ export default function Expenses() {
     try {
       await client.delete(`/expenses/${id}`);
       setDeleting(null);
+      toast?.info('Expense removed');
       load();
     } catch (err) {
       setError(apiError(err, 'Could not delete expense'));
+      toast?.error('Could not delete expense');
     }
   };
 
@@ -192,12 +229,26 @@ export default function Expenses() {
       </section>
 
       {/* Accounting Clarification Banner */}
+      {!bannerDismissed && (
         <section className="accounting-banner">
-          <AlertCircle size={17} />
-          <span>
+          <AlertCircle size={17} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>
             <strong>Accounting Guardrail:</strong> Future recurring payments are tracked separately as scheduled commitments. They will <em>not</em> be deducted from your current net profit until their scheduled billing month arrives.
           </span>
+          <button
+            type="button"
+            className="banner-dismiss-btn"
+            onClick={() => {
+              setBannerDismissed(true);
+              localStorage.setItem('bizai_hide_expense_banner', '1');
+            }}
+            title="Dismiss notice"
+            aria-label="Dismiss banner"
+          >
+            <X size={15} />
+          </button>
         </section>
+      )}
 
         {/* Monthly Spend Chart (Realized) */}
         {monthlyTotals.length > 1 && (
@@ -279,7 +330,8 @@ export default function Expenses() {
                 <thead>
                   <tr>
                     <th>Description</th>
-                    <th>Category</th>
+                    <th>Vendor / Payee</th>
+                    <th>Category &amp; Mode</th>
                     <th>Amount</th>
                     <th>Date</th>
                     <th>Status</th>
@@ -293,15 +345,25 @@ export default function Expenses() {
                       <tr key={expense.id}>
                         <td>
                           <strong>{expense.description}</strong>
-                          {expense.notes && <small style={{ display: 'block', color: 'var(--muted)' }}>{expense.notes}</small>}
+                          {expense.notes && <small style={{ display: 'block', color: 'var(--muted)', fontSize: 11 }}>{expense.notes}</small>}
+                        </td>
+                        <td>
+                          <span>{expense.vendor || '—'}</span>
+                          {expense.vendor_gstin && <small style={{ display: 'block', color: 'var(--muted)', fontSize: 10 }}>GSTIN: {expense.vendor_gstin}</small>}
                         </td>
                         <td>
                           <span className="status-pill">{expense.category || 'Other'}</span>
+                          <small style={{ display: 'block', color: 'var(--muted)', fontSize: 11, marginTop: 2 }}>
+                            {(expense.payment_mode || 'bank_transfer').replace('_', ' ')}
+                          </small>
                         </td>
                         <td>
                           <b style={{ color: isScheduled ? 'var(--teal)' : 'var(--coral)' }}>
                             {money(expense.amount)}
                           </b>
+                          {expense.gst_amount > 0 && (
+                            <small style={{ display: 'block', color: '#10b981', fontSize: 10 }}>ITC: {money(expense.gst_amount)}</small>
+                          )}
                         </td>
                         <td>{formatDate(expense.date)}</td>
                         <td>
@@ -364,49 +426,110 @@ export default function Expenses() {
                 {/* Add / Edit expense modal */}
                 {modal && (
                   <Modal title={form.id ? 'Edit expense' : 'Add expense'} onClose={() => { setModal(false); setForm(blank); }}>
-                    <form className="stack-form" onSubmit={save}>
+                    <form className="stack-form" onSubmit={save} style={{ maxHeight: '76vh', overflowY: 'auto', paddingRight: 4 }}>
                       <label>
-                        Description
+                        Description*
                         <input
                           value={form.description}
                           onChange={(e) => setForm({ ...form, description: e.target.value })}
-                          placeholder="e.g. Office rent for November"
+                          placeholder="e.g. Okhla Workshop Rent, Cotton Fabric Purchase"
                           required
                         />
                       </label>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        <label>
+                          Vendor / Payee
+                          <input
+                            value={form.vendor || ''}
+                            onChange={(e) => setForm({ ...form, vendor: e.target.value })}
+                            placeholder="e.g. Surat Textiles Ltd, Landlord"
+                          />
+                        </label>
+                        <label>
+                          Payment Mode*
+                          <select
+                            value={form.payment_mode || 'bank_transfer'}
+                            onChange={(e) => setForm({ ...form, payment_mode: e.target.value })}
+                            required
+                          >
+                            {PAYMENT_MODES.map((pm) => <option key={pm.id} value={pm.id}>{pm.label}</option>)}
+                          </select>
+                        </label>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        <label>
+                          Category*
+                          <select
+                            value={form.category}
+                            onChange={(e) => setForm({ ...form, category: e.target.value })}
+                            required
+                          >
+                            <option value="">Select category</option>
+                            {CATEGORIES.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+                          </select>
+                        </label>
+                        <label>
+                          Amount (₹)*
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={form.amount}
+                            onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                            required
+                          />
+                        </label>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        <label>
+                          Date*
+                          <input
+                            type="date"
+                            value={form.date}
+                            onChange={(e) => setForm({ ...form, date: e.target.value })}
+                            required
+                          />
+                        </label>
+                        <label>
+                          Vendor GSTIN (For ITC)
+                          <input
+                            value={form.vendor_gstin || ''}
+                            onChange={(e) => setForm({ ...form, vendor_gstin: e.target.value })}
+                            placeholder="e.g. 07AAACR1234F1Z5"
+                          />
+                        </label>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        <label>
+                          GST Amount Paid (ITC Claim)
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={form.gst_amount || ''}
+                            onChange={(e) => setForm({ ...form, gst_amount: e.target.value })}
+                            placeholder="e.g. 1800"
+                          />
+                        </label>
+                        <label>
+                          Receipt Link / Document URL
+                          <input
+                            value={form.receipt_url || ''}
+                            onChange={(e) => setForm({ ...form, receipt_url: e.target.value })}
+                            placeholder="https://.../receipt.pdf"
+                          />
+                        </label>
+                      </div>
                       <label>
-                        Category
-                        <select
-                          value={form.category}
-                          onChange={(e) => setForm({ ...form, category: e.target.value })}
-                          required
-                        >
-                          <option value="">Select category</option>
-                          {CATEGORIES.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
-                        </select>
-                      </label>
-                      <label>
-                        Amount (₹)
+                        Notes
                         <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={form.amount}
-                          onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                          required
-                        />
-                      </label>
-                      <label>
-                        Date
-                        <input
-                          type="date"
-                          value={form.date}
-                          onChange={(e) => setForm({ ...form, date: e.target.value })}
-                          required
+                          value={form.notes || ''}
+                          onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                          placeholder="Reference number or bill notes"
                         />
                       </label>
                       <button className="primary-btn" type="submit">
-                        {form.id ? 'Update expense' : 'Add expense'}
+                        {form.id ? 'Update expense' : 'Save Expense'}
                       </button>
                     </form>
                   </Modal>

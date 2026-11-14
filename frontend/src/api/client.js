@@ -52,4 +52,50 @@ export async function downloadInvoicePdf(invoiceId, filename) {
   URL.revokeObjectURL(url);
 }
 
+export async function downloadPackingSlipPdf(orderId, filename) {
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_URL}/orders/${orderId}/packing-slip`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('Could not download packing slip');
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename || `packing-slip-${orderId}.pdf`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadPnlPdf(filename) {
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_URL}/reports/pnl/pdf`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('Could not download P&L statement');
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename || 'profit-and-loss-statement.pdf';
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadGstr1Csv(filename) {
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_URL}/reports/gstr1-export`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('Could not download GSTR-1 report');
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename || 'gstr1-tax-report.csv';
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+
 export default client;

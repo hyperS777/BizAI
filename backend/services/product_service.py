@@ -238,3 +238,18 @@ def get_inventory_history(db: Session, product_id: Optional[int] = None, limit: 
     if product_id:
         query = query.filter(InventoryMovement.product_id == product_id)
     return query.limit(limit).all()
+
+
+def delete_product(db: Session, product_id: int) -> bool:
+    db_product = get_product(db, product_id)
+    if not db_product:
+        return False
+    from models.order import OrderItem
+    has_orders = db.query(OrderItem).filter(OrderItem.product_id == product_id).count() > 0
+    if has_orders:
+        db_product.is_active = False
+    else:
+        db.delete(db_product)
+    db.commit()
+    return True
+

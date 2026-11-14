@@ -56,7 +56,8 @@ _EXTRA_COLUMNS = {
         ("option1_name", "VARCHAR(50)"),
         ("option2_name", "VARCHAR(50)"),
         ("image_url", "VARCHAR(500)"),
-            ("shopify_product_id", "VARCHAR(80)"),
+        ("shopify_product_id", "VARCHAR(80)"),
+        ("gallery_urls", "TEXT"),
     ],
     "order_items": [
         ("variant_id", "INTEGER"),
@@ -83,6 +84,20 @@ _EXTRA_COLUMNS = {
     ],
     "invoices": [
         ("public_token", "VARCHAR(80)"),
+        ("customer_id", "INTEGER"),
+        ("payment_method", "VARCHAR(50)"),
+        ("taxable_amount", "FLOAT DEFAULT 0"),
+        ("cgst", "FLOAT DEFAULT 0"),
+        ("sgst", "FLOAT DEFAULT 0"),
+        ("igst", "FLOAT DEFAULT 0"),
+        ("notes", "TEXT"),
+    ],
+    "expenses": [
+        ("vendor", "VARCHAR(200)"),
+        ("payment_mode", "VARCHAR(50) DEFAULT 'bank_transfer'"),
+        ("receipt_url", "TEXT"),
+        ("vendor_gstin", "VARCHAR(20)"),
+        ("gst_amount", "FLOAT DEFAULT 0"),
     ],
     "storefront_simulations": [
         ("delivery_status", "VARCHAR(32) DEFAULT 'ready_to_pack'"),
@@ -101,7 +116,9 @@ _EXTRA_COLUMNS = {
         ("tags", "VARCHAR(255)"),
         ("notes", "TEXT"),
         ("accepts_marketing", "BOOLEAN DEFAULT 0"),
-            ("shopify_customer_id", "VARCHAR(80)"),
+        ("shopify_customer_id", "VARCHAR(80)"),
+        ("tier", "VARCHAR(30) DEFAULT 'Regular'"),
+        ("billing_address", "TEXT"),
     ],
     "inventory_movements": [
         ("variant_id", "INTEGER"),

@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
 import { warmupApi } from './api/client';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -39,29 +40,31 @@ export default function App() {
 
   return (
     <AuthProvider>
-      <Routes>
-        <Route path="/store" element={<Storefront />} />
-        <Route path="/store/demo" element={<Storefront />} />
-        <Route path="/delivery/demo/:token" element={<DeliveryDemo />} />
-        <Route path="/login" element={<Login />} />
-        <Route element={<ProtectedLayout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/customers" element={<Customers />} />
-          <Route path="/customers/:customerId" element={<CustomerDetail />} />
-          <Route path="/products" element={<Products />} />
-          <Route path="/inventory" element={<Inventory />} />
-          <Route path="/orders" element={<Orders />} />
-          <Route path="/invoices" element={<RequireRoles roles={['admin', 'manager', 'accountant']}><Invoices /></RequireRoles>} />
-          <Route path="/expenses" element={<RequireRoles roles={['admin', 'manager', 'accountant']}><Expenses /></RequireRoles>} />
-          <Route path="/reports" element={<RequireRoles roles={['admin', 'manager', 'accountant']}><Reports /></RequireRoles>} />
-          <Route path="/ai" element={<RequireRoles roles={['admin', 'manager', 'accountant']}><AIAssistant /></RequireRoles>} />
-          <Route path="/users" element={<RequireRoles roles={['admin']}><UsersPage /></RequireRoles>} />
-          <Route path="/integrations" element={<RequireRoles roles={['admin', 'manager']}><Integrations /></RequireRoles>} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/profile" element={<Profile />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+        <ToastProvider>
+          <Routes>
+            <Route path="/store" element={<Storefront />} />
+            <Route path="/store/demo" element={<Storefront />} />
+            <Route path="/delivery/demo/:token" element={<DeliveryDemo />} />
+            <Route path="/login" element={<Login />} />
+            <Route element={<ProtectedLayout />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/customers" element={<Customers />} />
+              <Route path="/customers/:customerId" element={<CustomerDetail />} />
+              <Route path="/products" element={<Products />} />
+              <Route path="/inventory" element={<Inventory />} />
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/invoices" element={<RequireRoles roles={['admin', 'manager', 'accountant']}><Invoices /></RequireRoles>} />
+              <Route path="/expenses" element={<RequireRoles roles={['admin', 'manager', 'accountant']}><Expenses /></RequireRoles>} />
+              <Route path="/reports" element={<RequireRoles roles={['admin', 'manager', 'accountant']}><Reports /></RequireRoles>} />
+              <Route path="/ai" element={<RequireRoles roles={['admin', 'manager', 'accountant']}><AIAssistant /></RequireRoles>} />
+              <Route path="/users" element={<RequireRoles roles={['admin']}><UsersPage /></RequireRoles>} />
+              <Route path="/integrations" element={<RequireRoles roles={['admin', 'manager']}><Integrations /></RequireRoles>} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/profile" element={<Profile />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+      </ToastProvider>
     </AuthProvider>
   );
 }

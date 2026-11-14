@@ -5,6 +5,8 @@
   --muted: #728087;
   --paper: #f6f8f7;
   --surface: #fff;
+  --surface-hover: #f1f5f3;
+  --border: #e4eae7;
   --line: #e4eae7;
   --teal: #0e766e;
   --teal-dark: #095b55;
@@ -3398,4 +3400,617 @@ body {
 
 .spin-animation {
   animation: spin 1s linear infinite;
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   SHOPIFY-GRADE POLARIS SYSTEM EXTENSIONS (BIZAI HQ)
+   ══════════════════════════════════════════════════════════════ */
+
+/* 1. Accounting Banner Contrast Fix */
+[data-theme='dark'] .accounting-banner {
+  background: rgba(16, 185, 129, 0.08) !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+  color: #a7f3d0 !important;
+}
+[data-theme='dark'] .accounting-banner strong {
+  color: #6ee7b7 !important;
+}
+
+.banner-dismiss-btn {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all .15s ease;
+  margin-left: auto;
+}
+.banner-dismiss-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--ink);
+}
+[data-theme='dark'] .banner-dismiss-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* 2. Brand Header & Monogram */
+.brand-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px 18px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+.brand-mark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.brand-monogram {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #0e766e 0%, #042f2c 100%);
+  color: #5eead4;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.05em;
+  box-shadow: 0 2px 8px rgba(14, 118, 110, 0.35);
+}
+.brand-identity {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.brand-name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+}
+.brand-sub {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* 3. Grouped Shopify Navigation */
+.shopify-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+.nav-group-section {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.nav-group-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  padding: 0 10px 4px;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: none;
+  transition: all .15s ease;
+}
+.nav-item:hover {
+  background: rgba(14, 118, 110, 0.08);
+  color: var(--ink);
+}
+.nav-item.active {
+  background: rgba(14, 118, 110, 0.14);
+  color: var(--teal);
+  font-weight: 600;
+}
+[data-theme='dark'] .nav-item.active {
+  background: #172d28;
+  color: #5eead4;
+}
+
+/* 4. Sidebar Live Sync Pill */
+.sidebar-bottom {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.sidebar-sync-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(14, 118, 110, 0.06);
+  border: 1px solid rgba(14, 118, 110, 0.14);
+}
+[data-theme='dark'] .sidebar-sync-pill {
+  background: #13221f;
+  border-color: #233a34;
+}
+.sync-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  flex-shrink: 0;
+}
+@keyframes pulse-ring {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.9); }
+}
+.sync-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.sync-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.sync-desc {
+  font-size: 10px;
+  color: var(--muted);
+}
+.signout-btn {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: var(--muted);
+  width: 100%;
+}
+.signout-btn:hover {
+  color: var(--coral);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+/* 5. Shopify Spotlight Trigger in Topbar */
+.shopify-spotlight-trigger {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 12px;
+  width: 320px;
+  transition: all .15s ease;
+}
+[data-theme='dark'] .shopify-spotlight-trigger {
+  background: #141c1a;
+  border-color: #2b3834;
+}
+.shopify-spotlight-trigger:hover {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 2px rgba(14, 118, 110, 0.12);
+}
+.spotlight-search-icon {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.spotlight-placeholder {
+  color: var(--muted);
+  font-size: 12px;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.spotlight-kbd {
+  font-size: 10px;
+  font-family: inherit;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+[data-theme='dark'] .spotlight-kbd {
+  background: #1e2a27;
+  border-color: #354742;
+  color: #9cb0aa;
+}
+.storefront-quick-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  background: rgba(14, 118, 110, 0.08);
+  border: 1px solid rgba(14, 118, 110, 0.2);
+  color: var(--teal);
+  text-decoration: none;
+  transition: all .15s ease;
+}
+.storefront-quick-link:hover {
+  background: rgba(14, 118, 110, 0.16);
+  color: var(--teal-dark);
+}
+[data-theme='dark'] .storefront-quick-link {
+  background: #142a25;
+  border-color: #27473f;
+  color: #5eead4;
+}
+
+/* 6. Spotlight Command Palette Dialog CSS */
+.command-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 99999;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 10vh;
+  animation: fadeIn .15s ease-out;
+}
+.command-palette-dialog {
+  width: 100%;
+  max-width: 620px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 20px 48px -8px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slideDown .18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-theme='dark'] .command-palette-dialog {
+  background: #16201e;
+  border-color: #2d3d39;
+  box-shadow: 0 24px 60px -8px rgba(0, 0, 0, 0.7);
+}
+.command-palette-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.command-palette-input {
+  flex: 1;
+  background: transparent !important;
+  border: 0 !important;
+  font-size: 15px;
+  color: var(--ink) !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+.command-kbd-esc {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+[data-theme='dark'] .command-kbd-esc {
+  background: #1f2d29;
+  border-color: #334641;
+}
+.command-clear-btn {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px;
+}
+.command-palette-body {
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 10px 8px;
+}
+.command-section {
+  margin-bottom: 12px;
+}
+.command-section:last-child {
+  margin-bottom: 0;
+}
+.command-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  padding: 6px 12px 4px;
+}
+.command-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.command-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all .12s ease;
+}
+.command-item:hover,
+.command-item.active {
+  background: rgba(14, 118, 110, 0.09);
+}
+[data-theme='dark'] .command-item:hover,
+[data-theme='dark'] .command-item.active {
+  background: #1c2e29;
+}
+.command-item-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.04);
+  display: grid;
+  place-items: center;
+  color: var(--teal);
+  flex-shrink: 0;
+}
+[data-theme='dark'] .command-item-icon {
+  background: #20312b;
+  color: #5eead4;
+}
+.command-item-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.04);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.command-item-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.command-item-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.command-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.command-item-meta {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.command-item-price {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ink);
+}
+.command-item-arrow {
+  color: var(--muted);
+  opacity: 0.5;
+}
+.command-empty-state {
+  padding: 36px 20px;
+  text-align: center;
+  color: var(--muted);
+}
+.command-empty-icon {
+  margin-bottom: 8px;
+  opacity: 0.6;
+}
+.command-empty-state p {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.command-empty-state small {
+  font-size: 12px;
+}
+.command-loading-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.command-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--teal);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.command-palette-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 18px;
+  background: rgba(0, 0, 0, 0.02);
+  border-top: 1px solid var(--line);
+}
+[data-theme='dark'] .command-palette-footer {
+  background: #131c1a;
+}
+.command-footer-tip {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.command-kbd {
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+[data-theme='dark'] .command-kbd {
+  background: #1b2724;
+  border-color: #30413c;
+}
+
+/* 7. Toast Notification Container & Pills (Shopify Polaris style) */
+.shopify-toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 100000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.shopify-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 280px;
+  max-width: 420px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  animation: toastSlideUp .2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all .2s ease;
+}
+.shopify-toast-success {
+  background: #064e3b;
+  color: #ecfdf5;
+  border: 1px solid #059669;
+}
+.shopify-toast-error {
+  background: #7f1d1d;
+  color: #fef2f2;
+  border: 1px solid #dc2626;
+}
+.shopify-toast-info {
+  background: #1e293b;
+  color: #f8fafc;
+  border: 1px solid #475569;
+}
+.shopify-toast-icon {
+  flex-shrink: 0;
+  display: flex;
+}
+.shopify-toast-msg {
+  flex: 1;
+  font-weight: 500;
+}
+.shopify-toast-close {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+}
+.shopify-toast-close:hover {
+  opacity: 1;
+}
+
+/* 8. Customer Tier Badges */
+.customer-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.customer-tier-badge.tier-VIP {
+  background: #fae8ff;
+  color: #86198f;
+  border: 1px solid #f0abfc;
+}
+.customer-tier-badge.tier-Wholesale {
+  background: #e0e7ff;
+  color: #3730a3;
+  border: 1px solid #a5b4fc;
+}
+.customer-tier-badge.tier-Repeat {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+.customer-tier-badge.tier-Regular {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+[data-theme='dark'] .customer-tier-badge.tier-VIP {
+  background: #3b0764;
+  color: #f0abfc;
+  border-color: #701a75;
+}
+[data-theme='dark'] .customer-tier-badge.tier-Wholesale {
+  background: #1e1b4b;
+  color: #c7d2fe;
+  border-color: #3730a3;
+}
+[data-theme='dark'] .customer-tier-badge.tier-Repeat {
+  background: #052e16;
+  color: #86efac;
+  border-color: #166534;
+}
+[data-theme='dark'] .customer-tier-badge.tier-Regular {
+  background: #1e293b;
+  color: #cbd5e1;
+  border-color: #334155;
 }

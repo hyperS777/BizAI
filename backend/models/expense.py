@@ -15,6 +15,11 @@ class Expense(Base):
     description = Column(String(300), nullable=False)
     amount = Column(Float, nullable=False)
     category = Column(String(100), nullable=True)  # e.g., "rent", "utilities", "supplies"
+    vendor = Column(String(200), nullable=True)
+    payment_mode = Column(String(50), default="bank_transfer")
+    receipt_url = Column(Text, nullable=True)
+    vendor_gstin = Column(String(20), nullable=True)
+    gst_amount = Column(Float, default=0.0)
     date = Column(Date, nullable=False)
     notes = Column(Text, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)

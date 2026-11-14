@@ -66,3 +66,37 @@ def update_existing_user(
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return db_user
+
+
+@router.post("/{user_id}/reset-password")
+def reset_user_password(
+    user_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    new_password = payload.get("password")
+    if not new_password or len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    db_user = update_user(db, user_id, UserUpdate(password=new_password))
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"ok": True, "message": "Password updated successfully"}
+
+
+@router.delete("/{user_id}")
+def delete_or_deactivate_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot deactivate or delete your own account")
+    db_user = get_user(db, user_id)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Soft delete / toggle active
+    db_user.is_active = not db_user.is_active
+    db.commit()
+    return {"ok": True, "is_active": db_user.is_active}
+

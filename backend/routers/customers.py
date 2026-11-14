@@ -1,8 +1,11 @@
 """Customer API."""
 
+import csv
+import io
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -40,6 +43,73 @@ def create_new_customer(
     current_user: User = Depends(require_employee),
 ):
     return create_customer(db, customer)
+
+
+@router.get("/export")
+def export_customers_csv(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff),
+):
+    customers = get_customers(db, limit=1000)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "Name", "Email", "Phone", "Company", "Tier", "Tags", "Address", "BillingAddress", "GSTIN", "OutstandingBalance"])
+    for c in customers:
+        writer.writerow([
+            c.id, c.name, c.email or "", c.phone or "", c.company or "",
+            c.tier or "Regular", c.tags or "", (c.address or "").replace("\n", " "),
+            (c.billing_address or "").replace("\n", " "), c.gstin or "", c.outstanding_balance or 0
+        ])
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="customers.csv"'},
+    )
+
+
+@router.post("/import")
+async def import_customers_csv(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_employee),
+):
+    content = await file.read()
+    text = content.decode("utf-8", errors="replace")
+    reader = csv.DictReader(io.StringIO(text))
+    count = 0
+    from models.customer import Customer
+    for row in reader:
+        name = (row.get("Name") or row.get("name") or "").strip()
+        if not name:
+            continue
+        email = (row.get("Email") or row.get("email") or "").strip() or None
+        phone = (row.get("Phone") or row.get("phone") or "").strip() or None
+
+        cust = None
+        if email:
+            cust = db.query(Customer).filter(Customer.email == email).first()
+        if not cust:
+            cust = Customer(
+                name=name,
+                email=email,
+                phone=phone,
+                company=row.get("Company") or row.get("company"),
+                tier=row.get("Tier") or row.get("tier") or "Regular",
+                tags=row.get("Tags") or row.get("tags"),
+                address=row.get("Address") or row.get("address"),
+                billing_address=row.get("BillingAddress") or row.get("billing_address"),
+                gstin=row.get("GSTIN") or row.get("gstin"),
+            )
+            db.add(cust)
+            count += 1
+        else:
+            cust.name = name
+            if phone:
+                cust.phone = phone
+            if row.get("Tier"):
+                cust.tier = row.get("Tier")
+    db.commit()
+    return {"ok": True, "imported_or_updated": count}
 
 
 @router.get("/{customer_id}", response_model=CustomerResponse)

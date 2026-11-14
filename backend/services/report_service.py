@@ -204,12 +204,21 @@ def get_dashboard_metrics(db: Session):
     }
 
 
-def get_sales_series(db: Session, days: int = 30):
-    start = date.today() - timedelta(days=days - 1)
+def get_sales_series(db: Session, days: int = 30, start_date: Optional[date] = None, end_date: Optional[date] = None):
+    if start_date and end_date:
+        start = start_date
+        end = end_date
+        total_days = max(1, (end - start).days + 1)
+    else:
+        end = date.today()
+        start = end - timedelta(days=days - 1)
+        total_days = days
+
     rows = (
         db.query(func.date(Order.created_at), func.coalesce(func.sum(Order.total_amount), 0))
         .filter(
             Order.created_at >= datetime.combine(start, datetime.min.time()),
+            Order.created_at <= datetime.combine(end, datetime.max.time()),
             Order.status != OrderStatus.CANCELLED.value,
         )
         .group_by(func.date(Order.created_at))
@@ -217,11 +226,59 @@ def get_sales_series(db: Session, days: int = 30):
     )
     by_day = {str(r[0]): float(r[1] or 0) for r in rows}
     series = []
-    for i in range(days):
+    for i in range(total_days):
         day = start + timedelta(days=i)
         key = day.isoformat()
         series.append({"date": key, "total": by_day.get(key, 0.0)})
     return series
+
+
+def get_pnl_data(db: Session, start_date: Optional[date] = None, end_date: Optional[date] = None) -> dict:
+    today = date.today()
+    q_orders = db.query(Order).filter(Order.status != OrderStatus.CANCELLED.value)
+    q_expenses = db.query(Expense).filter(Expense.date <= today)
+
+    if start_date:
+        q_orders = q_orders.filter(Order.created_at >= datetime.combine(start_date, datetime.min.time()))
+        q_expenses = q_expenses.filter(Expense.date >= start_date)
+    if end_date:
+        q_orders = q_orders.filter(Order.created_at <= datetime.combine(end_date, datetime.max.time()))
+        q_expenses = q_expenses.filter(Expense.date <= end_date)
+
+    orders = q_orders.all()
+    gross_sales = sum(float(o.total_amount or 0) for o in orders)
+    total_orders = len(orders)
+
+    order_ids = [o.id for o in orders]
+    cogs = 0.0
+    if order_ids:
+        items = db.query(OrderItem).filter(OrderItem.order_id.in_(order_ids)).all()
+        cogs = sum(float(it.quantity or 0) * float(it.cost_price or 0) for it in items)
+
+    gross_profit = gross_sales - cogs
+
+    expenses = q_expenses.all()
+    operating_expenses = sum(float(e.amount or 0) for e in expenses)
+    net_profit = gross_profit - operating_expenses
+
+    by_cat = {}
+    for e in expenses:
+        cat = e.category or "Other"
+        by_cat[cat] = by_cat.get(cat, 0.0) + float(e.amount or 0)
+    expense_categories = [{"category": k, "total": round(v, 2)} for k, v in sorted(by_cat.items(), key=lambda x: x[1], reverse=True)]
+
+    period_str = f"{start_date} to {end_date}" if start_date and end_date else "Fiscal Year to Date"
+    return {
+        "period": period_str,
+        "gross_sales": round(gross_sales, 2),
+        "total_orders": total_orders,
+        "cogs": round(cogs, 2),
+        "gross_profit": round(gross_profit, 2),
+        "operating_expenses": round(operating_expenses, 2),
+        "expense_categories": expense_categories,
+        "net_profit": round(net_profit, 2),
+    }
+
 
 
 def get_top_products(db: Session, limit: int = 10):
