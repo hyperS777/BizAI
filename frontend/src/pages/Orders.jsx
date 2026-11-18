@@ -169,7 +169,7 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onE
                 >
                   <Edit3 size={13} /> Edit Address &amp; Tracking
                 </button>
-                {order.status !== 'cancelled' && order.status !== 'delivered' && (
+                {order.status !== 'cancelled' && order.status !== 'delivered' && canStatus && (
                   <button
                     type="button"
                     className="outline-btn"
@@ -508,7 +508,15 @@ export default function Orders() {
         </section>
       ) : <EmptyState icon={Package} text="No simulated storefront checkouts." /> : view === 'map' ? (
         <section className="panel delivery-map-panel" style={{ height: 460, position: 'relative' }}>
-          <MapContainer center={[28.6139, 77.2090]} zoom={11} style={{ height: '100%', width: '100%', borderRadius: 8 }} zoomControl={false}>
+          <div style={{ padding: '10px 14px', background: 'var(--panel-alt)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 16, alignItems: 'center', fontSize: 12, flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 600 }}>📍 Delivery Map</span>
+            <span style={{ color: 'var(--muted)' }}>{mappedOrders.length} active shipments plotted</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} /> Delivered</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} /> Shipped</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} /> Confirmed</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#6366f1', display: 'inline-block' }} /> Pending</span>
+          </div>
+          <MapContainer center={[28.6139, 77.2090]} zoom={11} style={{ height: 'calc(100% - 42px)', width: '100%', borderRadius: '0 0 8px 8px' }} zoomControl={false}>
             <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             <ZoomControl position="bottomright" />
             <MapBounds orders={mappedOrders} />

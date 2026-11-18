@@ -146,6 +146,11 @@ export default function Layout() {
               <span className="sync-desc">Catalog · Stock · Delhivery</span>
             </div>
           </div>
+          <div style={{ padding: '6px 12px', fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6, borderTop: '1px solid var(--border)', marginTop: 4 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--teal)', display: 'inline-block' }} />
+            <span style={{ textTransform: 'capitalize', fontWeight: 600 }}>{role || 'Staff'}</span>
+            <span>· {user?.full_name?.split(' ')[0] || 'User'}</span>
+          </div>
           <button className="nav-item signout-btn" onClick={() => { logout(); navigate('/login'); }}>
             <LogOut size={16} /> Sign out
           </button>

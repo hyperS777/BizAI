@@ -399,7 +399,7 @@ export default function Products() {
                 ) : (
                   <div
                     onClick={() => fileInputRef.current?.click()}
-                    style={{ width: 70, height: 85, border: '2px dashed var(--border)', borderRadius: 6, display: 'grid', placeItems: 'center', cursor: 'pointer', background: '#fff' }}
+                    style={{ width: 70, height: 85, border: '2px dashed var(--border)', borderRadius: 6, display: 'grid', placeItems: 'center', cursor: 'pointer', background: 'var(--surface-hover)' }}
                     title="Click to upload"
                   >
                     <Upload size={18} style={{ color: 'var(--muted)' }} />
@@ -450,7 +450,7 @@ export default function Products() {
             </div>
 
             {/* Garment Variants Section */}
-            <div style={{ border: '1px solid var(--border)', padding: 12, borderRadius: 8, background: '#fafafa' }}>
+            <div style={{ border: '1px solid var(--border)', padding: 12, borderRadius: 8, background: 'var(--panel-alt)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <div>
                   <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -471,7 +471,7 @@ export default function Products() {
               {form.variants?.length ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {form.variants.map((v, idx) => (
-                    <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr 1fr 28px', gap: 6, alignItems: 'center', background: '#fff', padding: '6px 8px', borderRadius: 4, border: '1px solid #e5e7eb' }}>
+                    <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr 1fr 28px', gap: 6, alignItems: 'center', background: 'var(--surface)', padding: '6px 8px', borderRadius: 4, border: '1px solid var(--border)' }}>
                       <input
                         placeholder="Variant SKU"
                         value={v.sku}
@@ -536,7 +536,7 @@ export default function Products() {
             <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
               Upload a standard CSV file with headers: <code>Name, SKU, Price, CostPrice, Stock, MinStock, Category, Vendor, Description</code>.
             </p>
-            <div style={{ border: '2px dashed var(--border)', borderRadius: 8, padding: 24, textAlign: 'center', background: '#fafafa' }}>
+            <div style={{ border: '2px dashed var(--border)', borderRadius: 8, padding: 24, textAlign: 'center', background: 'var(--panel-alt)' }}>
               <Upload size={28} style={{ color: 'var(--teal)', margin: '0 auto 8px' }} />
               <input
                 type="file"

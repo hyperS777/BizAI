@@ -21,7 +21,7 @@ def ai_chat(
     return answer_query(
         db,
         current_user,
-        request.query,
+        request.query,  
         conversation_history=request.conversation_history,
     )
 

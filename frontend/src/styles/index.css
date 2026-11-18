@@ -1501,6 +1501,17 @@ select {
   background: #20312e
 }
 
+[data-theme="dark"] .leaflet-popup-content-wrapper,
+[data-theme="dark"] .leaflet-popup-tip {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+[data-theme="dark"] .leaflet-container {
+  background: #1a2420 !important;
+}
+
 .theme-toggle {
   border: 1px solid var(--line);
   background: var(--surface);

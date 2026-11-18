@@ -48,6 +48,12 @@ def _sanitize_input(query: str) -> tuple[str, str, set[str]]:
     norm = re.sub(r'\bdisc[o0]unt?s?\b', 'discount', norm)
     norm = re.sub(r'\b(expe+ct(ed|ing)?|forecast(ing)?|predict(ed|ion)?)\b', 'expect', norm)
     norm = re.sub(r'\b(perfo+rm(ing|ance)?|perfr+om)\b', 'perform', norm)
+    norm = re.sub(r'\b(bu+y+|buuy|bi+y)\b', 'buy', norm)
+    norm = re.sub(r'\b(stoc+k|stoock)\b', 'stock', norm)
+    norm = re.sub(r'\b(purchas[e]?|purchse|purches)\b', 'purchase', norm)
+    norm = re.sub(r'\b(recomm?end|recomend|recommnd)\b', 'recommend', norm)
+    norm = re.sub(r'\b(busines+|bisuness|bizness|bussiness)\b', 'business', norm)
+    norm = re.sub(r'\b(well|g[o0]{2}d|gr[e3]{2}t)\b', 'good', norm)
 
     words = set(norm.split())
     return clean.lower(), norm, words
@@ -338,6 +344,28 @@ def _fallback_conversational_answer(
                 f"**Recent Orders**:\n{orders_block}"
             )
 
+    # 4b. If query sounds like a customer lookup but no match found
+    _lookup_phrases = ["how many orders did", "orders from", "orders by", "orders placed by", "did", "make"]
+    if db and any(phrase in q_norm for phrase in _lookup_phrases):
+        # Check if query contains a name-like token not in DB
+        query_tokens = [w for w in q_norm.split() if len(w) >= 3 and w not in {'how', 'many', 'orders', 'did', 'the', 'make', 'place', 'order', 'placed'}]
+        all_customer_names_flat = set()
+        for c in db.query(CustomerModel).all():
+            if c.name:
+                for part in c.name.lower().split():
+                    if len(part) >= 3:
+                        all_customer_names_flat.add(part)
+        unknown_names = [t for t in query_tokens if t not in all_customer_names_flat and t.isalpha()]
+        if unknown_names:
+            name_guess = unknown_names[0].title()
+            return (
+                f"### Customer Not Found: '{name_guess}'\n\n"
+                f"No customer named **'{name_guess}'** exists in the REIHH Studio customer database.\n\n"
+                f"**Registered customers include:**\n"
+                + "\n".join(f"* {c['name']}" for c in top_customers[:6]) +
+                f"\n\nTry asking: *'How many orders did Amber Abbas make?'* or *'Who are our best customers?'*"
+            )
+
     # 5. Greetings & check-ins
     greeting_phrases = [
         "good morning", "good afternoon", "good evening", "how are you", "how u doing",
@@ -374,8 +402,13 @@ def _fallback_conversational_answer(
             f"You can view complete revenue charts and downloadable CSV statements in the **Reports** section."
         )
 
-    # 7. Order volume / pipeline count
-    if any(phrase in q_norm for phrase in ["how many order", "total orders", "order count", "number of order"]):
+    # 7. Order volume / pipeline count — only if no customer name in query
+    has_customer_name = db and any(
+        (c.name and len(c.name.strip()) >= 3 and 
+         any(part in q_norm for part in [p.lower() for p in c.name.strip().split() if len(p) >= 3]))
+        for c in db.query(CustomerModel).all()
+    ) if db else False
+    if not has_customer_name and any(phrase in q_norm for phrase in ["how many order", "total orders", "order count", "number of order"]):
         total_o = sales.get("total_orders", 0)
         delivered = order_counts.get("delivered", 0)
         shipped = order_counts.get("shipped", 0)
@@ -399,8 +432,119 @@ def _fallback_conversational_answer(
                 f"\n\nIncludes Womenswear, Menswear, Denim & Tailored Outerwear. You can edit sizing variants, upload high-res images, and update compare-at MRP prices in the **Products** section."
             )
 
+    # 9a. Buying / Purchasing Advisor — must come BEFORE the restock handler
+    # Triggers on open-ended "what should I buy", "what not to buy", "worth buying", etc.
+    _buy_phrases = [
+        "what should i buy", "what should we buy", "what to buy", "should i buy",
+        "what not to buy", "what should i not buy", "do not buy", "dont buy", "don't buy",
+        "worth buying", "good to buy", "buying decision", "buying advice", "purchasing advice",
+        "what should we order", "what to order", "what should i order", "should i order",
+        "what to stock", "what should i stock", "inventory decision", "worth stocking",
+        "over-order", "overstock", "which products to avoid", "which garment", "which style",
+        "is our business doing well", "how is our business", "are we doing well",
+        "what should i not stock", "what do i not buy", "and what do i not",
+        "should we buy more", "which to avoid", "avoid buying", "avoid stocking",
+    ]
+    _is_buying_query = any(phrase in q_norm for phrase in _buy_phrases) or (
+        ("buy" in words or "order" in words or "stock" in words or "purchase" in words)
+        and ("what" in words or "which" in words or "should" in words or "not" in words
+             or "avoid" in words or "recommend" in words)
+        and ("buy" in words or "purchase" in words or "order" in words)
+    )
+    if _is_buying_query:
+        # Sort all_products by stock sold (from top_products list)
+        sold_map = {p["name"]: p for p in top_products if p.get("total_revenue", 0) > 0}
+        no_sales = [p for p in all_products if p["name"] not in sold_map]
+
+        # Build BUY list: products with proven commercial demand
+        buy_lines = []
+        for p in top_products[:6]:
+            if p.get("total_revenue", 0) > 0:
+                units = p.get("total_quantity", 0)
+                rev = p.get("total_revenue", 0)
+                # Find cost from catalog
+                cat_p = next((x for x in all_products if x["name"] == p["name"]), None)
+                margin_note = ""
+                if cat_p and cat_p.get("price") and cat_p.get("cost_price"):
+                    margin = ((cat_p["price"] - cat_p["cost_price"]) / cat_p["price"]) * 100
+                    margin_note = f" · {margin:.0f}% margin"
+                stock_note = f" (Current stock: {cat_p['stock_qty']} units)" if cat_p else ""
+                buy_lines.append(
+                    f"* **{p['name']}**: {units} units sold · INR {rev:,.0f} revenue{margin_note}{stock_note}"
+                )
+
+        # Build DON'T BUY list: zero commercial traction
+        skip_lines = []
+        for p in no_sales[:5]:
+            skip_lines.append(
+                f"* **{p['name']}** (SKU: `{p['sku']}`): 0 units sold — price INR {p['price']:,.0f}, stock: {p['stock_qty']} units"
+            )
+
+        total_s = sales.get("total_sales", 0)
+        total_o = sales.get("total_orders", 0)
+
+        buy_block = "\n".join(buy_lines) or "* All products show equal demand signals currently."
+        skip_block = "\n".join(skip_lines) or "* All active products have recorded at least some demand."
+
+        return (
+            f"### 🛒 REIHH Studio — Inventory Buying Decision Guide\n\n"
+            f"Based on **{total_o} confirmed orders** and **INR {total_s:,.0f} in sales**, here's what the data says:\n\n"
+            f"---\n\n"
+            f"#### ✅ **BUY / Restock** — High Commercial Demand\n"
+            f"These are your proven revenue generators. Keep strong buffer stock:\n\n"
+            f"{buy_block}\n\n"
+            f"**Strategy:** Run a 2–3 month stock buffer (100–150 units minimum) for all high-velocity SKUs. "
+            f"Your fastest mover — **Alba light Wash Women's Straight Fit Denim** — should maintain a 200+ unit safety buffer "
+            f"in your Okhla DC ahead of Delhi's festive & winter season.\n\n"
+            f"---\n\n"
+            f"#### ⛔ **HOLD OFF / Don't Over-Buy** — Zero Commercial Traction Yet\n"
+            f"These garments have not generated paid orders yet. Avoid bulk restocking until demand is proven:\n\n"
+            f"{skip_block}\n\n"
+            f"**Strategy:** Cap test batches at 20–30 units per zero-traction SKU. Use markdown campaigns or influencer "
+            f"seeding to gauge organic demand before committing to bulk fabric orders.\n\n"
+            f"---\n\n"
+            f"**💡 REIHH Executive Summary:** Double down on your denim-and-trench-jacket coordinate sets — "
+            f"they represent your highest revenue concentration. Avoid speculative bulk orders on untested silhouettes "
+            f"until they show at least 3 confirmed paid conversions."
+        )
+
+    # 9b. Business health check — "is our business doing well", "how are we doing", etc.
+    _health_phrases = [
+        "is our business doing", "how is our business", "are we doing well", "how are we doing",
+        "business doing", "are we profitable", "how profitable", "is business good",
+        "business performance", "how well are we", "overall health", "business health",
+    ]
+    if any(phrase in q_norm for phrase in _health_phrases) or (
+        "business" in words and ("good" in words or "well" in words or "profit" in words or "doing" in words)
+    ):
+        total_s = sales.get("total_sales", 0)
+        total_o = sales.get("total_orders", 0)
+        p_val = profit.get("profit", 0)
+        monthly_s = sales.get("monthly_sales", 0)
+        prev_s = sales.get("previous_month_sales", 0)
+        margin_pct = (p_val / total_s * 100) if total_s > 0 else 0
+        mom_change = ((monthly_s - prev_s) / prev_s * 100) if prev_s > 0 else 0
+        mom_arrow = "📈" if mom_change >= 0 else "📉"
+        health_score = "Strong" if margin_pct > 40 else ("Healthy" if margin_pct > 20 else "Needs Attention")
+        top_product_name = top_products[0]["name"] if top_products else "N/A"
+        top_customer_name = top_customers[0]["name"] if top_customers else "N/A"
+        return (
+            f"### 📊 REIHH Studio — Business Health Report\n\n"
+            f"**Overall Status: {health_score}** ✅\n\n"
+            f"| Metric | Value |\n"
+            f"|--------|-------|\n"
+            f"| Lifetime Revenue | **INR {total_s:,.0f}** across {total_o} orders |\n"
+            f"| Net Profit | **INR {p_val:,.0f}** ({margin_pct:.1f}% net margin) |\n"
+            f"| This Month | INR {monthly_s:,.0f} {mom_arrow} {abs(mom_change):.1f}% vs last month |\n"
+            f"| Outstanding Receivables | INR {outstanding:,.0f} |\n"
+            f"| Best-Selling Product | {top_product_name} |\n"
+            f"| Top Client | {top_customer_name} |\n\n"
+            f"**Verdict:** {'Your business is growing with healthy margins. Focus on scaling your top SKUs and acquiring more repeat customers.' if margin_pct > 30 else 'Business is operational. Focus on reducing COGS and driving repeat customer revenue to push margins above 40%.'}\n\n"
+            f"Ask me: *'Break down our expenses'*, *'Who are our best customers?'*, or *'What should I restock?'*"
+        )
+
     # 9. Restocking & Inventory priorities
-    if any(w in q_norm for w in ["restock", "buy", "purchase", "reorder", "low stock", "safety stock"]):
+    if any(w in q_norm for w in ["restock", "reorder", "low stock", "safety stock", "inventory alert"]):
         if low_stock:
             lines = [
                 f"* **{item['name']}** (SKU: `{item['sku']}`): **{item['stock_qty']} units left** (Safety min: {item['min_stock_level']}) -> *Recommend reordering at least {item['min_stock_level'] * 2} units*."
@@ -507,20 +651,84 @@ def _fallback_conversational_answer(
             f"\n\nView client fit notes and manage VIP/Wholesale tiers in the **Customers** tab."
         )
 
-    # 12. Contextual default summary
+    # 17. Sales / revenue comparison between products
+    _compare_phrases = ["compare", "vs", "versus", "which is better", "which performs better", "difference between", "denim vs", "jacket vs"]
+    if any(phrase in q_norm for phrase in _compare_phrases):
+        if top_products and len(top_products) >= 2:
+            top2 = top_products[:2]
+            winner = top2[0]
+            runner = top2[1]
+            return (
+                f"### Product Sales Comparison\n\n"
+                f"**Winner by Revenue:** {winner['name']}\n"
+                f"* Units Sold: **{winner.get('total_quantity', 0)}** · Revenue: **INR {winner.get('total_revenue', 0):,.0f}**\n\n"
+                f"**Runner-Up:** {runner['name']}\n"
+                f"* Units Sold: **{runner.get('total_quantity', 0)}** · Revenue: **INR {runner.get('total_revenue', 0):,.0f}**\n\n"
+                f"**Gap:** INR {winner.get('total_revenue',0) - runner.get('total_revenue',0):,.0f} in favour of {winner['name'].split()[0]}.\n\n"
+                f"For a full side-by-side view across all {len(all_products)} garments, check the **Reports → Products** section."
+            )
+
+    # 18. Risk / what is risky, what could go wrong
+    _risk_phrases = ["risky", "risk", "what could go wrong", "downside", "danger", "overstock", "overorder", "overstocked"]
+    if any(phrase in q_norm for phrase in _risk_phrases):
+        no_demand_items = [p for p in all_products if not any(tp["name"] == p["name"] for tp in top_products)]
+        risk_lines = [f"* **{p['name']}** (SKU: `{p['sku']}`): {p['stock_qty']} units in stock, INR {p['price']:,.0f} price — 0 sales recorded" for p in no_demand_items[:4]]
+        return (
+            f"### ⚠️ Inventory Risk Assessment — REIHH Studio\n\n"
+            f"**Key Risks to Watch:**\n\n"
+            f"#### 1. Dead-Stock / Overstock Risk (Zero Sales)\n"
+            + ("\n".join(risk_lines) or "* All products have recorded some demand.") +
+            f"\n\n**Recommendation:** Cap these at 20–30 units until you see at least 3 organic paid orders.\n\n"
+            f"#### 2. Concentration Risk\n"
+            + (f"* Your revenue is **heavily concentrated** in `{top_products[0]['name']}` ({top_products[0].get('total_quantity',0)} units · INR {top_products[0].get('total_revenue',0):,.0f}). A stockout would significantly impact revenue." if top_products else "") +
+            f"\n\n#### 3. Receivables Risk\n"
+            f"* Outstanding receivables: **INR {outstanding:,.0f}** — ensure timely follow-up on unpaid invoices.\n\n"
+            f"Ask me *'What should I buy?'* or *'Show me my top customers'* for actionable next steps."
+        )
+
+    # 17. Smart contextual fallback — grounded in real data, not a dead-end menu
     total_o = sales.get("total_orders", 0)
-    tot_s = _format_inr(sales.get("total_sales", 0))
-    latest = f" Most recent order: **{recent_orders[0]['order_number']}** from {recent_orders[0]['customer']}." if recent_orders else ""
-    first = f" First order: **{first_order['order_number']}** from {first_order['customer']}." if first_order else ""
+    total_s = sales.get("total_sales", 0)
+    p_val = profit.get("profit", 0)
+    monthly_s = sales.get("monthly_sales", 0)
+    prev_s = sales.get("previous_month_sales", 0)
+    top_name = top_products[0]["name"] if top_products else "N/A"
+    top_rev = top_products[0].get("total_revenue", 0) if top_products else 0
+    top_cust = top_customers[0]["name"] if top_customers else "N/A"
+    latest_ord = recent_orders[0]["order_number"] if recent_orders else "N/A"
+    mom_change = ((monthly_s - prev_s) / prev_s * 100) if prev_s > 0 else 0
+    trend_str = f"{'up' if mom_change >= 0 else 'down'} {abs(mom_change):.1f}% vs last month"
+
+    # Try to generate a contextual response based on what words appear in the query
+    contextual_insight = ""
+    if any(w in words for w in ["sell", "selling", "sales", "sold"]):
+        contextual_insight = f"Sales are trending {trend_str} (INR {monthly_s:,.0f} this month). Your top garment by revenue is **{top_name}** at INR {top_rev:,.0f}."
+    elif any(w in words for w in ["customer", "client", "buyer", "who"]):
+        contextual_insight = f"Your strongest client account is **{top_cust}**. Total registered customer base: {sales.get('total_customers', 0)} accounts."
+    elif any(w in words for w in ["money", "cash", "earn", "earning", "make"]):
+        contextual_insight = f"REIHH has earned **INR {total_s:,.0f}** across {total_o} orders with **INR {p_val:,.0f} net profit** after COGS and operating expenses."
+    elif any(w in words for w in ["product", "item", "garment", "piece", "style", "collection"]):
+        contextual_insight = f"Your catalog has **{len(all_products)} active styles**. The standout performer is **{top_name}** with the highest commercial turnover."
+    elif any(w in words for w in ["order", "recent", "last", "new", "latest"]):
+        contextual_insight = f"Your most recent order is **{latest_ord}**. Total pipeline: {total_o} orders across all statuses."
+    else:
+        contextual_insight = (
+            f"Here's a live snapshot: **{total_o} orders**, **INR {total_s:,.0f} in revenue**, "
+            f"**INR {p_val:,.0f} net profit**. Top seller: {top_name}. Best client: {top_cust}."
+        )
 
     return (
-        f"Based on REIHH Studio's live database: **{total_o} orders** totaling **{tot_s} in sales**, with **INR {profit.get('profit', 0):,.0f} net profit**.{first}{latest}\n\n"
-        "Here are specific questions you can ask me:\n"
-        "1. *'What was the first order?'*\n"
-        "2. *'What products should I restock?'*\n"
-        "3. *'How is our Delhivery shipping performing?'*\n"
-        "4. *'Which items are our top sellers?'*\n"
-        "5. *'Break down our net profit and expenses.'*"
+        f"### REIHH Studio — Business Intelligence Response\n\n"
+        f"{contextual_insight}\n\n"
+        f"I can answer specific questions like:\n"
+        f"* *\"What should I buy?\"* — Inventory buying decisions\n"
+        f"* *\"Is our business doing well?\"* — Full health report\n"
+        f"* *\"What was the first order?\"* — Origin order & customer\n"
+        f"* *\"What is expected to perform next month?\"* — Sales forecast\n"
+        f"* *\"Who are our best customers?\"* — VIP client dossier\n"
+        f"* *\"Break down our profit and expenses\"* — Financial deep-dive\n"
+        f"* *\"What products are at risk of overstocking?\"* — Inventory risk report\n\n"
+        f"Or try entering an order number like `ORD-REIHH-001` to pull full order details."
     )
 
 

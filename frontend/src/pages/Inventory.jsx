@@ -339,16 +339,16 @@ export default function Inventory() {
       {poModal && (
         <Modal title="Automated Purchase Order (PO) · Restock Plan" onClose={() => setPoModal(false)}>
           <div style={{ maxHeight: '72vh', overflowY: 'auto', paddingRight: 4 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, background: '#f8fafc', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, background: 'var(--panel-alt)', padding: 14, borderRadius: 8, border: '1px solid var(--border)' }}>
               <div>
-                <strong style={{ display: 'block', fontSize: 14 }}>Supplier Reorder Recommendation</strong>
-                <small style={{ color: 'var(--muted)' }}>
+                <strong style={{ display: 'block', fontSize: 14, color: 'var(--text)' }}>Supplier Reorder Recommendation</strong>
+                <small style={{ color: 'var(--muted)', fontSize: 12 }}>
                   Grounded in current inventory safety thresholds and sales velocity.
                 </small>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <small style={{ color: 'var(--muted)' }}>Est. Total Order Cost</small>
-                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--teal)' }}>{money(estimatedPoTotal)}</div>
+                <small style={{ color: 'var(--muted)', fontSize: 11, display: 'block' }}>Est. Total Order Cost</small>
+                <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--teal)' }}>{money(estimatedPoTotal)}</div>
               </div>
             </div>
 

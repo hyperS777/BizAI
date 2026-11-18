@@ -322,7 +322,7 @@ export default function Customers() {
             <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
               Upload a CSV file with columns: <code>Name, Email, Phone, Company, Tier, Tags, Address, BillingAddress, GSTIN</code>.
             </p>
-            <div style={{ border: '2px dashed var(--border)', borderRadius: 8, padding: 24, textAlign: 'center', background: '#fafafa' }}>
+            <div style={{ border: '2px dashed var(--border)', borderRadius: 8, padding: 24, textAlign: 'center', background: 'var(--panel-alt)' }}>
               <Upload size={28} style={{ color: 'var(--teal)', margin: '0 auto 8px' }} />
               <input type="file" accept=".csv" onChange={(e) => setImportFile(e.target.files?.[0] || null)} required />
               {importFile && (

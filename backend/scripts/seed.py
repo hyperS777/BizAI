@@ -157,11 +157,27 @@ def reset_and_seed(db: SessionLocal = None):
                 (0, [(3, 1), (1, 1)], 26, OrderStatus.DELIVERED.value, "Studio showroom samples."),
             ]
 
+            ADDR_COORDS = {
+                'Mohali': (30.6757, 76.7332),
+                'Bengaluru': (12.9784, 77.6408),
+                'Mumbai': (19.0596, 72.8295),
+                'Jaipur': (26.9124, 75.7873),
+                'New Delhi': (28.6315, 77.2167),
+                'Delhi': (28.6315, 77.2167),
+            }
+
+            def get_coords(addr):
+                for city, coords in ADDR_COORDS.items():
+                    if city.lower() in (addr or '').lower():
+                        return coords
+                return (28.6139, 77.2090)
+
             for idx, (c_idx, p_specs, days_ago, st, note) in enumerate(order_templates, start=1):
                 cust = created_customers[c_idx % len(created_customers)]
                 order_time = now - timedelta(days=days_ago)
                 waybill = f"148{839201948 + idx}"
-                
+                lat, lon = get_coords(cust.address)
+
                 order = Order(
                     order_number=f"ORD-REIHH-{idx:03d}",
                     customer_id=cust.id,
@@ -169,9 +185,9 @@ def reset_and_seed(db: SessionLocal = None):
                     tracking_company="Delhivery Express",
                     tracking_number=waybill,
                     tracking_url=f"https://www.delhivery.com/track/package/{waybill}",
-                    delivery_location="Delhi NCR Hub",
-                    delivery_latitude=28.6139,
-                    delivery_longitude=77.2090,
+                    delivery_location=cust.address.split(',')[0] if cust.address else "Delhi NCR Hub",
+                    delivery_latitude=lat,
+                    delivery_longitude=lon,
                     delivery_updated_at=order_time,
                     shipping_address=cust.address,
                     currency="INR",
