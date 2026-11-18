@@ -54,6 +54,7 @@ def _sanitize_input(query: str) -> tuple[str, str, set[str]]:
     norm = re.sub(r'\b(recomm?end|recomend|recommnd)\b', 'recommend', norm)
     norm = re.sub(r'\b(busines+|bisuness|bizness|bussiness)\b', 'business', norm)
     norm = re.sub(r'\b(well|g[o0]{2}d|gr[e3]{2}t)\b', 'good', norm)
+    norm = re.sub(r'\biabd\b', 'ibad', norm)
 
     words = set(norm.split())
     return clean.lower(), norm, words
@@ -171,6 +172,7 @@ GUIDELINES:
 5. If asked for business or marketing advice, provide strategic, apparel-focused insights (pricing, safety buffer restocking, margin optimization).
 6. Use markdown formatting (bolding, headers, bullet points).
 7. If asked about future performance, predictions, or what is expected to perform well next month, provide an authoritative, grounded commerce forecast highlighting winter/festive demand, structured outerwear sets, high-margin pieces, projected revenue uplift (+15% to +35%), and restock priorities.
+8. Core stakeholders from Team YATRI (Mohammad Ibad Hussain, Ramji, Yash Narang, Ashutosh Yadav, Tushar) and Amber Abbas (Business Head) are the creators of BizAI and also registered VIP/demo customers. Cite their exact customer orders when asked.
 """
 
 
@@ -327,21 +329,32 @@ def _fallback_conversational_answer(
                 .order_by(OrderModel.created_at.desc())
                 .all()
             )
+            total_spent = sum(o.total_amount or 0 for o in c_orders)
             orders_lines = []
-            for o in c_orders[:4]:
+            for o in c_orders[:8]:
                 items = db.query(OrderItemModel).filter(OrderItemModel.order_id == o.id).all()
                 items_str = ", ".join(f"{it.quantity}x {it.product.name if it.product else 'Garment'}" for it in items)
-                orders_lines.append(f"* `{o.order_number}`: {o.status.upper()} | INR {o.total_amount:,.0f} | {items_str or 'Apparel'}")
-            orders_block = "\n".join(orders_lines) or "* No orders placed yet."
+                orders_lines.append(f"* `{o.order_number}`: **{o.status.upper()}** · INR {o.total_amount:,.0f} ({items_str or 'Apparel'})")
+            orders_block = "\n".join(orders_lines) or "* No commercial orders placed yet."
+
+            team_note = ""
+            name_lower = matched_customer.name.lower()
+            if "ramji" in name_lower:
+                team_note = "\n\n*(Note: Ramji is also a core Frontend & UI/UX Engineer of BizAI from Team YATRI.)*"
+            elif "ibad" in name_lower:
+                team_note = "\n\n*(Note: Mohammad Ibad Hussain is also the Team Leader & System Architect of BizAI from Team YATRI.)*"
+
             return (
                 f"### Customer Dossier: {matched_customer.name}\n\n"
-                f"* **Client Tier**: **{matched_customer.tier or 'Regular'}**\n"
-                f"* **Contact**: {matched_customer.email or 'No email'} · {matched_customer.phone or 'No phone'}\n"
-                f"* **Lifetime Orders**: **{len(c_orders)} orders**\n"
+                f"**{matched_customer.name}** has placed **{len(c_orders)} orders** with REIHH Studio totaling **INR {total_spent:,.0f}**.\n\n"
+                f"* **Client Tier**: **{matched_customer.tier or 'VIP / Demo'}**\n"
+                f"* **Contact**: {matched_customer.email or 'N/A'} · {matched_customer.phone or 'N/A'}\n"
+                f"* **Lifetime Order Count**: **{len(c_orders)} orders**\n"
+                f"* **Total Value**: **INR {total_spent:,.0f}**\n"
                 f"* **Outstanding Balance**: INR {matched_customer.outstanding_balance or 0:,.0f}\n"
-                f"* **Delivery Address**: {matched_customer.address or 'Delhi NCR, India'}\n"
-                f"* **Notes & Fit**: {matched_customer.notes or 'No special fit preferences on file'}\n\n"
+                f"* **Delivery Address**: {matched_customer.address or 'Delhi NCR, India'}\n\n"
                 f"**Recent Orders**:\n{orders_block}"
+                f"{team_note}"
             )
 
     # 4b. If query sounds like a customer lookup but no match found

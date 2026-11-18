@@ -122,6 +122,8 @@ def reset_and_seed(db: SessionLocal = None):
             ("Priya Verma", "priya.verma@gmail.com", "+919811223344", "Indie Studio", "Indiranagar, Bengaluru, Karnataka 560038"),
             ("Rohit Sen", "rohit.sen@gmail.com", "+919820112233", "Urban Collective", "Bandra West, Mumbai, Maharashtra 400050"),
             ("Tanya Ahuja", "tanya.ahuja@gmail.com", "+919876543210", "Ahuja Apparel", "Civil Lines, Jaipur, Rajasthan 302006"),
+            ("Ramji", "ramji@reihh.com", "+919876543211", "REIHH Demo Customer", "Sector 125, Mohali, Punjab 160055"),
+            ("Mohammad Ibad Hussain", "ibad@reihh.com", "+919815000004", "REIHH Studio & Demo Client", "Connaught Place, New Delhi 110001"),
         ]
         created_customers = []
         for name, email, phone, company, address in customers_data:
@@ -151,6 +153,10 @@ def reset_and_seed(db: SessionLocal = None):
                 (3, [(4, 1), (5, 1)], 4, OrderStatus.DELIVERED.value, "Doorstep OTP verified."),
                 (4, [(6, 2)], 5, OrderStatus.SHIPPED.value, "In transit: Delhi hub to Mumbai."),
                 (5, [(1, 1)], 6, OrderStatus.CONFIRMED.value, "Processing at central warehouse."),
+                (6, [(0, 1)], 1, OrderStatus.DELIVERED.value, "Demo VIP order via driver."),
+                (6, [(1, 1)], 7, OrderStatus.DELIVERED.value, "Delivered via Delhivery Courier Executive."),
+                (7, [(0, 1)], 1, OrderStatus.DELIVERED.value, "Studio bespoke sample."),
+                (7, [(0, 1)], 2, OrderStatus.CONFIRMED.value, "Ready for dispatch."),
                 (1, [(0, 2), (6, 1)], 12, OrderStatus.DELIVERED.value, "Pre-festive retail order."),
                 (2, [(2, 1), (4, 1)], 16, OrderStatus.DELIVERED.value, "Wholesale trial shipment."),
                 (3, [(5, 2)], 21, OrderStatus.DELIVERED.value, "Shipped via Delhivery Air."),

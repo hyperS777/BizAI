@@ -3,7 +3,7 @@ import {
   MapPin, MapPinned, ClipboardList, List, ChevronDown, ChevronRight,
   Package, FileText, ExternalLink, Truck, Printer, XCircle, Edit3, Trash2, Tag, Plus, Check,
 } from 'lucide-react';
-import { CircleMarker, MapContainer, Popup, TileLayer, ZoomControl, useMap } from 'react-leaflet';
+import { CircleMarker, MapContainer, Popup, TileLayer, ZoomControl, useMap, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import client, { downloadPackingSlipPdf } from '../api/client';
 import { EmptyState, Modal, PageHeader } from '../components/ui';
@@ -218,6 +218,7 @@ export default function Orders() {
     items: [{ product_id: '', variant_id: '', quantity: 1, unit_price: 0 }],
   });
   const [appliedDiscount, setAppliedDiscount] = useState(null);
+  const [selectedMapOrder, setSelectedMapOrder] = useState(null);
 
   const load = () => {
     client.get('/orders', { params: { limit: 250 } })
@@ -507,35 +508,163 @@ export default function Orders() {
           </table>
         </section>
       ) : <EmptyState icon={Package} text="No simulated storefront checkouts." /> : view === 'map' ? (
-        <section className="panel delivery-map-panel" style={{ height: 460, position: 'relative' }}>
-          <div style={{ padding: '10px 14px', background: 'var(--panel-alt)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 16, alignItems: 'center', fontSize: 12, flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 600 }}>📍 Delivery Map</span>
-            <span style={{ color: 'var(--muted)' }}>{mappedOrders.length} active shipments plotted</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} /> Delivered</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} /> Shipped</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} /> Confirmed</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#6366f1', display: 'inline-block' }} /> Pending</span>
+        <section className="panel delivery-map-panel" style={{ height: 520, position: 'relative' }}>
+          <div style={{ padding: '10px 14px', background: 'var(--panel-alt)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 16, alignItems: 'center', fontSize: 12, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Truck size={14} style={{ color: 'var(--teal)' }} /> REIHH Fulfillment Logistics Map
+              </span>
+              <span style={{ color: 'var(--muted)' }}>{mappedOrders.length} active shipments plotted</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} /> Delivered</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#8b5cf6', display: 'inline-block' }} /> In Transit</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} /> Confirmed</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} /> Pending</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#0e766e', border: '2px solid #fff', display: 'inline-block' }} /> Okhla DC</span>
+            </div>
+            {selectedMapOrder && (
+              <button
+                type="button"
+                className="text-btn"
+                onClick={() => setSelectedMapOrder(null)}
+                style={{ fontSize: 11, padding: '2px 6px' }}
+              >
+                Clear Selected Route
+              </button>
+            )}
           </div>
-          <MapContainer center={[28.6139, 77.2090]} zoom={11} style={{ height: 'calc(100% - 42px)', width: '100%', borderRadius: '0 0 8px 8px' }} zoomControl={false}>
-            <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-            <ZoomControl position="bottomright" />
-            <MapBounds orders={mappedOrders} />
-            {mappedOrders.map((o) => (
+
+          <div style={{ position: 'relative', height: 'calc(100% - 42px)', width: '100%' }}>
+            <MapContainer center={[28.5355, 77.2713]} zoom={6} style={{ height: '100%', width: '100%', borderRadius: '0 0 8px 8px' }} zoomControl={false}>
+              <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              <ZoomControl position="bottomright" />
+              <MapBounds orders={mappedOrders} />
+
+              {/* REIHH Central DC Warehouse Marker */}
               <CircleMarker
-                key={o.id}
-                center={[o.delivery_latitude, o.delivery_longitude]}
-                radius={8}
-                pathOptions={{ color: STATUS_COLORS[o.status] || '#14b8a6', fillColor: STATUS_COLORS[o.status] || '#14b8a6', fillOpacity: 0.8 }}
+                center={[28.5355, 77.2713]}
+                radius={10}
+                pathOptions={{ color: '#0e766e', fillColor: '#0e766e', fillOpacity: 0.9, weight: 3 }}
               >
                 <Popup>
-                  <strong>#{o.order_number}</strong><br />
-                  {o.customer?.name}<br />
-                  {o.delivery_location || 'En route via Delhivery'}<br />
-                  <b>{money(o.total_amount)}</b>
+                  <div style={{ padding: 2 }}>
+                    <strong style={{ display: 'block', fontSize: 13, color: '#0e766e' }}>🏭 REIHH Central Fulfillment DC</strong>
+                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Okhla Phase III, New Delhi 110020</div>
+                    <div style={{ fontSize: 11, marginTop: 4, fontWeight: 600 }}>Integrated with Delhivery Express Hub</div>
+                  </div>
                 </Popup>
               </CircleMarker>
-            ))}
-          </MapContainer>
+
+              {/* Delivery Orders Pins */}
+              {mappedOrders.map((o) => {
+                const isSelected = selectedMapOrder?.id === o.id;
+                return (
+                  <CircleMarker
+                    key={o.id}
+                    center={[o.delivery_latitude, o.delivery_longitude]}
+                    radius={isSelected ? 11 : 8}
+                    pathOptions={{
+                      color: isSelected ? '#ffffff' : (STATUS_COLORS[o.status] || '#14b8a6'),
+                      fillColor: STATUS_COLORS[o.status] || '#14b8a6',
+                      fillOpacity: 0.9,
+                      weight: isSelected ? 3 : 2,
+                    }}
+                    eventHandlers={{
+                      click: () => setSelectedMapOrder(o),
+                    }}
+                  >
+                    <Popup>
+                      <div style={{ padding: 2, minWidth: 180 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <strong style={{ fontSize: 13 }}>#{o.order_number}</strong>
+                          <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: STATUS_COLORS[o.status] || '#64748b', color: '#fff', textTransform: 'uppercase', fontWeight: 700 }}>
+                            {o.status}
+                          </span>
+                        </div>
+                        <div style={{ fontWeight: 600, fontSize: 12 }}>{o.customer?.name || 'Customer'}</div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>{o.delivery_location || o.shipping_address || 'Delhi NCR'}</div>
+                        <div style={{ marginTop: 6, fontWeight: 700, fontSize: 13, color: 'var(--teal)' }}>{money(o.total_amount)}</div>
+                        {o.tracking_number && (
+                          <div style={{ marginTop: 4, fontSize: 11 }}>
+                            <strong>AWB:</strong> {o.tracking_number} ({o.tracking_company || 'Delhivery'})
+                          </div>
+                        )}
+                        <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
+                          <button
+                            type="button"
+                            className="outline-btn"
+                            style={{ fontSize: 10, padding: '3px 8px' }}
+                            onClick={() => downloadPackingSlipPdf(o.id, o.order_number)}
+                          >
+                            Packing Slip
+                          </button>
+                        </div>
+                      </div>
+                    </Popup>
+                  </CircleMarker>
+                );
+              })}
+
+              {/* Connecting Dispatch Route from Okhla DC to Selected Order */}
+              {selectedMapOrder && Number.isFinite(selectedMapOrder.delivery_latitude) && (
+                <Polyline
+                  positions={[
+                    [28.5355, 77.2713],
+                    [selectedMapOrder.delivery_latitude, selectedMapOrder.delivery_longitude],
+                  ]}
+                  pathOptions={{ color: '#0e766e', weight: 3, dashArray: '6, 8', opacity: 0.8 }}
+                />
+              )}
+            </MapContainer>
+
+            {/* Selected Order Floating Card */}
+            {selectedMapOrder && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 12,
+                  left: 12,
+                  zIndex: 1000,
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  padding: 14,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                  maxWidth: 290,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <strong style={{ fontSize: 14 }}>#{selectedMapOrder.order_number}</strong>
+                  <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: STATUS_COLORS[selectedMapOrder.status] || '#64748b', color: '#fff', textTransform: 'uppercase', fontWeight: 700 }}>
+                    {selectedMapOrder.status}
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>{selectedMapOrder.customer?.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{selectedMapOrder.shipping_address || selectedMapOrder.delivery_location}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--teal)', marginTop: 6 }}>{money(selectedMapOrder.total_amount)}</div>
+                <div style={{ fontSize: 11, marginTop: 4, color: 'var(--muted)' }}>
+                  Carrier: <strong>{selectedMapOrder.tracking_company || 'Delhivery Express'}</strong>
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    style={{ fontSize: 11, padding: '4px 10px', flex: 1 }}
+                    onClick={() => downloadPackingSlipPdf(selectedMapOrder.id, selectedMapOrder.order_number)}
+                  >
+                    <Printer size={12} /> Packing Slip
+                  </button>
+                  <button
+                    type="button"
+                    className="outline-btn"
+                    style={{ fontSize: 11, padding: '4px 8px' }}
+                    onClick={() => setSelectedMapOrder(null)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </section>
       ) : visibleOrders.length ? (
         <section className="panel table-panel order-table-panel">
