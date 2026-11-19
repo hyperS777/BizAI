@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Users, Download, Upload, Plus, Tag, ShieldCheck, Trash2 } from 'lucide-react';
+import { Users, Download, Upload, Plus, Tag, ShieldCheck, Trash2, MessageCircle } from 'lucide-react';
 import client from '../api/client';
 import { EmptyState, Modal, PageHeader } from '../components/ui';
 import { apiError, formatDate, money } from '../utils/format';
@@ -35,6 +35,7 @@ export default function Customers() {
   const canEdit = can(['admin', 'manager', 'employee']);
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get('q') || '');
+  const [activeSegment, setActiveSegment] = useState('all');
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -159,8 +160,29 @@ export default function Customers() {
         </div>
       </PageHeader>
 
-      {notice && <div className="notice success" style={{ background: '#eaf4f1', borderColor: 'var(--teal)', color: 'var(--teal-dark)' }}>{notice}</div>}
+      {notice && <div className="notice success" style={{ background: 'var(--surface-hover)', borderColor: 'var(--teal)', color: 'var(--teal)' }}>{notice}</div>}
       {error && <div className="notice error">{error}</div>}
+
+      {/* Smart Segments Filter Strip */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, overflowX: 'auto', paddingBottom: 4 }}>
+        {[
+          { id: 'all', label: 'All Customers' },
+          { id: 'vip', label: '⭐ VIP Concierge' },
+          { id: 'wholesale', label: '🏢 Wholesale / B2B' },
+          { id: 'ar_due', label: '⚠️ Outstanding AR' },
+          { id: 'clean', label: '✅ Zero Balance' },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={activeSegment === tab.id ? 'primary-btn' : 'outline-btn'}
+            style={{ fontSize: 11.5, padding: '4px 12px', borderRadius: 20 }}
+            onClick={() => setActiveSegment(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
       <div className="toolbar">
         <input className="filter-input" placeholder="Search customer name, company, email, phone, or tags…" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -180,8 +202,16 @@ export default function Customers() {
               </tr>
             </thead>
             <tbody>
-              {customers.map((customer) => {
-                const tierInfo = TIERS.find((t) => t.id === customer.tier) || TIERS[3];
+              {customers
+                .filter((c) => {
+                  if (activeSegment === 'vip') return c.tier === 'VIP';
+                  if (activeSegment === 'wholesale') return c.tier === 'Wholesale';
+                  if (activeSegment === 'ar_due') return (c.outstanding_balance || 0) > 0;
+                  if (activeSegment === 'clean') return (c.outstanding_balance || 0) === 0;
+                  return true;
+                })
+                .map((customer) => {
+                  const tierInfo = TIERS.find((t) => t.id === customer.tier) || TIERS[3];
                 return (
                   <tr key={customer.id}>
                     <td>
@@ -223,7 +253,21 @@ export default function Customers() {
                       </b>
                     </td>
                     <td className="row-actions" style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                        {customer.phone && (
+                          <a
+                            href={`https://wa.me/${customer.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                              `✨ *Hello ${customer.name} from REIHH Studio*\n\nThank you for being a valued client of REIHH Studio. How may we assist your bespoke apparel styling or orders today? 🙏`
+                            )}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-btn"
+                            style={{ color: '#25D366', display: 'inline-flex', alignItems: 'center', gap: 2 }}
+                            title="Open WhatsApp Chat"
+                          >
+                            <MessageCircle size={14} />
+                          </a>
+                        )}
                         <button className="text-btn" onClick={() => openHistory(customer)}>History</button>
                         {canEdit && <button className="text-btn" onClick={() => openEdit(customer)}>Edit</button>}
                         {canEdit && (

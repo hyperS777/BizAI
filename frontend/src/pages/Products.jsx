@@ -229,15 +229,34 @@ export default function Products() {
         </div>
       </PageHeader>
 
-      {notice && <div className="notice success" style={{ background: '#eaf4f1', borderColor: 'var(--teal)', color: 'var(--teal-dark)' }}>{notice}</div>}
+      {notice && <div className="notice success" style={{ background: 'var(--surface-hover)', borderColor: 'var(--teal)', color: 'var(--teal)' }}>{notice}</div>}
       {error && <div className="notice error">{error}</div>}
+
+      {/* Collection / Category Filter Pills */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className={categoryId === '' ? 'primary-btn' : 'outline-btn'}
+          style={{ fontSize: 11.5, padding: '4px 12px', borderRadius: 20 }}
+          onClick={() => setCategoryId('')}
+        >
+          All Collections ({products.length})
+        </button>
+        {categories.map((cat) => (
+          <button
+            key={cat.id}
+            type="button"
+            className={categoryId === String(cat.id) ? 'primary-btn' : 'outline-btn'}
+            style={{ fontSize: 11.5, padding: '4px 12px', borderRadius: 20 }}
+            onClick={() => setCategoryId(categoryId === String(cat.id) ? '' : String(cat.id))}
+          >
+            {cat.name}
+          </button>
+        ))}
+      </div>
 
       <div className="toolbar">
         <input className="filter-input" placeholder="Search product name, SKU, or tag…" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-          <option value="">All categories</option>
-          {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-        </select>
       </div>
 
       {products.length ? (

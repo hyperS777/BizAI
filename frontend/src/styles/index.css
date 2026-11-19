@@ -2,6 +2,7 @@
 
 :root {
   --ink: #17252b;
+  --text: #17252b;
   --muted: #728087;
   --paper: #f6f8f7;
   --surface: #fff;
@@ -1456,6 +1457,7 @@ select {
 
 [data-theme='dark'] {
   --ink: #e5eeeb;
+  --text: #e5eeeb;
   --muted: #9aacaa;
   --paper: #101918;
   --surface: #172422;

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   MapPin, MapPinned, ClipboardList, List, ChevronDown, ChevronRight,
   Package, FileText, ExternalLink, Truck, Printer, XCircle, Edit3, Trash2, Tag, Plus, Check,
+  Clock3, Download, MessageCircle,
 } from 'lucide-react';
 import { CircleMarker, MapContainer, Popup, TileLayer, ZoomControl, useMap, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -42,15 +43,23 @@ function MapBounds({ orders }) {
 }
 
 /* Expandable order row */
-function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onEditShipping, onCancelOrder }) {
+function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onEditShipping, onCancelOrder, isSelected, onToggleSelect }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
     <>
       <tr
-        className={`order-data-row ${expanded ? 'expanded' : ''}`}
+        className={`order-data-row ${expanded ? 'expanded' : ''} ${isSelected ? 'selected-row' : ''}`}
         onClick={() => setExpanded((x) => !x)}
       >
+        <td onClick={(e) => e.stopPropagation()} style={{ width: 34, textAlign: 'center' }}>
+          <input
+            type="checkbox"
+            checked={!!isSelected}
+            onChange={(e) => onToggleSelect(order.id, e.target.checked)}
+            aria-label={`Select order ${order.order_number}`}
+          />
+        </td>
         <td>
           <span className="order-expand-icon">{expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
           <strong>#{order.order_number}</strong>
@@ -93,8 +102,46 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onE
       </tr>
       {expanded && (
         <tr className="order-detail-row">
-          <td colSpan={7}>
+          <td colSpan={8}>
             <div className="order-detail-panel">
+              {/* Shopify-Style Lifecycle Timeline */}
+              <div className="order-detail-section" style={{ gridColumn: '1 / -1' }}>
+                <div className="order-detail-heading"><Clock3 size={14} /> Order Activity &amp; Fulfillment Timeline</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10, marginTop: 8 }}>
+                  <div style={{ padding: '8px 12px', borderRadius: 6, background: 'var(--panel-alt)', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--teal)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Check size={12} /> 1. Placed
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{formatDate(order.created_at)}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>{order.customer?.name || 'Customer'}</div>
+                  </div>
+
+                  <div style={{ padding: '8px 12px', borderRadius: 6, background: 'var(--panel-alt)', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: order.status !== 'pending' ? 'var(--teal)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {order.status !== 'pending' ? <Check size={12} /> : '○'} 2. Allocated
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{order.status !== 'pending' ? 'Stock Reserved' : 'Pending Allocation'}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>Okhla Phase III DC</div>
+                  </div>
+
+                  <div style={{ padding: '8px 12px', borderRadius: 6, background: 'var(--panel-alt)', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: ['shipped', 'delivered'].includes(order.status) ? 'var(--teal)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {['shipped', 'delivered'].includes(order.status) ? <Check size={12} /> : '○'} 3. Dispatched
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{order.tracking_company || 'Delhivery Express'}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>AWB: {order.tracking_number || 'Awaiting dispatch'}</div>
+                  </div>
+
+                  <div style={{ padding: '8px 12px', borderRadius: 6, background: 'var(--panel-alt)', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: order.status === 'delivered' ? 'var(--teal)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {order.status === 'delivered' ? <Check size={12} /> : '○'} 4. Delivered
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{order.status === 'delivered' ? 'Delivered to Customer' : 'In Fulfillment'}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>{order.delivery_location || 'Destination'}</div>
+                  </div>
+                </div>
+              </div>
+
               {/* Items */}
               <div className="order-detail-section">
                 <div className="order-detail-heading"><Package size={14} /> Items Ordered</div>
@@ -153,7 +200,21 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onE
               </div>
 
               {/* Operational Action Bar */}
-              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap', paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+                {order.customer?.phone && (
+                  <a
+                    className="outline-btn"
+                    href={`https://wa.me/${order.customer.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                      `🛍️ *REIHH Studio Order Update*\n\nDear ${order.customer.name},\nYour order *#${order.order_number}* is currently: *${order.status.toUpperCase()}*.\n\n📍 *Location:* ${order.delivery_location || 'Delhi NCR'}\n🚚 *Carrier:* ${order.tracking_company || 'Delhivery Express'}\n🔗 *Track:* ${order.tracking_url || 'https://www.delhivery.com'}\n\nThank you for choosing REIHH Studio! 🙏`
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    title="Send instant WhatsApp delivery update to customer"
+                  >
+                    <MessageCircle size={13} style={{ color: '#25D366' }} /> WhatsApp Concierge
+                  </a>
+                )}
                 <button
                   type="button"
                   className="outline-btn"
@@ -219,6 +280,81 @@ export default function Orders() {
   });
   const [appliedDiscount, setAppliedDiscount] = useState(null);
   const [selectedMapOrder, setSelectedMapOrder] = useState(null);
+  const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
+
+  const toggleSelectOrder = (id, checked) => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (checked) => {
+    if (checked) {
+      setSelectedOrderIds(new Set(visibleOrders.map((o) => o.id)));
+    } else {
+      setSelectedOrderIds(new Set());
+    }
+  };
+
+  const allVisibleSelected = visibleOrders.length > 0 && visibleOrders.every((o) => selectedOrderIds.has(o.id));
+
+  const handleBatchStatus = async (nextStatus) => {
+    const ids = Array.from(selectedOrderIds);
+    if (!ids.length) return;
+    try {
+      await Promise.all(ids.map((id) => client.patch(`/orders/${id}/status`, { status: nextStatus })));
+      toast.success(`Updated ${ids.length} orders to ${nextStatus.replace('_', ' ')}`);
+      setSelectedOrderIds(new Set());
+      load();
+    } catch (err) {
+      toast.error(apiError(err, 'Failed to update some orders'));
+    }
+  };
+
+  const handleExportCsv = () => {
+    const list = selectedOrderIds.size > 0
+      ? visibleOrders.filter((o) => selectedOrderIds.has(o.id))
+      : visibleOrders;
+    if (!list.length) return;
+
+    const headers = ['Order Number', 'Customer Name', 'Customer Email', 'Status', 'Carrier', 'Tracking Number', 'Total Amount', 'Date', 'Shipping Address'];
+    const rows = list.map((o) => [
+      `"${o.order_number}"`,
+      `"${o.customer?.name || ''}"`,
+      `"${o.customer?.email || ''}"`,
+      `"${o.status}"`,
+      `"${o.tracking_company || 'Delhivery Express'}"`,
+      `"${o.tracking_number || ''}"`,
+      o.total_amount,
+      `"${formatDate(o.created_at)}"`,
+      `"${(o.shipping_address || o.delivery_location || '').replace(/"/g, '""')}"`,
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `reihh-orders-${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Exported ${list.length} orders to CSV`);
+  };
+
+  const handleBatchPrintSlips = () => {
+    const ids = Array.from(selectedOrderIds);
+    if (!ids.length) return;
+    ids.forEach((id, idx) => {
+      const ord = orders.find((o) => o.id === id);
+      setTimeout(() => {
+        downloadPackingSlipPdf(id, `packing-slip-${ord?.order_number || id}.pdf`);
+      }, idx * 400);
+    });
+    toast.info(`Triggered packing slip download for ${ids.length} orders`);
+  };
 
   const load = () => {
     client.get('/orders', { params: { limit: 250 } })
@@ -667,14 +803,22 @@ export default function Orders() {
           </div>
         </section>
       ) : visibleOrders.length ? (
-        <section className="panel table-panel order-table-panel">
+        <section className="panel table-panel order-table-panel" style={{ position: 'relative' }}>
           <table className="data-table">
             <thead>
               <tr>
-                <th style={{ width: '14%' }}>Order</th>
-                <th style={{ width: '22%' }}>Customer</th>
+                <th style={{ width: 34, textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={(e) => toggleSelectAll(e.target.checked)}
+                    aria-label="Select all orders"
+                  />
+                </th>
+                <th style={{ width: '13%' }}>Order</th>
+                <th style={{ width: '21%' }}>Customer</th>
                 <th style={{ width: '14%' }}>Status</th>
-                <th style={{ width: '22%' }}>Carrier &amp; AWB</th>
+                <th style={{ width: '20%' }}>Carrier &amp; AWB</th>
                 <th style={{ width: '12%' }}>Total</th>
                 <th style={{ width: '10%' }}>Date</th>
                 <th style={{ width: '6%', textAlign: 'right' }} />
@@ -685,6 +829,8 @@ export default function Orders() {
                 <OrderRow
                   key={order.id}
                   order={order}
+                  isSelected={selectedOrderIds.has(order.id)}
+                  onToggleSelect={toggleSelectOrder}
                   canStatus={canStatus}
                   canInvoice={canInvoice}
                   onChangeStatus={changeStatus}
@@ -695,6 +841,78 @@ export default function Orders() {
               ))}
             </tbody>
           </table>
+
+          {/* Floating Bulk Actions Bar (Shopify-Style) */}
+          {selectedOrderIds.size > 0 && (
+            <div
+              style={{
+                position: 'fixed',
+                bottom: 24,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 9999,
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 10,
+                boxShadow: '0 12px 36px rgba(0,0,0,0.28)',
+                padding: '10px 18px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--teal)' }} />
+                <span>{selectedOrderIds.size} orders selected</span>
+              </div>
+              <div style={{ height: 18, width: 1, background: 'var(--border)' }} />
+              {canStatus && (
+                <>
+                  <button
+                    type="button"
+                    className="outline-btn"
+                    style={{ fontSize: 12, padding: '4px 10px' }}
+                    onClick={() => handleBatchStatus('confirmed')}
+                  >
+                    Mark Confirmed
+                  </button>
+                  <button
+                    type="button"
+                    className="outline-btn"
+                    style={{ fontSize: 12, padding: '4px 10px' }}
+                    onClick={() => handleBatchStatus('delivered')}
+                  >
+                    Mark Delivered
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                className="outline-btn"
+                style={{ fontSize: 12, padding: '4px 10px' }}
+                onClick={handleBatchPrintSlips}
+              >
+                <Printer size={13} /> Batch Slips
+              </button>
+              <button
+                type="button"
+                className="primary-btn"
+                style={{ fontSize: 12, padding: '4px 12px' }}
+                onClick={handleExportCsv}
+              >
+                <Download size={13} /> Export CSV
+              </button>
+              <button
+                type="button"
+                className="text-btn"
+                style={{ fontSize: 12, padding: '4px 8px' }}
+                onClick={() => setSelectedOrderIds(new Set())}
+              >
+                Deselect
+              </button>
+            </div>
+          )}
         </section>
       ) : <EmptyState icon={ClipboardList} text={status === 'all' ? 'No orders recorded yet.' : `No ${status.replace('_', ' ')} orders.`} />}
 

@@ -15,77 +15,218 @@ const THREADS = [
 
 const defaultPromptsByThread = {
   general: [
+    'How many orders did Ramji make?',
+    'Analyze Mohammad Ibad Hussain\'s orders',
+    'What should I buy and what do I not buy?',
     'What is expected to perform good next month?',
-    'What was the first order?',
-    'What was the latest order?',
-    'Give me a summary of this month\'s performance.',
-    'Who are our best customers by lifetime spend?',
+    'Which garments have the best profit margins?',
+    'Give me an executive summary of our business health.',
   ],
   inventory: [
+    'What should I buy and what do I not buy?',
+    'Which garments have the highest gross profit margin?',
     'What is expected to perform good next month?',
-    'What products should I buy / restock?',
     'Which products are low in stock right now?',
-    'Which garments have the highest velocity?',
+    'What is our deadstock / overstock risk?',
   ],
   financials: [
-    'What is our total revenue and turnover?',
-    'Break down our net profit and expenses.',
-    'What is our gross profit margin after COGS?',
+    'Break down our net profit, COGS, and operating expenses.',
+    'Which garments have the best profit margins?',
+    'What are our active promotional discount codes?',
     'Show outstanding receivables and unpaid invoices.',
+    'Is our business profitable and healthy?',
   ],
   fulfillment: [
-    'What is our delivery status with Delhivery?',
-    'How many orders are pending dispatch?',
-    'Show in-transit packages across Delhi NCR.',
-    'What was the latest order?',
+    'What is our live delivery status with Delhivery?',
+    'How many orders are in transit vs awaiting dispatch?',
+    'Show active shipments across Delhi NCR.',
+    'What was the latest order recorded?',
+    'What was the first order ever placed?',
   ],
 };
 
-function renderInlineBold(text) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i} style={{ color: 'var(--ink)' }}>{part.slice(2, -2)}</strong>;
+function renderInlineFormatted(text) {
+  // Handle markdown links [text](url)
+  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = linkRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
     }
-    return part;
+    const label = match[1];
+    const url = match[2];
+    parts.push(
+      <a key={match.index} href={url} style={{ color: 'var(--teal)', fontWeight: 600, textDecoration: 'underline' }}>
+        {label}
+      </a>
+    );
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+
+  // Handle bold and code spans
+  return parts.map((seg, sIdx) => {
+    if (typeof seg !== 'string') return seg;
+    const subParts = seg.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+    return subParts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={`${sIdx}-${i}`} style={{ color: 'var(--ink)' }}>{part.slice(2, -2)}</strong>;
+      }
+      if (part.startsWith('`') && part.endsWith('`')) {
+        return (
+          <code key={`${sIdx}-${i}`} style={{ background: 'var(--surface-hover)', padding: '1px 5px', borderRadius: 4, fontSize: 12 }}>
+            {part.slice(1, -1)}
+          </code>
+        );
+      }
+      return part;
+    });
   });
 }
 
 function FormattedMessage({ text }) {
   if (!text) return null;
   const lines = text.split('\n');
+
+  // Group lines into blocks (tables, blockquotes, paragraphs)
+  const blocks = [];
+  let currentTable = null;
+  let currentQuote = null;
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+
+    // Markdown table detection
+    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      if (currentQuote) {
+        blocks.push({ type: 'quote', lines: currentQuote });
+        currentQuote = null;
+      }
+      if (!currentTable) currentTable = [];
+      // Ignore separator line |---|---|
+      if (!/^\|[\s\-:|]+\|$/.test(trimmed)) {
+        currentTable.push(trimmed);
+      }
+      return;
+    } else if (currentTable) {
+      blocks.push({ type: 'table', lines: currentTable });
+      currentTable = null;
+    }
+
+    // Blockquote / Reasoning detection
+    if (trimmed.startsWith('> ')) {
+      if (!currentQuote) currentQuote = [];
+      currentQuote.push(trimmed.slice(2));
+      return;
+    } else if (currentQuote) {
+      blocks.push({ type: 'quote', lines: currentQuote });
+      currentQuote = null;
+    }
+
+    blocks.push({ type: 'line', text: trimmed });
+  });
+
+  if (currentTable) blocks.push({ type: 'table', lines: currentTable });
+  if (currentQuote) blocks.push({ type: 'quote', lines: currentQuote });
+
   return (
     <div className="formatted-ai-response">
-      {lines.map((line, idx) => {
-        const trimmed = line.trim();
+      {blocks.map((block, bIdx) => {
+        if (block.type === 'quote') {
+          return (
+            <div
+              key={bIdx}
+              style={{
+                background: 'var(--surface-hover)',
+                borderLeft: '3px solid var(--teal)',
+                borderRadius: '0 8px 8px 0',
+                padding: '8px 12px',
+                margin: '8px 0 12px',
+                fontSize: 12.5,
+                color: 'var(--ink)',
+                lineHeight: 1.5,
+              }}
+            >
+              {block.lines.map((ql, qIdx) => (
+                <div key={qIdx} style={{ marginBottom: qIdx === block.lines.length - 1 ? 0 : 3 }}>
+                  {renderInlineFormatted(ql)}
+                </div>
+              ))}
+            </div>
+          );
+        }
+
+        if (block.type === 'table') {
+          const headerRow = block.lines[0]?.split('|').map((c) => c.trim()).filter(Boolean) || [];
+          const dataRows = block.lines.slice(1).map((r) => r.split('|').map((c) => c.trim()).filter(Boolean));
+          return (
+            <div key={bIdx} style={{ overflowX: 'auto', margin: '10px 0' }}>
+              <table className="data-table" style={{ fontSize: 12, width: '100%' }}>
+                <thead>
+                  <tr>
+                    {headerRow.map((h, i) => (
+                      <th key={i}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {dataRows.map((row, rIdx) => (
+                    <tr key={rIdx}>
+                      {row.map((cell, cIdx) => (
+                        <td key={cIdx}>{renderInlineFormatted(cell)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
+
+        const trimmed = block.text;
         if (!trimmed) {
-          return <div key={idx} style={{ height: 8 }} />;
+          return <div key={bIdx} style={{ height: 6 }} />;
         }
         if (trimmed.startsWith('### ')) {
           return (
-            <h4 key={idx} style={{ margin: '8px 0 4px', fontSize: 14, fontWeight: 700, color: 'var(--teal)' }}>
+            <h4 key={bIdx} style={{ margin: '12px 0 6px', fontSize: 14.5, fontWeight: 700, color: 'var(--teal)' }}>
               {trimmed.replace('### ', '')}
             </h4>
+          );
+        }
+        if (trimmed.startsWith('#### ')) {
+          return (
+            <h5 key={bIdx} style={{ margin: '10px 0 4px', fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>
+              {trimmed.replace('#### ', '')}
+            </h5>
           );
         }
         if (trimmed.startsWith('* ') || trimmed.startsWith('• ') || trimmed.startsWith('- ')) {
           const content = trimmed.slice(2);
           return (
-            <li key={idx} style={{ marginLeft: 16, marginBottom: 4, lineHeight: 1.5 }}>
-              {renderInlineBold(content)}
+            <li key={bIdx} style={{ marginLeft: 16, marginBottom: 4, lineHeight: 1.5 }}>
+              {renderInlineFormatted(content)}
             </li>
           );
         }
         if (/^\d+\.\s/.test(trimmed)) {
           return (
-            <div key={idx} style={{ marginLeft: 12, marginBottom: 4, lineHeight: 1.5 }}>
-              {renderInlineBold(trimmed)}
+            <div key={bIdx} style={{ marginLeft: 12, marginBottom: 4, lineHeight: 1.5 }}>
+              {renderInlineFormatted(trimmed)}
             </div>
           );
         }
+        if (trimmed === '---') {
+          return <hr key={bIdx} style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '10px 0' }} />;
+        }
         return (
-          <p key={idx} style={{ margin: '0 0 6px', lineHeight: 1.5 }}>
-            {renderInlineBold(trimmed)}
+          <p key={bIdx} style={{ margin: '0 0 6px', lineHeight: 1.5 }}>
+            {renderInlineFormatted(trimmed)}
           </p>
         );
       })}

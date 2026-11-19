@@ -270,6 +270,180 @@ def reset_and_seed(db: SessionLocal = None):
             db.close()
 
 
+def ensure_essential_records(db: SessionLocal):
+    """
+    Self-healing routine running on boot to ensure core stakeholders (Ramji, Mohammad Ibad Hussain),
+    their orders, realistic geocoordinates, and clean customer names always exist.
+    """
+    try:
+        # 1. Ensure Ramji customer
+        ramji = db.query(Customer).filter((Customer.name == "Ramji") | (Customer.email == "ramji@reihh.com")).first()
+        if not ramji:
+            ramji = Customer(
+                name="Ramji",
+                email="ramji@reihh.com",
+                phone="+919876543211",
+                tier="VIP",
+                company="REIHH Demo Customer & Engineer",
+                address="Sector 125, Mohali, Punjab 160055",
+            )
+            db.add(ramji)
+            db.flush()
+        else:
+            ramji.tier = "VIP"
+            ramji.phone = ramji.phone or "+919876543211"
+            ramji.address = ramji.address or "Sector 125, Mohali, Punjab 160055"
+
+        # 2. Ensure Mohammad Ibad Hussain customer
+        ibad = db.query(Customer).filter(
+            (Customer.name.ilike("%ibad%")) | (Customer.name.ilike("%iabd%")) | (Customer.email == "ibad@reihh.com")
+        ).first()
+        if not ibad:
+            ibad = Customer(
+                name="Mohammad Ibad Hussain",
+                email="ibad@reihh.com",
+                phone="+919815000004",
+                tier="VIP",
+                company="REIHH Studio & Team Lead",
+                address="Connaught Place, New Delhi 110001",
+            )
+            db.add(ibad)
+            db.flush()
+        else:
+            ibad.name = "Mohammad Ibad Hussain"
+            ibad.tier = "VIP"
+            ibad.phone = ibad.phone or "+919815000004"
+            ibad.address = ibad.address or "Connaught Place, New Delhi 110001"
+
+        db.commit()
+
+        # 3. Clean up any typo customers (like 'iabd' or 'hello' demo accounts)
+        typo_custs = db.query(Customer).filter(Customer.name.in_(["iabd", "hello", "demo"])).all()
+        for tc in typo_custs:
+            # Reassign orders to ibad
+            db.query(Order).filter(Order.customer_id == tc.id).update({"customer_id": ibad.id})
+            db.delete(tc)
+        db.commit()
+
+        # 4. Ensure Ramji has at least 2 orders
+        ramji_orders_count = db.query(Order).filter(Order.customer_id == ramji.id).count()
+        alba_prod = db.query(Product).filter(Product.is_active == True).first()
+        if ramji_orders_count < 2 and alba_prod:
+            now = datetime.now()
+            # Order 1
+            o1 = Order(
+                order_number="ORD-89B08259",
+                customer_id=ramji.id,
+                status=OrderStatus.DELIVERED.value,
+                tracking_company="Delhivery Express",
+                tracking_number="148839201977",
+                tracking_url="https://www.delhivery.com/track/package/148839201977",
+                delivery_location="Mohali, Punjab",
+                delivery_latitude=30.6757,
+                delivery_longitude=76.7332,
+                delivery_updated_at=now - timedelta(days=8),
+                shipping_address=ramji.address,
+                currency="INR",
+                subtotal_amount=4950.0,
+                total_amount=4950.0,
+                notes="Delivered to Mohali storefront. Core engineer demo order.",
+                created_at=now - timedelta(days=8),
+            )
+            db.add(o1)
+            db.flush()
+            db.add(OrderItem(order_id=o1.id, product_id=alba_prod.id, quantity=1, unit_price=4950.0, cost_price=alba_prod.cost_price or 1800.0, total_price=4950.0, sku=alba_prod.sku))
+            
+            # Order 2
+            o2 = Order(
+                order_number="ORD-35AAC5A4",
+                customer_id=ramji.id,
+                status=OrderStatus.DELIVERED.value,
+                tracking_company="Delhivery Express",
+                tracking_number="148839201978",
+                tracking_url="https://www.delhivery.com/track/package/148839201978",
+                delivery_location="Saket, New Delhi",
+                delivery_latitude=28.5244,
+                delivery_longitude=77.2185,
+                delivery_updated_at=now - timedelta(days=14),
+                shipping_address="Saket, South Delhi 110017",
+                currency="INR",
+                subtotal_amount=8500.0,
+                total_amount=8500.0,
+                notes="VIP Delivery via Delhivery Express.",
+                created_at=now - timedelta(days=14),
+            )
+            db.add(o2)
+            db.flush()
+            db.add(OrderItem(order_id=o2.id, product_id=alba_prod.id, quantity=2, unit_price=4250.0, cost_price=alba_prod.cost_price or 1800.0, total_price=8500.0, sku=alba_prod.sku))
+            db.commit()
+
+        # 5. Ensure Mohammad Ibad Hussain has orders
+        ibad_orders_count = db.query(Order).filter(Order.customer_id == ibad.id).count()
+        if ibad_orders_count == 0 and alba_prod:
+            now = datetime.now()
+            orders_to_add = [
+                ("ORD-1560B63F", OrderStatus.DELIVERED.value, 4250.0, 14, "Studio bespoke sample. Delivered in CP."),
+                ("ORD-0B6ABBDF", OrderStatus.CONFIRMED.value, 4450.0, 14, "VIP Pre-order tailored piece."),
+                ("ORD-9B9747BA", OrderStatus.CONFIRMED.value, 4450.0, 14, "Ready for warehouse dispatch."),
+                ("ORD-84BDAC86", OrderStatus.CONFIRMED.value, 23300.0, 15, "Wholesale trial order."),
+                ("ORD-27489DF1", OrderStatus.SHIPPED.value, 4450.0, 15, "In transit via Delhivery rider."),
+                ("ORD-CE0B8A25", OrderStatus.CONFIRMED.value, 19900.0, 15, "Outerwear coordination set."),
+            ]
+            for num, st, amt, days, nt in orders_to_add:
+                ord_rec = Order(
+                    order_number=num,
+                    customer_id=ibad.id,
+                    status=st,
+                    tracking_company="Delhivery Express",
+                    tracking_number=f"14883{abs(hash(num)) % 1000000:06d}",
+                    tracking_url="https://www.delhivery.com/track/package/148839201999",
+                    delivery_location="Connaught Place, New Delhi",
+                    delivery_latitude=28.6315,
+                    delivery_longitude=77.2167,
+                    delivery_updated_at=now - timedelta(days=days),
+                    shipping_address=ibad.address,
+                    currency="INR",
+                    subtotal_amount=amt,
+                    total_amount=amt,
+                    notes=nt,
+                    created_at=now - timedelta(days=days),
+                )
+                db.add(ord_rec)
+                db.flush()
+                db.add(OrderItem(order_id=ord_rec.id, product_id=alba_prod.id, quantity=1, unit_price=amt, cost_price=alba_prod.cost_price or 1800.0, total_price=amt, sku=alba_prod.sku))
+            db.commit()
+
+        # 6. Ensure all orders have coordinates
+        ADDR_COORDS = {
+            'mohali': (30.6757, 76.7332),
+            'bengaluru': (12.9784, 77.6408),
+            'mumbai': (19.0596, 72.8295),
+            'jaipur': (26.9124, 75.7873),
+            'connaught': (28.6315, 77.2167),
+            'saket': (28.5244, 77.2185),
+            'south delhi': (28.5244, 77.2185),
+            'okhla': (28.5355, 77.2713),
+            'noida': (28.5355, 77.3910),
+            'gurgaon': (28.4595, 77.0266),
+            'delhi': (28.6139, 77.2090),
+        }
+        for o in db.query(Order).all():
+            if not o.delivery_latitude or not o.delivery_longitude:
+                addr_text = f"{o.shipping_address or ''} {o.delivery_location or ''}".lower()
+                chosen = (28.6139, 77.2090)
+                for city, coords in ADDR_COORDS.items():
+                    if city in addr_text:
+                        chosen = coords
+                        break
+                o.delivery_latitude = chosen[0]
+                o.delivery_longitude = chosen[1]
+        db.commit()
+
+    except Exception as exc:
+        logger.warning("ensure_essential_records error: %s", exc)
+        db.rollback()
+
+
 def seed_data():
     """Initial boot seeder that ensures basic data exists and auto-cleans old dummy data."""
     db = SessionLocal()
@@ -286,6 +460,9 @@ def seed_data():
         if user_count == 0 or order_count == 0 or has_stale_dummy_data:
             logger.info("Stale or missing database records detected on boot — auto-resetting with clean REIHH data.")
             reset_and_seed(db)
+        else:
+            # Self-healing check on existing database
+            ensure_essential_records(db)
     finally:
         db.close()
 

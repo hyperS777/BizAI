@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Building2, ChevronRight, Mail, MapPin, Phone, ReceiptText, ShoppingBag, WalletCards, Tag, Edit, Save, Check } from 'lucide-react';
+import { ArrowLeft, Building2, ChevronRight, Mail, MapPin, Phone, ReceiptText, ShoppingBag, WalletCards, Tag, Edit, Save, Check, MessageCircle } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import client from '../api/client';
 import { EmptyState, PageHeader } from '../components/ui';
@@ -54,15 +54,29 @@ export default function CustomerDetail() {
     <>
       <button className="back-link" onClick={() => navigate('/customers')}><ArrowLeft size={16} /> Back to customers</button>
       <PageHeader eyebrow="CRM / Customer 360°" title={customer.name} subtitle={customer.company || 'Individual Client'}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span className="status-pill" style={{ background: '#f5f3ff', color: '#7c3aed', borderColor: '#c4b5fd', fontWeight: 600 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="status-pill" style={{ background: 'var(--surface-hover)', color: '#7c3aed', borderColor: '#c4b5fd', fontWeight: 600 }}>
             {customer.tier || 'Regular'} Tier
           </span>
+          {customer.phone && (
+            <a
+              className="outline-btn"
+              href={`https://wa.me/${customer.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                `✨ *Hello ${customer.name} from REIHH Studio*\n\nThank you for being a valued client of REIHH Studio. We are reviewing your customer profile and wish to assist you with bespoke tailoring, size consultation, or order updates! 🙏`
+              )}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#25D366' }}
+              title="Message customer on WhatsApp"
+            >
+              <MessageCircle size={15} /> WhatsApp Concierge
+            </a>
+          )}
           <button className="outline-btn" onClick={() => navigate('/orders')}><ShoppingBag size={16} /> Create order</button>
         </div>
       </PageHeader>
 
-      {notice && <div className="notice success" style={{ background: '#eaf4f1', borderColor: 'var(--teal)', color: 'var(--teal-dark)' }}>{notice}</div>}
+      {notice && <div className="notice success" style={{ background: 'var(--surface-hover)', borderColor: 'var(--teal)', color: 'var(--teal)' }}>{notice}</div>}
 
       <section className="customer-hero panel">
         <div className="customer-identity">
