@@ -1,8 +1,8 @@
-# BizAI – AI-Powered Business Management Platform
+# BizAI: Fashion ERP & Commerce Platform
 
 **Team YATRI** | Software Engineering Project
 
-Centralized workspace for customers, products, inventory, orders, invoices, reports, users, and a data-grounded AI assistant.
+A full-stack, AI-powered ERP and commercial operations platform built for an apparel and luxury fashion studio. It unifies inventory control, multi-carrier courier dispatch and live tracking, automated GST invoicing, customer relationship management, and an interactive customer-facing storefront with real-time financial reporting.
 
 ## Tech stack
 

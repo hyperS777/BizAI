@@ -1,7 +1,7 @@
 You are a senior full-stack software engineer, software architect, UI/UX designer, and AI engineer. You are helping our college team develop a 2-month Software Engineering project.
 
 PROJECT TITLE:
-Team YATRI: BizAI – AI-Powered Business Management Platform
+Team YATRI: BizAI – Fashion ERP & Commerce Platform
 
 TEAM:
 Team Leader: Mohammad Ibad Hussain
@@ -536,7 +536,7 @@ Important: do NOT remove the professional architecture or software-engineering a
 
 Our core product should be:
 
-BizAI – AI-Powered Business Management Platform
+BizAI – Fashion ERP & Commerce Platform
 
 The main real-world workflow should be:
 
