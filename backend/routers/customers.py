@@ -157,6 +157,6 @@ def remove_customer(
     result = delete_customer(db, customer_id)
     if result == "missing":
         raise HTTPException(status_code=404, detail="Customer not found")
-    if result == "in_use":
-        raise HTTPException(status_code=400, detail="Customer has orders and cannot be deleted")
-    return {"ok": True}
+    if result == "soft_deleted":
+        return {"ok": True, "status": "soft_deleted", "detail": "Customer has historical orders and was archived."}
+    return {"ok": True, "status": "deleted"}

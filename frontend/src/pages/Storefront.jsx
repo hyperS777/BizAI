@@ -7,7 +7,18 @@ import client from '../api/client';
 import { apiError, money } from '../utils/format';
 import './Storefront.css';
 
-const collections = ['All pieces', 'New arrivals', 'Menswear', 'Womenswear', 'Wishlist'];
+function ProductSilhouette({ title = '', size = 26, style = {} }) {
+  return (
+    <div className="product-placeholder" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, ...style }}>
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.45 }}>
+        <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" />
+      </svg>
+      <span style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.7, fontWeight: 600 }}>
+        {title ? title.slice(0, 14) : 'REIHH'}
+      </span>
+    </div>
+  );
+}
 
 const DISCOUNT_CODES = {
   REIHH10: { type: 'percent', value: 10, label: '10% off — Spring special' },
@@ -148,6 +159,19 @@ export default function Storefront() {
   }, [customer.name, customer.phone, customer.address, customer.whatsappUpdates]);
 
   /* ── filter & sort products (Shopify-style) ── */
+  const dynamicCollections = useMemo(() => {
+    const cats = Array.from(new Set(products.map((p) => p.category).filter(Boolean)));
+    const base = ['All pieces'];
+    if (products.some((p) => p.collections?.includes('new-collections'))) {
+      base.push('New arrivals');
+    }
+    cats.forEach((c) => {
+      if (!base.includes(c)) base.push(c);
+    });
+    base.push('Wishlist');
+    return base;
+  }, [products]);
+
   const filteredProducts = useMemo(() => {
     let list = products.filter((product) => {
       if (category === 'Wishlist') return wishlist.includes(product.id);
@@ -1001,7 +1025,7 @@ export default function Storefront() {
               {line.product.image_url ? (
                 <img src={line.product.image_url} alt="" />
               ) : (
-                <div className="product-placeholder" style={{ width: 76, height: 98 }}>REIHH</div>
+                <ProductSilhouette title={line.product.title} style={{ width: 76, height: 98 }} />
               )}
               <div className="cart-line-body">
                 <strong>{line.product.title}</strong>
@@ -1124,7 +1148,7 @@ export default function Storefront() {
           </div>
 
           <nav className="store-filter">
-            {collections.map((col) => (
+            {dynamicCollections.map((col) => (
               <button
                 key={col}
                 className={category === col ? 'selected' : ''}
@@ -1213,7 +1237,7 @@ export default function Storefront() {
                       {product.image_url ? (
                         <img src={product.image_url} alt={product.title} loading="lazy" />
                       ) : (
-                        <div className="product-placeholder">REIHH</div>
+                        <ProductSilhouette title={product.title} />
                       )}
                     </div>
                     {stockBadge(product)}
@@ -1510,7 +1534,7 @@ export default function Storefront() {
                 {quickViewProduct.image_url ? (
                   <img src={quickViewProduct.image_url} alt={quickViewProduct.title} />
                 ) : (
-                  <div className="product-placeholder">REIHH</div>
+                  <ProductSilhouette title={quickViewProduct.title} />
                 )}
               </div>
               <div className="quick-view-info-pane">

@@ -17,7 +17,7 @@ def get_customer(db: Session, customer_id: int) -> Optional[Customer]:
 def get_customers(
     db: Session, skip: int = 0, limit: int = 100, search: Optional[str] = None
 ) -> List[Customer]:
-    query = db.query(Customer)
+    query = db.query(Customer).filter(Customer.is_active != False)
     if search:
         term = f"%{search}%"
         query = query.filter(
@@ -67,7 +67,9 @@ def delete_customer(db: Session, customer_id: int) -> Optional[str]:
         return "missing"
     has_orders = db.query(Order).filter(Order.customer_id == customer_id).first()
     if has_orders:
-        return "in_use"
+        db_customer.is_active = False
+        db.commit()
+        return "soft_deleted"
     db.delete(db_customer)
     db.commit()
     return "deleted"

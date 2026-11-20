@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   MapPin, MapPinned, ClipboardList, List, ChevronDown, ChevronRight,
   Package, FileText, ExternalLink, Truck, Printer, XCircle, Edit3, Trash2, Tag, Plus, Check,
-  Clock3, Download, MessageCircle,
+  Clock3, Download, MessageCircle, RotateCcw, Barcode,
 } from 'lucide-react';
 import { CircleMarker, MapContainer, Popup, TileLayer, ZoomControl, useMap, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -18,6 +18,7 @@ const statusTabs = [
   { id: 'confirmed', label: 'Confirmed' },
   { id: 'shipped', label: 'In transit' },
   { id: 'delivered', label: 'Delivered' },
+  { id: 'returned', label: 'Returned' },
   { id: 'cancelled', label: 'Cancelled' },
 ];
 
@@ -26,6 +27,7 @@ const STATUS_COLORS = {
   confirmed: '#3b82f6',
   shipped: '#8b5cf6',
   delivered: '#10b981',
+  returned: '#a855f7',
   cancelled: '#ef4444',
 };
 
@@ -43,7 +45,7 @@ function MapBounds({ orders }) {
 }
 
 /* Expandable order row */
-function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onEditShipping, onCancelOrder, isSelected, onToggleSelect }) {
+function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onEditShipping, onCancelOrder, onReturnOrder, isSelected, onToggleSelect }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -230,7 +232,7 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onE
                 >
                   <Edit3 size={13} /> Edit Address &amp; Tracking
                 </button>
-                {order.status !== 'cancelled' && order.status !== 'delivered' && canStatus && (
+                {order.status !== 'cancelled' && order.status !== 'delivered' && order.status !== 'returned' && canStatus && (
                   <button
                     type="button"
                     className="outline-btn"
@@ -238,6 +240,17 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onE
                     onClick={() => onCancelOrder(order)}
                   >
                     <XCircle size={13} /> Cancel Order &amp; Restore Stock
+                  </button>
+                )}
+                {(order.status === 'delivered' || order.status === 'shipped') && canStatus && (
+                  <button
+                    type="button"
+                    className="outline-btn"
+                    style={{ color: '#8b5cf6', borderColor: '#d8b4fe' }}
+                    onClick={() => onReturnOrder(order)}
+                    title="Restock garments to warehouse and credit/void invoice"
+                  >
+                    <RotateCcw size={13} /> Process Return &amp; Restock
                   </button>
                 )}
               </div>
@@ -282,6 +295,9 @@ export default function Orders() {
   const [selectedMapOrder, setSelectedMapOrder] = useState(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
+  const [returnModalOrder, setReturnModalOrder] = useState(null);
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const [discountValidationMsg, setDiscountValidationMsg] = useState('');
 
   const toggleSelectOrder = (id, checked) => {
     setSelectedOrderIds((prev) => {
@@ -473,19 +489,73 @@ export default function Orders() {
     return Math.max(0, subtotal - discountAmount) + Number(form.shipping_amount || 0);
   }, [subtotal, discountAmount, form.shipping_amount]);
 
-  const applyDiscountCode = () => {
+  const applyDiscountCode = async () => {
     const code = (form.discount_code || '').trim().toUpperCase();
     if (!code) return;
-    if (code === 'REIHH10' || code === 'FIRST10') {
-      setAppliedDiscount({ code, type: 'percent', value: 10 });
-    } else if (code === 'VIP15') {
-      setAppliedDiscount({ code, type: 'percent', value: 15 });
-    } else if (code === 'STUDIO20') {
-      setAppliedDiscount({ code, type: 'percent', value: 20 });
-    } else if (code === 'FLAT500') {
-      setAppliedDiscount({ code, type: 'fixed', value: 500 });
-    } else {
-      setAppliedDiscount({ code, type: 'percent', value: 10 });
+    try {
+      const res = await client.post('/integrations/discounts/validate', { code, subtotal });
+      setAppliedDiscount({
+        code: res.data.code,
+        type: res.data.discount_type,
+        value: res.data.value,
+        amount: res.data.discount_amount,
+      });
+      setDiscountValidationMsg('');
+      toast?.success(`Promotional code ${res.data.code} applied!`);
+    } catch (err) {
+      setAppliedDiscount(null);
+      const msg = err.response?.data?.detail || 'Invalid or expired promotional code';
+      setDiscountValidationMsg(msg);
+      toast?.error(msg);
+    }
+  };
+
+  const handleBarcodeScan = () => {
+    const q = barcodeInput.trim().toLowerCase();
+    if (!q) return;
+    const found = products.find((p) =>
+      p.sku?.toLowerCase() === q ||
+      p.name?.toLowerCase().includes(q) ||
+      (p.variants || []).some((v) => v.sku?.toLowerCase() === q || v.barcode === q)
+    );
+    if (!found) {
+      toast?.error(`No garment or variant found for "${barcodeInput}"`);
+      return;
+    }
+    const matchedVariant = (found.variants || []).find((v) => v.sku?.toLowerCase() === q || v.barcode === q) || found.variants?.[0];
+    const unitPrice = matchedVariant ? matchedVariant.selling_price : found.price;
+    setForm((prev) => ({
+      ...prev,
+      items: [
+        ...prev.items.filter((it) => it.product_id),
+        {
+          product_id: found.id,
+          variant_id: matchedVariant?.id || '',
+          quantity: 1,
+          unit_price: unitPrice,
+        },
+      ],
+    }));
+    setBarcodeInput('');
+    toast?.success(`Quick-added "${found.name}" (${matchedVariant ? matchedVariant.title : 'Standard'})`);
+  };
+
+  const returnOrder = (order) => {
+    setReturnModalOrder(order);
+  };
+
+  const confirmReturnOrder = async () => {
+    if (!returnModalOrder) return;
+    const order = returnModalOrder;
+    setReturnModalOrder(null);
+    try {
+      await client.patch(`/orders/${order.id}/status`, { status: 'returned' });
+      setNotice(`Order #${order.order_number} processed as Returned. Inventory restocked.`);
+      toast?.info(`Order #${order.order_number} returned; stock replenished.`);
+      load();
+    } catch (err) {
+      setError(apiError(err, 'Could not process return'));
+      toast?.error('Failed to process customer return');
     }
   };
 
@@ -844,6 +914,7 @@ export default function Orders() {
                   onInvoice={invoice}
                   onEditShipping={openEditShipping}
                   onCancelOrder={cancelOrder}
+                  onReturnOrder={returnOrder}
                 />
               ))}
             </tbody>
@@ -948,6 +1019,21 @@ export default function Orders() {
               />
             </label>
 
+            {/* Quick Barcode / SKU Add Input */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, padding: '8px 10px', background: 'var(--panel-alt)', borderRadius: 6, border: '1px solid var(--border)' }}>
+              <Barcode size={16} style={{ color: 'var(--teal)' }} />
+              <input
+                placeholder="Scan barcode or type SKU to quick-add item…"
+                value={barcodeInput}
+                onChange={(e) => setBarcodeInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleBarcodeScan(); } }}
+                style={{ flex: 1, fontSize: 12, padding: '4px 8px' }}
+              />
+              <button type="button" className="outline-btn" style={{ fontSize: 11, padding: '4px 10px' }} onClick={handleBarcodeScan}>
+                + Add
+              </button>
+            </div>
+
             {/* Line Items with Variant Selector */}
             <div style={{ background: 'var(--panel-alt)', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -1034,6 +1120,11 @@ export default function Orders() {
                     <button type="button" className="outline-btn" onClick={applyDiscountCode}>Apply</button>
                   </div>
                 </label>
+                {discountValidationMsg && !appliedDiscount && (
+                  <small style={{ color: '#ef4444', display: 'block', marginTop: 4, fontSize: 11 }}>
+                    {discountValidationMsg}
+                  </small>
+                )}
                 {appliedDiscount && (
                   <small style={{ color: '#10b981', display: 'block', marginTop: 4 }}>
                     <Check size={11} style={{ display: 'inline', verticalAlign: -1 }} /> {appliedDiscount.code} applied ({appliedDiscount.type === 'percent' ? `${appliedDiscount.value}% off` : `₹${appliedDiscount.value} off`})
@@ -1139,6 +1230,17 @@ export default function Orders() {
         confirmVariant="danger"
         onConfirm={confirmCancelOrder}
         onCancel={() => setCancelModalOrder(null)}
+      />
+
+      {/* Confirmation Dialog on Order Return */}
+      <ConfirmDialog
+        isOpen={!!returnModalOrder}
+        title={`Process Return · Order #${returnModalOrder?.order_number}`}
+        message={`Are you sure you want to process a customer return for order #${returnModalOrder?.order_number}? Garments will be restored to inventory stock, the invoice voided, and status marked as Returned.`}
+        confirmText="Confirm Customer Return & Restock"
+        confirmVariant="danger"
+        onConfirm={confirmReturnOrder}
+        onCancel={() => setReturnModalOrder(null)}
       />
     </>
   );

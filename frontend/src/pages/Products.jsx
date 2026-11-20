@@ -284,7 +284,7 @@ export default function Products() {
                         {product.image_url ? (
                           <img src={product.image_url} alt="" style={{ width: 40, height: 50, objectFit: 'cover', borderRadius: 6, background: '#eee', flexShrink: 0, border: '1px solid var(--border)' }} />
                         ) : (
-                          <div style={{ width: 40, height: 50, borderRadius: 6, background: '#f0f2f1', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                          <div style={{ width: 40, height: 50, borderRadius: 6, background: 'var(--panel-alt)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
                             <Package size={18} style={{ color: 'var(--muted)' }} />
                           </div>
                         )}

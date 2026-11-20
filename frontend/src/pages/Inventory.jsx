@@ -29,6 +29,11 @@ export default function Inventory() {
   const [lowOnly, setLowOnly] = useState(false);
   const [sortField, setSortField] = useState('stock_qty');
   const [sortAsc, setSortAsc] = useState(true);
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyDate, setHistoryDate] = useState('');
+  const [supplierName, setSupplierName] = useState('Okhla Garment Manufacturing Co.');
+  const [deliveryDate, setDeliveryDate] = useState(() => new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10));
+  const [receivingPo, setReceivingPo] = useState(false);
 
   const load = () => {
     Promise.all([client.get('/products'), client.get('/products/history')])
@@ -115,6 +120,46 @@ export default function Inventory() {
       return sum + (deficit * (p.cost_price || p.price * 0.4));
     }, 0);
   }, [lowStockItems]);
+
+  const filteredHistory = useMemo(() => {
+    return history.filter((row) => {
+      if (historyDate && !row.created_at?.startsWith(historyDate)) return false;
+      if (historySearch) {
+        const q = historySearch.toLowerCase();
+        const matchReason = (row.reason || '').toLowerCase().includes(q);
+        const matchNotes = (row.notes || '').toLowerCase().includes(q);
+        if (!matchReason && !matchNotes) return false;
+      }
+      return true;
+    });
+  }, [history, historySearch, historyDate]);
+
+  const handleReceivePo = async () => {
+    if (!lowStockItems.length) {
+      toast?.error('No low stock items to restock');
+      return;
+    }
+    setReceivingPo(true);
+    try {
+      for (const p of lowStockItems) {
+        const orderQty = Math.max((p.min_stock_level * 2) - p.stock_qty, 10);
+        await client.post(`/products/${p.id}/stock`, {
+          quantity_change: orderQty,
+          reason: 'supplier_po',
+          notes: `Inbound PO received from ${supplierName} (Expected: ${deliveryDate})`,
+        });
+      }
+      toast?.success(`Received & restocked ${lowStockItems.length} products to warehouse inventory!`);
+      setNotice(`Restocked ${lowStockItems.length} low-stock products from ${supplierName}.`);
+      setPoModal(false);
+      load();
+    } catch (err) {
+      setError(apiError(err, 'Failed to receive purchase order'));
+      toast?.error(apiError(err, 'Failed to receive purchase order'));
+    } finally {
+      setReceivingPo(false);
+    }
+  };
 
   return (
     <>
@@ -211,7 +256,7 @@ export default function Inventory() {
                       {product.image_url ? (
                         <img src={product.image_url} alt="" style={{ width: 36, height: 46, objectFit: 'cover', borderRadius: 5, background: '#eee', flexShrink: 0, border: '1px solid var(--border)' }} />
                       ) : (
-                        <div style={{ width: 36, height: 46, borderRadius: 5, background: '#f0f2f1', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                        <div style={{ width: 36, height: 46, borderRadius: 5, background: 'var(--panel-alt)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
                           <Package size={16} style={{ color: 'var(--muted)' }} />
                         </div>
                       )}
@@ -262,8 +307,48 @@ export default function Inventory() {
       ) : <EmptyState icon={Package} text="No products match the selected inventory filter." />}
 
       <section className="panel" style={{ marginTop: 16 }}>
-        <h2>Warehouse audit trail (Recent movements)</h2>
-        {history.length ? history.slice(0, 15).map((row) => (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
+          <h2 style={{ margin: 0 }}>Warehouse audit trail (Stock movements)</h2>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              value={historySearch}
+              onChange={(e) => setHistorySearch(e.target.value)}
+              placeholder="Search movements or notes…"
+              style={{
+                padding: '6px 10px',
+                borderRadius: 6,
+                border: '1px solid var(--border)',
+                background: 'var(--surface)',
+                color: 'var(--ink)',
+                fontSize: 12.5,
+              }}
+            />
+            <input
+              type="date"
+              value={historyDate}
+              onChange={(e) => setHistoryDate(e.target.value)}
+              style={{
+                padding: '6px 10px',
+                borderRadius: 6,
+                border: '1px solid var(--border)',
+                background: 'var(--surface)',
+                color: 'var(--ink)',
+                fontSize: 12.5,
+              }}
+            />
+            {(historySearch || historyDate) && (
+              <button
+                className="text-btn"
+                onClick={() => { setHistorySearch(''); setHistoryDate(''); }}
+                style={{ fontSize: 12 }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+        {filteredHistory.length ? filteredHistory.slice(0, 20).map((row) => (
           <div className="history-row" key={row.id}>
             <strong style={{ textTransform: 'capitalize' }}>{(row.reason || 'Manual').replace(/_/g, ' ')}</strong>
             <span style={{ fontWeight: 600, color: row.quantity_change > 0 ? '#10b981' : '#ef4444' }}>
@@ -272,7 +357,7 @@ export default function Inventory() {
             <span>{formatDate(row.created_at)}</span>
             <span className="muted">{row.notes || '—'}</span>
           </div>
-        )) : <p className="muted">No stock movements recorded yet.</p>}
+        )) : <p className="muted">{history.length ? 'No stock movements match the filter.' : 'No stock movements recorded yet.'}</p>}
       </section>
 
       {/* Stock Adjustment Modal */}
@@ -352,6 +437,26 @@ export default function Inventory() {
               </div>
             </div>
 
+            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 12, marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 600 }}>Supplier / Manufacturing Unit
+                <input
+                  type="text"
+                  value={supplierName}
+                  onChange={(e) => setSupplierName(e.target.value)}
+                  placeholder="e.g. Okhla Garment Manufacturing Co."
+                  style={{ width: '100%', marginTop: 4, padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)' }}
+                />
+              </label>
+              <label style={{ fontSize: 12, fontWeight: 600 }}>Expected Inbound Date
+                <input
+                  type="date"
+                  value={deliveryDate}
+                  onChange={(e) => setDeliveryDate(e.target.value)}
+                  style={{ width: '100%', marginTop: 4, padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)' }}
+                />
+              </label>
+            </div>
+
             {lowStockItems.length ? (
               <table className="data-table" style={{ fontSize: 12 }}>
                 <thead>
@@ -391,7 +496,7 @@ export default function Inventory() {
               </p>
             )}
 
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16, flexWrap: 'wrap' }}>
               <button
                 type="button"
                 className="outline-btn"
@@ -399,16 +504,18 @@ export default function Inventory() {
               >
                 <Printer size={14} /> Print PO Draft
               </button>
-              <button
-                type="button"
-                className="primary-btn"
-                onClick={() => {
-                  setPoModal(false);
-                  setNotice('Purchase order draft saved to procurement records.');
-                }}
-              >
-                <Check size={14} /> Approve &amp; Dispatch to Manufacturer
-              </button>
+              {canEdit && lowStockItems.length > 0 && (
+                <button
+                  type="button"
+                  className="primary-btn"
+                  disabled={receivingPo}
+                  onClick={handleReceivePo}
+                  style={{ background: 'var(--teal)' }}
+                  title="Receive goods into warehouse inventory ledger"
+                >
+                  <Plus size={14} /> {receivingPo ? 'Receiving & Restocking…' : 'Receive Goods & Restock Warehouse'}
+                </button>
+              )}
             </div>
           </div>
         </Modal>

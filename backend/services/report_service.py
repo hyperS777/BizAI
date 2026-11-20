@@ -533,3 +533,32 @@ def build_business_snapshot(db: Session) -> dict:
         "storefront_funnel": storefront_funnel,
         "storefront_top_viewed": storefront_top_viewed,
     }
+
+
+def get_staff_performance(db: Session, limit: int = 10) -> List[dict]:
+    from models.user import User
+    rows = (
+        db.query(
+            User.id.label("user_id"),
+            User.full_name.label("full_name"),
+            User.email.label("email"),
+            func.count(Order.id).label("order_count"),
+            func.coalesce(func.sum(Order.total_amount), 0).label("total_sales"),
+        )
+        .join(Order, Order.created_by == User.id)
+        .filter(Order.status != OrderStatus.CANCELLED.value)
+        .group_by(User.id)
+        .order_by(func.sum(Order.total_amount).desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "user_id": r.user_id,
+            "full_name": r.full_name or "Staff Member",
+            "email": r.email,
+            "order_count": int(r.order_count or 0),
+            "total_sales": float(r.total_sales or 0.0),
+        }
+        for r in rows
+    ]

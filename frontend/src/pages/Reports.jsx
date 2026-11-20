@@ -52,6 +52,7 @@ export default function Reports() {
   const [topProducts, setTopProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [expenses, setExpenses] = useState(null);
+  const [staffPerf, setStaffPerf] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -69,13 +70,15 @@ export default function Reports() {
       client.get('/reports/expenses-summary', {
         params: useCustomDates ? { start_date: startDate, end_date: endDate } : undefined,
       }),
+      client.get('/reports/staff-performance').catch(() => ({ data: [] })),
     ])
-      .then(([dashboard, salesRes, topRes, custRes, expRes]) => {
+      .then(([dashboard, salesRes, topRes, custRes, expRes, staffRes]) => {
         setMetrics(dashboard.data);
         setSeries(salesRes.data.points || []);
         setTopProducts(topRes.data || []);
         setCustomers(custRes.data || []);
         setExpenses(expRes.data);
+        setStaffPerf(staffRes.data || []);
       })
       .catch((err) => setError(apiError(err)))
       .finally(() => setLoading(false));
@@ -382,6 +385,49 @@ return (
     </section>
   )
 }
+
+{/* Staff Sales Performance */}
+{staffPerf.length > 0 && (
+  <section className="panel table-panel" style={{ marginTop: 14 }}>
+    <div className="panel-heading" style={{ padding: '18px 22px 0' }}>
+      <div>
+        <p className="eyebrow">Team Performance</p>
+        <h2>Staff sales &amp; order attribution</h2>
+      </div>
+      <button
+        className="outline-btn"
+        style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        onClick={() => exportCSV(staffPerf, 'staff-performance.csv')}
+      >
+        <Download size={14} /> CSV
+      </button>
+    </div>
+    <table className="data-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Staff Member</th>
+          <th>Email</th>
+          <th>Orders Handled</th>
+          <th>Average Order Value</th>
+          <th>Gross Revenue</th>
+        </tr>
+      </thead>
+      <tbody>
+        {staffPerf.map((s, i) => (
+          <tr key={s.user_id}>
+            <td style={{ color: 'var(--muted)', fontWeight: 700 }}>{i + 1}</td>
+            <td><strong>{s.full_name}</strong></td>
+            <td style={{ color: 'var(--muted)' }}>{s.email}</td>
+            <td>{s.order_count} orders</td>
+            <td>{money(s.order_count ? Math.round(s.total_sales / s.order_count) : 0)}</td>
+            <td><b style={{ color: 'var(--teal)' }}>{money(s.total_sales)}</b></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </section>
+)}
     </>
   );
 }

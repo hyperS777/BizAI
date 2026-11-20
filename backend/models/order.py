@@ -15,14 +15,16 @@ class OrderStatus(str, enum.Enum):
     SHIPPED = "shipped"
     DELIVERED = "delivered"
     CANCELLED = "cancelled"
+    RETURNED = "returned"
 
 
 ALLOWED_TRANSITIONS = {
     OrderStatus.PENDING.value: {OrderStatus.CONFIRMED.value, OrderStatus.CANCELLED.value},
     OrderStatus.CONFIRMED.value: {OrderStatus.SHIPPED.value, OrderStatus.CANCELLED.value},
-    OrderStatus.SHIPPED.value: {OrderStatus.DELIVERED.value},
-    OrderStatus.DELIVERED.value: set(),
+    OrderStatus.SHIPPED.value: {OrderStatus.DELIVERED.value, OrderStatus.RETURNED.value},
+    OrderStatus.DELIVERED.value: {OrderStatus.RETURNED.value},
     OrderStatus.CANCELLED.value: set(),
+    OrderStatus.RETURNED.value: set(),
 }
 
 CANCEL_LOCKED_STATUSES = {OrderStatus.SHIPPED.value, OrderStatus.DELIVERED.value}

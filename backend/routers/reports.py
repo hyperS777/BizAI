@@ -20,6 +20,7 @@ from services.report_service import (
     get_customer_activity,
     get_expense_summary,
     get_pnl_data,
+    get_staff_performance,
 )
 from utils.pdf import build_pnl_pdf
 from utils.permissions import require_finance
@@ -153,3 +154,13 @@ def expenses_summary_report(
     current_user: User = Depends(require_finance),
 ):
     return get_expense_summary(db, start_date=start_date, end_date=end_date)
+
+
+@router.get("/staff-performance")
+def staff_performance_report(
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_finance),
+):
+    return get_staff_performance(db, limit=limit)
+

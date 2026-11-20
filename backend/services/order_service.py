@@ -1,5 +1,6 @@
 """Order service: variants, discounts, FSM, cancel lock, automation."""
 
+from datetime import datetime, timezone
 from typing import List, Optional
 import uuid
 
@@ -13,6 +14,34 @@ from schemas.order import OrderCreate, OrderUpdate
 from services.integration_service import apply_discount, bump_discount_usage, emit_event, get_setting, setting_enabled
 from services.invoice_service import generate_invoice_from_order, void_invoice
 from services.product_service import update_stock
+
+ADDR_COORDS = {
+    "mohali": (30.6757, 76.7332),
+    "bengaluru": (12.9784, 77.6408),
+    "bangalore": (12.9784, 77.6408),
+    "mumbai": (19.0596, 72.8295),
+    "jaipur": (26.9124, 75.7873),
+    "connaught place": (28.6315, 77.2167),
+    "okhla": (28.5355, 77.2713),
+    "new delhi": (28.6315, 77.2167),
+    "delhi": (28.6315, 77.2167),
+    "gurgaon": (28.4595, 77.0266),
+    "gurugram": (28.4595, 77.0266),
+    "noida": (28.5355, 77.3910),
+    "chandigarh": (30.7333, 76.7794),
+    "ludhiana": (30.9010, 75.8573),
+}
+
+
+def geocode_address(addr: Optional[str]) -> tuple[float, float, str]:
+    if not addr:
+        return 28.6139, 77.2090, "Delhi NCR Hub"
+    lower = addr.lower()
+    for city, coords in ADDR_COORDS.items():
+        if city in lower:
+            loc_label = addr.split(",")[0].strip() or city.title()
+            return coords[0], coords[1], loc_label
+    return 28.6139, 77.2090, addr.split(",")[0].strip() or "Delhi NCR Hub"
 
 
 def _status_value(status) -> str:
@@ -79,6 +108,9 @@ def create_order(db: Session, order: OrderCreate, user_id: int) -> Order:
     order_number = f"ORD-{uuid.uuid4().hex[:8].upper()}"
     shipping_addr = order.shipping_address or (customer.address if customer else None)
     shipping_amt = float(order.shipping_amount or 0.0)
+    lat, lon, loc_label = geocode_address(shipping_addr)
+    waybill = f"148{uuid.uuid4().int % 900000000 + 100000000}"
+
     db_order = Order(
         order_number=order_number,
         customer_id=order.customer_id,
@@ -87,6 +119,13 @@ def create_order(db: Session, order: OrderCreate, user_id: int) -> Order:
         notes=order.notes,
         created_by=user_id,
         status=OrderStatus.PENDING.value,
+        delivery_latitude=lat,
+        delivery_longitude=lon,
+        delivery_location=loc_label,
+        tracking_company="Delhivery Express",
+        tracking_number=waybill,
+        tracking_url=f"https://www.delhivery.com/track/package/{waybill}",
+        delivery_updated_at=datetime.now(timezone.utc),
     )
     db.add(db_order)
     db.flush()
@@ -215,13 +254,25 @@ def update_order_status(db: Session, order_id: int, status: OrderStatus) -> Opti
         )
 
     elif new_status == OrderStatus.CANCELLED.value:
-        if old_status == OrderStatus.CONFIRMED.value:
+        if old_status in (OrderStatus.CONFIRMED.value, OrderStatus.SHIPPED.value):
             _adjust_line_stock(db, db_order, 1, "order_cancelled")
         void_invoice(db, db_order.id, commit=False)
         db_order.status = new_status
         emit_event(
             db,
             "order.cancelled",
+            "order",
+            db_order.id,
+            {"order_number": db_order.order_number, "from": old_status},
+        )
+
+    elif new_status == OrderStatus.RETURNED.value or new_status == "returned":
+        _adjust_line_stock(db, db_order, 1, "customer_return")
+        void_invoice(db, db_order.id, commit=False)
+        db_order.status = OrderStatus.RETURNED.value
+        emit_event(
+            db,
+            "order.returned",
             "order",
             db_order.id,
             {"order_number": db_order.order_number, "from": old_status},

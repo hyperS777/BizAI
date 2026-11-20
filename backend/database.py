@@ -119,6 +119,7 @@ _EXTRA_COLUMNS = {
         ("shopify_customer_id", "VARCHAR(80)"),
         ("tier", "VARCHAR(30) DEFAULT 'Regular'"),
         ("billing_address", "TEXT"),
+        ("is_active", "BOOLEAN DEFAULT 1"),
     ],
     "inventory_movements": [
         ("variant_id", "INTEGER"),

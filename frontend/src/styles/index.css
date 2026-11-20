@@ -1316,6 +1316,11 @@ select {
   color: var(--blue)
 }
 
+.status-pill.returned {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -2344,6 +2349,11 @@ body {
 [data-theme='dark'] .status-pill.delivered {
   background: #1d3b34;
   color: #83d8c6;
+}
+
+[data-theme='dark'] .status-pill.returned {
+  background: #3b2149;
+  color: #d8b4fe;
 }
 
 [data-theme='dark'] .primary-btn:hover,

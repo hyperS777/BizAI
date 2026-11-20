@@ -146,10 +146,24 @@ def create_standalone_invoice(
         raise HTTPException(status_code=400, detail="Invoice amount must be greater than zero")
 
     invoice_number = f"INV-{uuid.uuid4().hex[:8].upper()}"
-    taxable = taxable_amount or round(total_amount / 1.18, 2)
-    tax_diff = total_amount - taxable
-    c_tax = cgst or round(tax_diff / 2, 2)
-    s_tax = sgst or c_tax
+    taxable = taxable_amount if taxable_amount is not None else round(total_amount / 1.18, 2)
+    tax_diff = max(0.0, total_amount - taxable)
+    if igst is not None and igst > 0:
+        c_tax = 0.0
+        s_tax = 0.0
+        i_tax = round(igst, 2)
+    elif cgst is not None and sgst is not None:
+        c_tax = round(cgst, 2)
+        s_tax = round(sgst, 2)
+        i_tax = 0.0
+    elif taxable >= total_amount:
+        c_tax = 0.0
+        s_tax = 0.0
+        i_tax = 0.0
+    else:
+        c_tax = round(tax_diff / 2, 2)
+        s_tax = round(tax_diff - c_tax, 2)
+        i_tax = 0.0
 
     db_invoice = Invoice(
         invoice_number=invoice_number,
@@ -164,7 +178,7 @@ def create_standalone_invoice(
         taxable_amount=taxable,
         cgst=c_tax,
         sgst=s_tax,
-        igst=igst or 0.0,
+        igst=i_tax,
         notes=notes,
     )
     db.add(db_invoice)

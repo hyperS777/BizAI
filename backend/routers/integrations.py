@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from config import settings
 from database import get_db
+from models.integration import DiscountCode
 from models.user import User
 from schemas.integration import (
     DiscountPayload,
@@ -17,6 +18,7 @@ from schemas.integration import (
     WebhookResponse,
 )
 from services.integration_service import (
+    apply_discount,
     emit_event,
     list_discounts,
     list_events,
@@ -35,7 +37,7 @@ from services.shopify_service import (
     sync_shopify_store,
     verify_shopify_signature,
 )
-from utils.permissions import require_integration_admin, require_integration_reader
+from utils.permissions import require_integration_admin, require_integration_reader, require_staff
 
 router = APIRouter(prefix="/api/integrations", tags=["integrations"])
 
@@ -207,3 +209,27 @@ def update_discount(
         return upsert_discount(db, payload.model_dump(exclude_unset=True), discount_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/discounts/validate")
+def validate_discount_code(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff),
+):
+    code = (payload.get("code") or "").strip().upper()
+    subtotal = float(payload.get("subtotal", 0.0))
+    if not code:
+        raise HTTPException(status_code=400, detail="Discount code is required")
+    try:
+        amount, normalized_code = apply_discount(db, code, subtotal)
+        row = db.query(DiscountCode).filter(DiscountCode.code == normalized_code).first()
+        return {
+            "valid": True,
+            "code": normalized_code,
+            "discount_type": row.discount_type if row else "percent",
+            "value": float(row.value) if row else 0.0,
+            "discount_amount": amount,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))

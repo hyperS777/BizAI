@@ -32,6 +32,7 @@ export default function Invoices() {
     total_amount: '',
     due_date: new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10),
     payment_method: 'bank_transfer',
+    tax_rate_type: 'intra_state', // 'intra_state' | 'inter_state' | 'exempt'
     notes: 'Luxury Garment Supply & Tailoring',
   });
 
@@ -57,9 +58,19 @@ export default function Invoices() {
     e.preventDefault();
     try {
       const total = Number(invoiceForm.total_amount);
-      const taxable = Math.round((total / 1.18) * 100) / 100;
-      const cgst = Math.round(((total - taxable) / 2) * 100) / 100;
-      const sgst = cgst;
+      let taxable = total;
+      let cgst = 0;
+      let sgst = 0;
+      let igst = 0;
+
+      if (invoiceForm.tax_rate_type === 'intra_state') {
+        taxable = Math.round((total / 1.18) * 100) / 100;
+        cgst = Math.round(((total - taxable) / 2) * 100) / 100;
+        sgst = Math.round((total - taxable - cgst) * 100) / 100;
+      } else if (invoiceForm.tax_rate_type === 'inter_state') {
+        taxable = Math.round((total / 1.18) * 100) / 100;
+        igst = Math.round((total - taxable) * 100) / 100;
+      }
 
       await client.post('/invoices', {
         customer_id: invoiceForm.customer_id ? Number(invoiceForm.customer_id) : null,
@@ -69,6 +80,7 @@ export default function Invoices() {
         taxable_amount: taxable,
         cgst: cgst,
         sgst: sgst,
+        igst: igst,
         notes: invoiceForm.notes,
       });
 
@@ -183,6 +195,10 @@ export default function Invoices() {
                 const customer = invoice.order?.customer || invoice.customer;
                 const taxable = invoice.taxable_amount || Math.round((invoice.total_amount / 1.18) * 100) / 100;
                 const gst = Math.round((invoice.total_amount - taxable) * 100) / 100;
+                const hasIgst = (invoice.igst || 0) > 0;
+                const isExempt = (invoice.cgst || 0) === 0 && (invoice.sgst || 0) === 0 && (invoice.igst || 0) === 0 && (invoice.taxable_amount === invoice.total_amount);
+                const gstRateLabel = isExempt ? '0% Exempt' : hasIgst ? 'IGST 18%' : 'CGST 9% + SGST 9%';
+                const gstAmount = isExempt ? 0 : (hasIgst ? invoice.igst : (((invoice.cgst || 0) + (invoice.sgst || 0)) || gst));
                 return (
                   <tr key={invoice.id}>
                     <td>
@@ -197,8 +213,8 @@ export default function Invoices() {
                     </td>
                     <td>{money(taxable)}</td>
                     <td>
-                      <div>{money(gst)}</div>
-                      <small style={{ color: 'var(--muted)', fontSize: 10 }}>CGST 9% + SGST 9%</small>
+                      <div>{money(gstAmount)}</div>
+                      <small style={{ color: 'var(--muted)', fontSize: 10 }}>{gstRateLabel}</small>
                     </td>
                     <td><strong style={{ fontSize: 13.5 }}>{money(invoice.total_amount)}</strong></td>
                     <td>
@@ -304,16 +320,29 @@ export default function Invoices() {
               </label>
             </div>
 
-            <label>Expected Payment Method
-              <select
-                value={invoiceForm.payment_method}
-                onChange={(e) => setInvoiceForm({ ...invoiceForm, payment_method: e.target.value })}
-              >
-                {PAYMENT_METHODS.map((m) => (
-                  <option key={m.id} value={m.id}>{m.label}</option>
-                ))}
-              </select>
-            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 10 }}>
+              <label>Expected Payment Method
+                <select
+                  value={invoiceForm.payment_method}
+                  onChange={(e) => setInvoiceForm({ ...invoiceForm, payment_method: e.target.value })}
+                >
+                  {PAYMENT_METHODS.map((m) => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label>GST Tax Structure*
+                <select
+                  value={invoiceForm.tax_rate_type}
+                  onChange={(e) => setInvoiceForm({ ...invoiceForm, tax_rate_type: e.target.value })}
+                >
+                  <option value="intra_state">Intra-State (9% CGST + 9% SGST)</option>
+                  <option value="inter_state">Inter-State (18% IGST)</option>
+                  <option value="exempt">Zero-Rated / Exempt (0% GST)</option>
+                </select>
+              </label>
+            </div>
 
             <label>Description / Line Items
               <textarea
@@ -325,7 +354,11 @@ export default function Invoices() {
             </label>
 
             <div style={{ background: 'var(--panel-alt)', border: '1px solid var(--border)', padding: 10, borderRadius: 6, fontSize: 12, color: 'var(--muted)' }}>
-              GST Note: Automatically computes 18% GST (9% CGST + 9% SGST) breakdown and issues an official tax invoice.
+              GST Compliance: {invoiceForm.tax_rate_type === 'intra_state'
+                ? 'Applies standard 18% GST (9% CGST + 9% SGST) for local state sales.'
+                : invoiceForm.tax_rate_type === 'inter_state'
+                ? 'Applies standard 18% Integrated GST (IGST) for interstate dispatches.'
+                : 'Zero-rated or exempt supply (0% tax rate).'}
             </div>
 
             <button className="primary-btn" type="submit" disabled={!invoiceForm.total_amount}>

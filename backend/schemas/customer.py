@@ -15,6 +15,7 @@ class CustomerBase(BaseModel):
     tier: Optional[str] = "Regular"
     notes: Optional[str] = None
     accepts_marketing: Optional[bool] = False
+    is_active: Optional[bool] = True
 
 
 class CustomerCreate(CustomerBase):
@@ -33,6 +34,7 @@ class CustomerUpdate(BaseModel):
     tier: Optional[str] = None
     notes: Optional[str] = None
     accepts_marketing: Optional[bool] = None
+    is_active: Optional[bool] = None
 
 
 class CustomerResponse(CustomerBase):
