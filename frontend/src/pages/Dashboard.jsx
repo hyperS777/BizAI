@@ -1,8 +1,8 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bar } from 'react-chartjs-2';
+import { Line } from 'react-chartjs-2';
 import {
-  CategoryScale, LinearScale, BarElement, Tooltip, Legend, Chart as ChartJS,
+  CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler, Chart as ChartJS,
 } from 'chart.js';
 import {
   BarChart3, ChevronRight, CircleDollarSign, ClipboardList, Package, Search,
@@ -13,7 +13,7 @@ import client from '../api/client';
 import { EmptyState, PageHeader } from '../components/ui';
 import { formatDate, money } from '../utils/format';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
 export default function Dashboard() {
   const { user, role } = useContext(AuthContext);
@@ -67,10 +67,15 @@ export default function Dashboard() {
   const chart = useMemo(() => ({
     labels: series.map((point) => formatDate(point.date).split(' ').slice(0, 2).join(' ')),
     datasets: [{
-      label: 'Sales (₹)',
+      label: 'Daily Sales (₹)',
       data: series.map((point) => point.total),
-      backgroundColor: '#75b9ac',
-      borderRadius: 3,
+      backgroundColor: 'rgba(14, 118, 110, 0.14)',
+      borderColor: '#0e766e',
+      borderWidth: 2,
+      fill: true,
+      tension: 0.35,
+      pointRadius: 2.5,
+      pointBackgroundColor: '#0e766e',
     }],
   }), [series]);
 
@@ -162,7 +167,7 @@ export default function Dashboard() {
           </div>
           {series.some((point) => point.total > 0) ? (
             <div className="chart-wrap">
-              <Bar data={chart} options={{ plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } }, responsive: true, maintainAspectRatio: false }} />
+              <Line data={chart} options={{ plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } }, responsive: true, maintainAspectRatio: false }} />
             </div>
           ) : (
             <EmptyState icon={CircleDollarSign} text="No sales data yet — orders will appear here automatically." />

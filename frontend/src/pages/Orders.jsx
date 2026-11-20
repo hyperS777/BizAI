@@ -7,7 +7,7 @@ import {
 import { CircleMarker, MapContainer, Popup, TileLayer, ZoomControl, useMap, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import client, { downloadPackingSlipPdf } from '../api/client';
-import { EmptyState, Modal, PageHeader } from '../components/ui';
+import { EmptyState, Modal, PageHeader, ConfirmDialog } from '../components/ui';
 import { apiError, formatDate, money } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -281,6 +281,7 @@ export default function Orders() {
   const [appliedDiscount, setAppliedDiscount] = useState(null);
   const [selectedMapOrder, setSelectedMapOrder] = useState(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
+  const [cancelModalOrder, setCancelModalOrder] = useState(null);
 
   const toggleSelectOrder = (id, checked) => {
     setSelectedOrderIds((prev) => {
@@ -526,8 +527,14 @@ export default function Orders() {
     }
   };
 
-  const cancelOrder = async (order) => {
-    if (!window.confirm(`Are you sure you want to cancel order #${order.order_number}? Inventory stock will be automatically restored.`)) return;
+  const cancelOrder = (order) => {
+    setCancelModalOrder(order);
+  };
+
+  const confirmCancelOrder = async () => {
+    if (!cancelModalOrder) return;
+    const order = cancelModalOrder;
+    setCancelModalOrder(null);
     try {
       await client.patch(`/orders/${order.id}/status`, { status: 'cancelled' });
       setNotice(`Order #${order.order_number} cancelled and stock reversed.`);
@@ -1122,6 +1129,17 @@ export default function Orders() {
           </form>
         </Modal>
       )}
+
+      {/* Confirmation Dialog on Order Cancellation */}
+      <ConfirmDialog
+        isOpen={!!cancelModalOrder}
+        title={`Cancel Order #${cancelModalOrder?.order_number}`}
+        message={`Are you sure you want to cancel order #${cancelModalOrder?.order_number}? Constituent inventory stock will be atomically restored and recorded in the movement audit ledger.`}
+        confirmText="Yes, Cancel Order"
+        confirmVariant="danger"
+        onConfirm={confirmCancelOrder}
+        onCancel={() => setCancelModalOrder(null)}
+      />
     </>
   );
 }

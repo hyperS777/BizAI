@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CircleDollarSign, Plus, Download, MessageCircle, Mail, CheckCircle2, CreditCard, FileText } from 'lucide-react';
+import { CircleDollarSign, Plus, Download, MessageCircle, Mail, CheckCircle2, CreditCard, FileText, Link2 } from 'lucide-react';
 import client, { downloadInvoicePdf } from '../api/client';
 import { EmptyState, Modal, PageHeader } from '../components/ui';
 import { apiError, formatDate, money } from '../utils/format';
@@ -109,10 +109,31 @@ export default function Invoices() {
     }
   };
 
+  const copyPublicLink = (invoice) => {
+    const token = invoice.public_token;
+    if (!token) {
+      toast?.error('No public link generated for this invoice');
+      return;
+    }
+    const publicUrl = `${window.location.origin}/api/invoices/public/${token}/pdf`;
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(publicUrl).then(() => {
+        toast?.success('Public invoice PDF link copied to clipboard');
+      }).catch(() => {
+        prompt('Copy public invoice PDF URL:', publicUrl);
+      });
+    } else {
+      prompt('Copy public invoice PDF URL:', publicUrl);
+    }
+  };
+
   const shareWhatsApp = (invoice) => {
     const custName = invoice.order?.customer?.name || invoice.customer?.name || 'Valued Customer';
+    const invoiceUrl = invoice.public_token
+      ? `${window.location.origin}/api/invoices/public/${invoice.public_token}/pdf`
+      : `${window.location.origin}/invoices`;
     const text = encodeURIComponent(
-      `Hello ${custName}, here is your tax invoice #${invoice.invoice_number} from REIHH Studio for INR ${invoice.total_amount}. Balance due: INR ${invoice.balance_due}. Link: ${window.location.origin}/invoices`
+      `Hello ${custName}, here is your tax invoice #${invoice.invoice_number} from REIHH Studio for INR ${invoice.total_amount}. Balance due: INR ${invoice.balance_due}. View/Download PDF: ${invoiceUrl}`
     );
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
@@ -199,6 +220,16 @@ export default function Invoices() {
                         >
                           PDF
                         </button>
+                        {invoice.public_token && (
+                          <button
+                            className="text-btn"
+                            onClick={() => copyPublicLink(invoice)}
+                            title="Copy Public Customer PDF Link"
+                            style={{ color: 'var(--muted)' }}
+                          >
+                            <Link2 size={14} />
+                          </button>
+                        )}
                         {canPay && invoice.balance_due > 0 && (
                           <button
                             className="text-btn"

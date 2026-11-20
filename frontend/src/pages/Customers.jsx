@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Users, Download, Upload, Plus, Tag, ShieldCheck, Trash2, MessageCircle } from 'lucide-react';
 import client from '../api/client';
-import { EmptyState, Modal, PageHeader } from '../components/ui';
+import { EmptyState, Modal, PageHeader, ConfirmDialog } from '../components/ui';
 import { apiError, formatDate, money } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -46,6 +46,7 @@ export default function Customers() {
   const [importing, setImporting] = useState(false);
   const [form, setForm] = useState(blank);
   const [history, setHistory] = useState([]);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -100,8 +101,14 @@ export default function Customers() {
     }
   };
 
-  const remove = async (customer) => {
-    if (!window.confirm(`Delete ${customer.name}?`)) return;
+  const remove = (customer) => {
+    setDeleteTarget(customer);
+  };
+
+  const confirmDeleteCustomer = async () => {
+    if (!deleteTarget) return;
+    const customer = deleteTarget;
+    setDeleteTarget(null);
     try {
       await client.delete(`/customers/${customer.id}`);
       setNotice(`Customer ${customer.name} deleted.`);
@@ -381,6 +388,17 @@ export default function Customers() {
           </form>
         </Modal>
       )}
+
+      {/* Confirmation Dialog on Delete Customer */}
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title={`Delete Customer: ${deleteTarget?.name}`}
+        message={`Are you sure you want to delete "${deleteTarget?.name}"? Customer master records and associated ledger references will be removed.`}
+        confirmText="Yes, Delete Customer"
+        confirmVariant="danger"
+        onConfirm={confirmDeleteCustomer}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </>
   );
 }

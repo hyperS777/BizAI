@@ -57,6 +57,7 @@ class PaymentResponse(BaseModel):
 class InvoiceResponse(InvoiceBase):
     id: int
     invoice_number: str
+    public_token: Optional[str] = None
     status: str
     total_amount: float
     paid_amount: float

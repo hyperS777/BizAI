@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Check, ChevronRight, Moon, RotateCcw, Sparkles, Sun, Building2, Key, Eye, EyeOff, Save, CheckCircle2 } from 'lucide-react';
 import client from '../api/client';
-import { PageHeader } from '../components/ui';
+import { PageHeader, ConfirmDialog } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { apiError } from '../utils/format';
 import { useToast } from '../context/ToastContext';
@@ -36,6 +36,7 @@ export function Settings() {
   const [scenario, setScenario] = useState('showcase');
   const [delay, setDelay] = useState('0');
   const [dark, setDark] = useState(() => localStorage.getItem('bizai-theme') === 'dark');
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
     // Business Profile & API Keys State
     const [companySettings, setCompanySettings] = useState({
@@ -120,16 +121,18 @@ export function Settings() {
       }
     };
 
-    const resetCleanData = async () => {
-      if (!window.confirm('Reset workspace? This will clear test clutter and populate clean authentic REIHH apparel, customers, Delhivery orders, and expenses.')) return;
+    const handleConfirmReset = async () => {
+      setShowResetConfirm(false);
       setBusy(true);
       setMessage('');
       setError('');
       try {
         await client.post('/demo/reset-clean-data');
         setMessage('Workspace reset complete: Clean authentic REIHH catalog, orders, and expenses generated successfully.');
+        toast?.success('Workspace demo data reset');
       } catch (err) {
         setError(apiError(err, 'Could not reset workspace demo data'));
+        toast?.error('Could not reset workspace');
       } finally {
         setBusy(false);
       }
@@ -314,7 +317,7 @@ export function Settings() {
                         type="button"
                         className="outline-btn"
                         style={{ width: '100%', marginBottom: 14, justifyContent: 'center' }}
-                        onClick={resetCleanData}
+                        onClick={() => setShowResetConfirm(true)}
                         disabled={busy}
                       >
                         <RotateCcw size={15} /> Reset &amp; Populate Clean REIHH Data
@@ -346,8 +349,19 @@ export function Settings() {
                   </button>
                 </div>
       </div>
-          </>
-          );
+
+      {/* Confirmation Dialog on Reset Clean Data */}
+      <ConfirmDialog
+        isOpen={showResetConfirm}
+        title="Reset &amp; Populate Clean REIHH Data"
+        message="Are you sure you want to reset the workspace? This will clear test clutter and populate clean authentic REIHH apparel, customers, Delhivery orders, and expenses."
+        confirmText="Reset Workspace"
+        confirmVariant="danger"
+        onConfirm={handleConfirmReset}
+        onCancel={() => setShowResetConfirm(false)}
+      />
+    </>
+  );
 }
 
           export default Settings;

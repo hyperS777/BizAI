@@ -107,20 +107,31 @@ def build_invoice_pdf(invoice) -> bytes:
     y -= 6 * mm
 
     # Calculate GST (18% inclusive or breakdown)
-    taxable = round(invoice.total_amount / 1.18, 2)
-    cgst = round((invoice.total_amount - taxable) / 2, 2)
-    sgst = cgst
+    taxable = getattr(invoice, "taxable_amount", None) or round(invoice.total_amount / 1.18, 2)
+    igst = getattr(invoice, "igst", None) or 0.0
+    if igst > 0:
+        cgst = 0.0
+        sgst = 0.0
+    else:
+        cgst = getattr(invoice, "cgst", None) or round((invoice.total_amount - taxable) / 2, 2)
+        sgst = getattr(invoice, "sgst", None) or cgst
 
     pdf.setFont("Helvetica", 9)
     pdf.drawString(105 * mm, y, "Taxable Value:")
     pdf.drawRightString(width - 22 * mm, y, f"INR {taxable:,.2f}")
     y -= 4.5 * mm
-    pdf.drawString(105 * mm, y, "CGST (9%):")
-    pdf.drawRightString(width - 22 * mm, y, f"INR {cgst:,.2f}")
-    y -= 4.5 * mm
-    pdf.drawString(105 * mm, y, "SGST (9%):")
-    pdf.drawRightString(width - 22 * mm, y, f"INR {sgst:,.2f}")
-    y -= 6 * mm
+    if igst > 0:
+        pdf.drawString(105 * mm, y, "IGST (18%):")
+        pdf.drawRightString(width - 22 * mm, y, f"INR {igst:,.2f}")
+        y -= 4.5 * mm
+    else:
+        pdf.drawString(105 * mm, y, "CGST (9%):")
+        pdf.drawRightString(width - 22 * mm, y, f"INR {cgst:,.2f}")
+        y -= 4.5 * mm
+        pdf.drawString(105 * mm, y, "SGST (9%):")
+        pdf.drawRightString(width - 22 * mm, y, f"INR {sgst:,.2f}")
+        y -= 4.5 * mm
+    y -= 1.5 * mm
 
     pdf.setFont("Helvetica-Bold", 11)
     pdf.drawString(105 * mm, y, "Total Amount:")

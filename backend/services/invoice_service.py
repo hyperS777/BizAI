@@ -32,6 +32,7 @@ def get_invoice(db: Session, invoice_id: int) -> Optional[Invoice]:
 def get_invoices(
     db: Session, skip: int = 0, limit: int = 100, status: Optional[InvoiceStatus] = None
 ) -> List[Invoice]:
+    scan_overdue_invoices(db)
     query = db.query(Invoice).options(
         joinedload(Invoice.order).joinedload(Order.customer),
         joinedload(Invoice.customer),
@@ -48,10 +49,10 @@ def _refresh_invoice_status(invoice: Invoice):
         return
     if invoice.balance_due <= 0:
         invoice.status = InvoiceStatus.PAID.value
-    elif (invoice.paid_amount or 0) > 0:
-        invoice.status = InvoiceStatus.PARTIALLY_PAID.value
     elif invoice.due_date and invoice.due_date < date.today():
         invoice.status = InvoiceStatus.OVERDUE.value
+    elif (invoice.paid_amount or 0) > 0:
+        invoice.status = InvoiceStatus.PARTIALLY_PAID.value
     else:
         invoice.status = InvoiceStatus.SENT.value
 
@@ -73,20 +74,41 @@ def generate_invoice_from_order(
 
     existing_invoice = db.query(Invoice).filter(Invoice.order_id == order_id).first()
     if existing_invoice:
+        updated = False
         if not existing_invoice.public_token:
             existing_invoice.public_token = secrets.token_urlsafe(36)
+            updated = True
+        if not existing_invoice.taxable_amount and (existing_invoice.total_amount or 0) > 0:
+            taxable = round(existing_invoice.total_amount / 1.18, 2)
+            tax_diff = round(existing_invoice.total_amount - taxable, 2)
+            existing_invoice.taxable_amount = taxable
+            existing_invoice.cgst = round(tax_diff / 2.0, 2)
+            existing_invoice.sgst = round(tax_diff - existing_invoice.cgst, 2)
+            existing_invoice.igst = 0.0
+            updated = True
+        if updated:
             db.flush()
         return get_invoice(db, existing_invoice.id)
 
     invoice_number = f"INV-{uuid.uuid4().hex[:8].upper()}"
+    taxable = round(order.total_amount / 1.18, 2)
+    tax_diff = round(order.total_amount - taxable, 2)
+    c_tax = round(tax_diff / 2.0, 2)
+    s_tax = round(tax_diff - c_tax, 2)
+
     db_invoice = Invoice(
         invoice_number=invoice_number,
         public_token=secrets.token_urlsafe(36),
         order_id=order_id,
         status=InvoiceStatus.SENT.value,
-        total_amount=order.total_amount,
+        total_amount=round(order.total_amount, 2),
         paid_amount=0.0,
         due_date=due_date or (date.today() + timedelta(days=15)),
+        taxable_amount=taxable,
+        cgst=c_tax,
+        sgst=s_tax,
+        igst=0.0,
+        notes=f"Order #{order.order_number} apparel dispatch",
     )
     db.add(db_invoice)
     db.flush()
@@ -255,7 +277,7 @@ def scan_overdue_invoices(db: Session) -> int:
     open_statuses = {
         InvoiceStatus.SENT.value,
         InvoiceStatus.PARTIALLY_PAID.value,
-        InvoiceStatus.OVERDUE.value,
+        InvoiceStatus.DRAFT.value,
     }
     rows = (
         db.query(Invoice)
@@ -264,7 +286,7 @@ def scan_overdue_invoices(db: Session) -> int:
     )
     count = 0
     for invoice in rows:
-        if invoice.status != InvoiceStatus.OVERDUE.value:
+        if invoice.balance_due > 0 and invoice.status != InvoiceStatus.OVERDUE.value:
             invoice.status = InvoiceStatus.OVERDUE.value
             count += 1
     if count:
