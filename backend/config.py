@@ -3,8 +3,13 @@ BizAI Configuration
 Loads settings from environment variables using pydantic-settings.
 """
 
+import os
+from pathlib import Path
 from pydantic_settings import BaseSettings
 from typing import List
+
+_backend_dir = Path(__file__).resolve().parent
+_default_sqlite = f"sqlite:///{(_backend_dir / 'bizai.db').as_posix()}"
 
 
 class Settings(BaseSettings):
@@ -13,7 +18,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # Database
-    DATABASE_URL: str = "sqlite:///./bizai.db"
+    DATABASE_URL: str = os.getenv("DATABASE_URL", _default_sqlite)
 
     # JWT
     SECRET_KEY: str = "dev-secret-key-change-in-production"

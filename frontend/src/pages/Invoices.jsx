@@ -227,8 +227,8 @@ export default function Invoices() {
                     </td>
                     <td>{formatDate(invoice.due_date)}</td>
                     <td><span className={`status-pill ${invoice.status}`}>{invoice.status}</span></td>
-                    <td className="row-actions" style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                    <td style={{ textAlign: 'right' }}>
+                      <div className="row-actions" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
                         <button
                           className="text-btn"
                           onClick={() => downloadInvoicePdf(invoice.id, `${invoice.invoice_number}.pdf`)}

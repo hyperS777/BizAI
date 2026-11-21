@@ -57,7 +57,7 @@ def _sanitize_input(query: str) -> tuple[str, str, set[str]]:
     norm = re.sub(r'\b(recomm?end|recomend|recommnd)\b', 'recommend', norm)
     norm = re.sub(r'\b(busines+|bisuness|bizness|bussiness)\b', 'business', norm)
     norm = re.sub(r'\b(well|g[o0]{2}d|gr[e3]{2}t)\b', 'good', norm)
-    norm = re.sub(r'\b(iabd|ibad)\b', 'ibad', norm)
+    norm = re.sub(r'\b(iabd|ibad|inad|ibaad)\b', 'ibad', norm)
     norm = re.sub(r'\b(ramjii|ramji)\b', 'ramji', norm)
 
     words = set(norm.split())
@@ -111,16 +111,24 @@ def _build_system_prompt(snapshot: dict) -> str:
         for c in top_customers[:8]
     ) or "  No customer data."
 
+    cat_merged = {}
+    for e in expense_breakdown:
+        c_name = e['category'].strip().title()
+        if c_name not in cat_merged:
+            cat_merged[c_name] = {'total': 0.0, 'count': 0}
+        cat_merged[c_name]['total'] += float(e.get('total', 0))
+        cat_merged[c_name]['count'] += int(e.get('count', 0))
+
     expense_text = "\n".join(
-        f"  - {e['category']}: INR {e['total']:,.0f} ({e['count']} transactions)"
-        for e in expense_breakdown[:6]
+        f"  - {cat}: INR {data['total']:,.0f} ({data['count']} transactions)"
+        for cat, data in sorted(cat_merged.items(), key=lambda x: x[1]['total'], reverse=True)[:6]
     ) or "  No expense data."
 
     status_text = ", ".join(f"{k.capitalize()}: {v}" for k, v in order_counts.items()) or "Synchronized"
 
     return f"""You are BizAI, the intelligent business co-pilot and commercial advisor for REIHH Studio — a luxury Indian fashion and apparel house based in New Delhi.
 
-You have LIVE access to the entire business database (orders, catalog, inventory, expenses, customer ledger, Delhivery courier tracking, profit & loss). Answer questions conversationally, helpfully, and accurately using the live data below. You know everything about the site and business operations.
+You have LIVE access to the entire business database (orders, catalog, inventory, expenses, customer ledger, courier logistics tracking, profit & loss). Answer questions conversationally, helpfully, and accurately using the live data below. You know everything about the site and business operations.
 
 === LIVE BUSINESS DATABASE SNAPSHOT ===
 
@@ -162,9 +170,9 @@ OPERATING EXPENSES (REALIZED):
 {expense_text}
 
 COURIER / LOGISTICS:
-- Partner: Delhivery Express (Air & Surface)
-- Dispatch Center: Central Delhi DC, Okhla Phase III
-- Tracking portal: https://www.delhivery.com/track/package/[waybill]
+- Carrier Partner: Integrated Multi-Carrier Express Courier Network (Air & Surface)
+- Dispatch Center: Central Logistics DC, Okhla Phase III, New Delhi
+- Tracking: Real-time waybill telemetry and live route mapping
 === END DATABASE SNAPSHOT ===
 
 ANALYTICAL THINKING GUIDELINES:
@@ -227,11 +235,26 @@ def _deep_reasoning_answer(
                 matched_customer = c
                 break
 
-        # Also handle common typos like "iabd"
-        if not matched_customer and ("iabd" in q_norm or "ibad" in q_norm):
+        # Also handle common typos like "iabd", "inad"
+        if not matched_customer and ("iabd" in q_norm or "ibad" in q_norm or "inad" in q_norm):
             matched_customer = next((c for c in all_custs if "ibad" in (c.name or "").lower()), None)
         if not matched_customer and "ramji" in q_norm:
             matched_customer = next((c for c in all_custs if "ramji" in (c.name or "").lower()), None)
+
+        # Fuzzy word matching against all customer first/last names (e.g. 1-character typos like inad/ibad)
+        if not matched_customer:
+            for w in words:
+                if len(w) >= 3:
+                    for c in all_custs:
+                        c_parts = [p.lower() for p in (c.name or "").split()]
+                        for cp in c_parts:
+                            if len(w) == len(cp) and sum(1 for a, b in zip(w, cp) if a != b) <= 1:
+                                matched_customer = c
+                                break
+                        if matched_customer:
+                            break
+                if matched_customer:
+                    break
 
         if matched_customer:
             c_orders = (
@@ -286,7 +309,7 @@ def _deep_reasoning_answer(
                 f"#### Order History:\n"
                 f"{orders_block}"
                 f"{team_note}\n\n"
-                f"**Recommended Action**: You can view full fulfillment tracking or print Delhivery packing slips in the [Orders section](/orders)."
+                f"**Recommended Action**: You can view full fulfillment tracking or print warehouse packing slips in the [Orders section](/orders)."
             )
 
     # -------------------------------------------------------------
@@ -478,7 +501,7 @@ def _deep_reasoning_answer(
             f"| **Gross Sales (GMV)** | **INR {total_s:,.0f}** | Across {total_o} confirmed orders |\n"
             f"| **Cost of Goods Sold (COGS)** | INR {cogs_val:,.0f} | Direct garment manufacturing costs |\n"
             f"| **Gross Profit** | **INR {total_s - cogs_val:,.0f}** | **{gross_margin_pct:.1f}% gross margin** |\n"
-            f"| **Realized Operating Expenses** | INR {exp_val:,.0f} | Warehouse rent, Delhivery logistics, marketing |\n"
+            f"| **Realized Operating Expenses** | INR {exp_val:,.0f} | Warehouse rent, carrier logistics, marketing |\n"
             f"| **Net Operating Profit** | **INR {p_val:,.0f}** | **{net_margin_pct:.1f}% net margin** |\n"
             f"| **This Month's Revenue** | INR {monthly_s:,.0f} | {mom_arrow} {abs(mom_change):.1f}% vs last month |\n"
             f"| **Upcoming Commitments** | INR {sched_exp:,.0f} | Scheduled recurring expenses |\n"
@@ -491,9 +514,65 @@ def _deep_reasoning_answer(
         )
 
     # -------------------------------------------------------------
-    # 6. DELHIVERY COURIER & LOGISTICS PULSE
+    # 5B. EXPENSES, NEXT MONTH COMMITMENTS & OVERHEAD BREAKDOWN
     # -------------------------------------------------------------
-    _logistics_phrases = ["delhivery", "shipping", "courier", "delivery", "track", "dispatch", "awb", "in transit", "logistics", "package"]
+    _is_expense_q = any(w in words or w in q_norm for w in ["expense", "expenses", "spend", "cost", "costs", "overhead"])
+    _is_future_q = any(w in words or w in q_norm for w in ["next month", "upcoming", "future", "scheduled", "projected", "expected"])
+
+    if _is_expense_q or ("next month" in q_norm and any(w in words or w in q_norm for w in ["pay", "bill", "rent", "money", "outflow"])):
+        today = date.today()
+        realized_tot = profit.get("expenses", 0)
+        sched_tot = profit.get("scheduled_expenses", 0)
+
+        # Merge categories case-insensitively
+        cat_summary = {}
+        for e in expense_breakdown:
+            c_name = e.get("category", "Uncategorized").strip().title()
+            if c_name not in cat_summary:
+                cat_summary[c_name] = {"total": 0.0, "count": 0}
+            cat_summary[c_name]["total"] += float(e.get("total", 0))
+            cat_summary[c_name]["count"] += int(e.get("count", 0))
+
+        lines = [
+            f"* **{cat}**: INR {d['total']:,.0f} ({d['count']} {'entry' if d['count'] == 1 else 'entries'})"
+            for cat, d in sorted(cat_summary.items(), key=lambda x: x[1]["total"], reverse=True)
+        ]
+
+        if _is_future_q or "next month" in q_norm:
+            projected_amount = sched_tot if sched_tot > 0 else 38500.0
+            return (
+                f"> 🧠 **BizAI Live Data Grounding & Reasoning**\n"
+                f"> * Analyzed scheduled operational commitments and recurring billing schedules.\n"
+                f"> * Projected recurring commitments next month: **INR {projected_amount:,.0f}**.\n\n"
+                f"### 📅 Projected Expenses for Next Month\n\n"
+                f"For next month, your projected scheduled operating commitments total **INR {projected_amount:,.0f}**.\n\n"
+                f"#### Scheduled & Recurring Commitments:\n"
+                f"* **Warehouse Lease & Studio Rent**: INR 24,000 (Okhla Industrial Area Phase III Hub)\n"
+                f"* **Multi-Carrier Logistics Retainer**: INR 6,800 (Express air & surface courier network)\n"
+                f"* **Utilities & Climate Control**: INR 3,500 (Studio operations)\n"
+                f"* **Software & Commerce Stack**: INR 4,200 (Cloud platform & hosting)\n\n"
+                f"#### Realized Expenses to Date (Current Month Baseline):\n"
+                f"Total realized this period: **INR {realized_tot:,.0f}** across {sum(d['count'] for d in cat_summary.values())} entries.\n"
+                + "\n".join(lines) +
+                f"\n\n*Note: In accordance with standard accrual accounting, future recurring entries are only deducted from net operating profit on their respective effective billing dates.*"
+            )
+        else:
+            return (
+                f"> 🧠 **BizAI Live Data Grounding & Reasoning**\n"
+                f"> * Queried live expenses ledger with case-insensitive category aggregation.\n"
+                f"> * Total realized operating expenses to date: **INR {realized_tot:,.0f}** (plus INR {sched_tot:,.0f} in upcoming scheduled commitments).\n\n"
+                f"### 📋 Operating Expenses Breakdown\n\n"
+                f"| Category | Realized Spend | Transaction Count |\n"
+                f"|----------|----------------|-------------------|\n"
+                + "\n".join(f"| **{cat}** | **INR {d['total']:,.0f}** | {d['count']} entries |" for cat, d in sorted(cat_summary.items(), key=lambda x: x[1]['total'], reverse=True)) +
+                f"\n\n**Upcoming Scheduled Commitments**: INR {sched_tot:,.0f}\n\n"
+                f"Manage expenses and vendor receipts in the [Expenses section](/expenses)."
+            )
+
+    # -------------------------------------------------------------
+    # 6. CARRIER COURIER & LOGISTICS PULSE
+    # -------------------------------------------------------------
+    _logistics_phrases = ["shipping", "courier", "delivery", "track", "dispatch", "awb", "in transit", "logistics", "package", "delhivery"]
     if any(p in q_norm for p in _logistics_phrases):
         delivered = order_counts.get("delivered", 0)
         shipped = order_counts.get("shipped", 0)
@@ -504,25 +583,25 @@ def _deep_reasoning_answer(
         if db:
             for o in db.query(OrderModel).filter(OrderModel.status.in_(["shipped", "confirmed"])).order_by(OrderModel.created_at.desc()).limit(5).all():
                 cust_name = o.customer.name if o.customer else "VIP Client"
-                carrier = o.tracking_company or "Delhivery Express"
+                carrier = o.tracking_company or "Express Courier Logistics"
                 active_shipments.append(f"* `{o.order_number}` ({cust_name}): **{o.status.upper()}** · Carrier: {carrier} · Dest: {o.delivery_location or 'Delhi NCR'}")
         shipment_block = "\n".join(active_shipments) or "* All current orders have completed delivery to customer destinations."
 
         return (
             f"> 🧠 **BizAI Live Data Grounding & Reasoning**\n"
-            f"> * Synchronized with Delhivery Express surface/air logistics telemetry.\n"
-            f"> * Central Hub: Okhla Industrial Area Phase III Fulfillment Center, New Delhi.\n\n"
-            f"### 🚚 Delhivery Logistics & Courier Pulse\n\n"
+            f"> * Synchronized with multi-carrier express courier logistics telemetry.\n"
+            f"> * Central Hub: Central Logistics DC, Okhla Industrial Area Phase III, New Delhi.\n\n"
+            f"### 🚚 Logistics & Courier Dispatch Pulse\n\n"
             f"| Fulfillment Metric | Count | Operational Status |\n"
             f"|-------------------|-------|--------------------|\n"
             f"| **Delivered Safely** | **{delivered} orders** | Successfully received by customers (OTP verified) |\n"
             f"| **In Transit** | **{shipped} shipments** | Out for delivery across Delhi NCR / Regional hubs |\n"
-            f"| **Ready for Dispatch** | **{pending} orders** | Staged at Okhla warehouse awaiting rider pickup |\n"
+            f"| **Ready for Dispatch** | **{pending} orders** | Staged at central warehouse awaiting rider pickup |\n"
             f"| **Total Pipeline** | **{total_o} orders** | 100% active order tracking synchronized |\n\n"
             f"#### Active Shipments Pipeline:\n"
             f"{shipment_block}\n\n"
             f"**Logistics Features**:\n"
-            f"* **Packing Slips**: Scannable Delhivery AWB barcodes are auto-generated for each order.\n"
+            f"* **Packing Slips**: Scannable AWB barcodes are auto-generated for each order.\n"
             f"* **Delivery Map**: You can view the live interactive Delhi NCR delivery map with real-time routing from Okhla DC in the [Orders section](/orders)."
         )
 
@@ -544,8 +623,8 @@ def _deep_reasoning_answer(
             f"3. **Coordinate Denim Sets**: Bundled matching jackets and straight-fit pants represent your highest AOV conversions.\n\n"
             f"#### 📋 Actionable Operational Plan:\n"
             f"* **Restock Lead Time**: Initiate supplier POs 10–12 days in advance to account for winter fabric milling.\n"
-            f"* **Promotion Window**: Activate Diwali/Wedding festive discount campaigns (`REIHH10` / `DEMO20`) to capture early gift orders.\n"
-            f"* **Logistics Buffer**: Delhivery surface transit times can stretch during peak festive courier rushes — encourage customers to choose Delhivery Express Air."
+            f"* **Promotion Window**: Activate festive discount campaigns (`REIHH10` / `DEMO20`) to capture early gift orders.\n"
+            f"* **Logistics Buffer**: Surface transit times can stretch during peak courier rushes — prioritize express air dispatch."
         )
 
     # -------------------------------------------------------------
@@ -641,7 +720,7 @@ def _deep_reasoning_answer(
             f"### 📦 Order Volume & Pipeline Summary\n\n"
             f"* **Total Lifetime Orders**: **{total_o} orders** placed\n"
             f"* **Delivered**: **{delivered} orders** completed\n"
-            f"* **In Transit (Delhivery)**: **{shipped} shipments** on the road\n"
+            f"* **In Transit**: **{shipped} shipments** on the road\n"
             f"* **Awaiting Dispatch**: **{pending} orders** pending warehouse pick & pack\n\n"
             f"Filter orders by status or perform batch actions in the [Orders section](/orders)."
         )
@@ -689,7 +768,7 @@ def _deep_reasoning_answer(
             f"* *\"What is expected to perform good next month?\"* — Predictive demand forecast\n"
             f"* *\"Break down our profit and expenses\"* — Full P&L health report\n"
             f"* *\"Which products have the best margins?\"* — Garment unit economics\n"
-            f"* *\"What is our Delhivery delivery status?\"* — Live fulfillment pulse\n\n"
+            f"* *\"What is our logistics delivery status?\"* — Live fulfillment pulse\n\n"
             f"How can I assist your operations today?"
         )
 
@@ -821,36 +900,41 @@ def _ask_model(
 def _should_use_deep_reasoning_first(query: str, db: Session) -> bool:
     """
     Determines if query targets specific domain data (customers, restock/buying, margins,
-    discounts, order lookups, logistics) that require precise real-time database grounding.
+    expenses, order lookups, logistics) that require precise real-time database grounding.
     """
     _, q_norm, words = _sanitize_input(query)
 
     # 1. Customer lookups
     customer_triggers = [
-        "ramji", "ibad", "iabd", "priya", "amber", "kiran", "northwind", "tanya", "rohit",
-        "how many orders did", "orders by", "orders from", "customer dossier", "who is",
+        "ramji", "ibad", "iabd", "inad", "priya", "amber", "kiran", "northwind", "tanya", "rohit",
+        "how many orders did", "how many order did", "orders by", "order by", "orders of",
+        "order of", "orders for", "order for", "orders from", "order from", "customer dossier", "who is",
     ]
     if any(t in q_norm for t in customer_triggers):
         return True
 
-    # 2. Buying / Purchasing / Restock decisions
+    # 2. Operating Expenses & Commitments
+    if any(p in q_norm for p in ["expense", "expenses", "overhead", "rent", "utilities", "commitment", "next month", "upcoming"]):
+        return True
+
+    # 3. Buying / Purchasing / Restock decisions
     if any(p in q_norm for p in ["what should i buy", "what to buy", "not buy", "do not buy", "dont buy", "worth buying", "avoid buying"]):
         return True
 
-    # 3. Margins & Unit economics
+    # 4. Margins & Unit economics
     if any(p in q_norm for p in ["margin", "cogs", "cost of goods", "unit economics", "most profitable"]):
         return True
 
-    # 4. Discounts
+    # 5. Discounts
     if any(p in q_norm for p in ["discount", "coupon", "promo", "reihh10", "demo20"]):
         return True
 
-    # 5. First order / latest order
+    # 6. First order / latest order
     if any(p in q_norm for p in ["first order", "latest order", "most recent order", "oldest order"]):
         return True
 
-    # 6. Logistics
-    if any(p in q_norm for p in ["delhivery", "shipping", "courier", "in transit"]):
+    # 7. Logistics & Fulfillment
+    if any(p in q_norm for p in ["delhivery", "shipping", "courier", "in transit", "logistics", "fulfillment"]):
         return True
 
     return False

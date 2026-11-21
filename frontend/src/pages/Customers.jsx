@@ -171,7 +171,7 @@ export default function Customers() {
       {error && <div className="notice error">{error}</div>}
 
       {/* Smart Segments Filter Strip */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 12, overflowX: 'auto', paddingBottom: 4 }}>
+      <div className="segment-filter-strip" style={{ display: 'flex', gap: 8, marginBottom: 14, overflowX: 'auto', paddingBottom: 4 }}>
         {[
           { id: 'all', label: 'All Customers' },
           { id: 'vip', label: '⭐ VIP Concierge' },
@@ -182,8 +182,7 @@ export default function Customers() {
           <button
             key={tab.id}
             type="button"
-            className={activeSegment === tab.id ? 'primary-btn' : 'outline-btn'}
-            style={{ fontSize: 11.5, padding: '4px 12px', borderRadius: 20 }}
+            className={`segment-pill ${activeSegment === tab.id ? 'active' : ''}`}
             onClick={() => setActiveSegment(tab.id)}
           >
             {tab.label}
@@ -216,6 +215,17 @@ export default function Customers() {
                   if (activeSegment === 'ar_due') return (c.outstanding_balance || 0) > 0;
                   if (activeSegment === 'clean') return (c.outstanding_balance || 0) === 0;
                   return true;
+                })
+                .filter((c) => {
+                  if (!search.trim()) return true;
+                  const q = search.toLowerCase();
+                  return (
+                    (c.name || '').toLowerCase().includes(q) ||
+                    (c.company || '').toLowerCase().includes(q) ||
+                    (c.email || '').toLowerCase().includes(q) ||
+                    (c.phone || '').toLowerCase().includes(q) ||
+                    (c.tags || '').toLowerCase().includes(q)
+                  );
                 })
                 .map((customer) => {
                   const tierInfo = TIERS.find((t) => t.id === customer.tier) || TIERS[3];
@@ -259,8 +269,8 @@ export default function Customers() {
                         {money(customer.outstanding_balance)}
                       </b>
                     </td>
-                    <td className="row-actions" style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                    <td style={{ textAlign: 'right' }}>
+                      <div className="row-actions" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
                         {customer.phone && (
                           <a
                             href={`https://wa.me/${customer.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(

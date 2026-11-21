@@ -143,7 +143,7 @@ export default function Layout() {
             <span className="sync-pulse-dot" />
             <div className="sync-info">
               <span className="sync-title">REIHH Live Sync</span>
-              <span className="sync-desc">Catalog · Stock · Delhivery</span>
+              <span className="sync-desc">Catalog · Stock · Logistics</span>
             </div>
           </div>
           <div style={{ padding: '6px 12px', fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6, borderTop: '1px solid var(--border)', marginTop: 4 }}>

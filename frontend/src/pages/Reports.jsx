@@ -325,24 +325,27 @@ return (
     </div>
     {customers.length ? (
       <div className="stock-list">
-        {customers.slice(0, 8).map((c, i) => (
-          <div className="stock-row" key={c.customer_id} style={{ gap: 10 }}>
-            <span
-              style={{
-                width: 26, height: 26, background: PALETTE[i % PALETTE.length] + '22',
-                color: PALETTE[i % PALETTE.length], borderRadius: 4, display: 'grid',
-                placeItems: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0,
-              }}
-            >
-              {i + 1}
-            </span>
-            <span style={{ flex: 1, display: 'grid', gap: 2 }}>
-              <strong style={{ fontSize: 13 }}>{c.name}</strong>
-              <small style={{ color: 'var(--muted)', fontSize: 11 }}>{c.order_count} orders</small>
-            </span>
-            <b style={{ fontFamily: "'Space Grotesk'", fontSize: 13 }}>{money(c.total_spent)}</b>
-          </div>
-        ))}
+        {customers.slice(0, 8).map((c, i) => {
+          const custName = c.name?.toLowerCase() === 'iabd' ? 'Mohammad Ibad Hussain' : c.name;
+          return (
+            <div className="stock-row" key={c.customer_id} style={{ gap: 10 }}>
+              <span
+                style={{
+                  width: 24, height: 24, background: 'var(--surface-hover)',
+                  color: 'var(--teal)', border: '1px solid var(--border)', borderRadius: 4, display: 'grid',
+                  placeItems: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0,
+                }}
+              >
+                {i + 1}
+              </span>
+              <span style={{ flex: 1, display: 'grid', gap: 2 }}>
+                <strong style={{ fontSize: 13 }}>{custName}</strong>
+                <small style={{ color: 'var(--muted)', fontSize: 11 }}>{c.order_count} {c.order_count === 1 ? 'order' : 'orders'}</small>
+              </span>
+              <b style={{ fontFamily: "'Space Grotesk'", fontSize: 12.5 }}>{money(c.total_spent)}</b>
+            </div>
+          );
+        })}
       </div>
     ) : (
       <EmptyState icon={Users} text="No customer activity yet." />

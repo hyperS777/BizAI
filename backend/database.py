@@ -158,3 +158,6 @@ def ensure_schema():
         for table, column, index_name in unique_indexes:
             if table in existing_tables:
                 conn.execute(text(f"CREATE UNIQUE INDEX IF NOT EXISTS {index_name} ON {table} ({column})"))
+
+        if "invoices" in existing_tables:
+            conn.execute(text("UPDATE invoices SET due_date = substr(due_date, 1, 10) WHERE due_date LIKE '% %' OR due_date LIKE '%T%'"))

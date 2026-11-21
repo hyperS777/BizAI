@@ -2,11 +2,31 @@
 Invoice and payment models.
 """
 
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Date, Text
+from datetime import date
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Date, Text, types
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
 import enum
+
+
+class SafeDate(types.TypeDecorator):
+    """Safely handles dates in SQLite where timestamps with times might be stored."""
+    impl = types.Date
+    cache_ok = True
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, date):
+            return value
+        if isinstance(value, str):
+            clean = value.split(" ")[0].split("T")[0]
+            try:
+                return date.fromisoformat(clean)
+            except Exception:
+                return None
+        return value
 
 
 class InvoiceStatus(str, enum.Enum):
@@ -34,7 +54,7 @@ class Invoice(Base):
     igst = Column(Float, default=0.0)
     total_amount = Column(Float, nullable=False)
     paid_amount = Column(Float, default=0.0)
-    due_date = Column(Date, nullable=True)
+    due_date = Column(SafeDate, nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

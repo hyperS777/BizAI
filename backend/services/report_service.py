@@ -345,11 +345,7 @@ def get_customer_activity(db: Session, limit: int = 10):
 
 def get_expense_summary(db: Session, start_date=None, end_date=None):
     today = date.today()
-    q = db.query(
-        Expense.category,
-        func.coalesce(func.sum(Expense.amount), 0).label("total"),
-        func.count(Expense.id).label("count"),
-    )
+    q = db.query(Expense)
     if start_date:
         q = q.filter(Expense.date >= start_date)
     if end_date:
@@ -358,13 +354,21 @@ def get_expense_summary(db: Session, start_date=None, end_date=None):
         # Default to realized expenses up to today so upcoming recurring schedules do not inflate spend
         q = q.filter(Expense.date <= today)
 
-    rows = q.group_by(Expense.category).order_by(func.sum(Expense.amount).desc()).all()
-    realized_total = float(
-        db.query(func.coalesce(func.sum(Expense.amount), 0))
-        .filter(Expense.date <= today)
-        .scalar()
-        or 0
-    )
+    all_exps = q.all()
+    # Case-insensitive grouping by category.strip().title()
+    category_totals = {}
+    category_counts = {}
+    for e in all_exps:
+        cat = (e.category or "Uncategorized").strip().title()
+        amt = float(e.amount or 0)
+        category_totals[cat] = category_totals.get(cat, 0.0) + amt
+        category_counts[cat] = category_counts.get(cat, 0) + 1
+
+    by_category = [
+        {"category": cat, "total": total, "count": category_counts[cat]}
+        for cat, total in sorted(category_totals.items(), key=lambda x: x[1], reverse=True)
+    ]
+    realized_total = sum(category_totals.values())
     scheduled_total = float(
         db.query(func.coalesce(func.sum(Expense.amount), 0))
         .filter(Expense.date > today)
@@ -375,10 +379,7 @@ def get_expense_summary(db: Session, start_date=None, end_date=None):
         "total": realized_total,
         "realized_total": realized_total,
         "scheduled_total": scheduled_total,
-        "by_category": [
-            {"category": r.category or "Uncategorized", "total": float(r.total or 0), "count": int(r.count or 0)}
-            for r in rows
-        ],
+        "by_category": by_category,
     }
 
 

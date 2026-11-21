@@ -130,7 +130,7 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onE
                     <div style={{ fontSize: 11, fontWeight: 700, color: ['shipped', 'delivered'].includes(order.status) ? 'var(--teal)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
                       {['shipped', 'delivered'].includes(order.status) ? <Check size={12} /> : '○'} 3. Dispatched
                     </div>
-                    <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{order.tracking_company || 'Delhivery Express'}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{order.tracking_company || 'Express Logistics'}</div>
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>AWB: {order.tracking_number || 'Awaiting dispatch'}</div>
                   </div>
 
@@ -207,7 +207,7 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onE
                   <a
                     className="outline-btn"
                     href={`https://wa.me/${order.customer.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                      `🛍️ *REIHH Studio Order Update*\n\nDear ${order.customer.name},\nYour order *#${order.order_number}* is currently: *${order.status.toUpperCase()}*.\n\n📍 *Location:* ${order.delivery_location || 'Delhi NCR'}\n🚚 *Carrier:* ${order.tracking_company || 'Delhivery Express'}\n🔗 *Track:* ${order.tracking_url || 'https://www.delhivery.com'}\n\nThank you for choosing REIHH Studio! 🙏`
+                      `🛍️ *REIHH Studio Order Update*\n\nDear ${order.customer.name},\nYour order *#${order.order_number}* is currently: *${order.status.toUpperCase()}*.\n\n📍 *Location:* ${order.delivery_location || 'Delhi NCR'}\n🚚 *Carrier:* ${order.tracking_company || 'Express Logistics'}\n🔗 *Track:* ${order.tracking_url || 'https://www.reihh.com'}\n\nThank you for choosing REIHH Studio! 🙏`
                     )}`}
                     target="_blank"
                     rel="noreferrer"
@@ -221,9 +221,9 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onE
                   type="button"
                   className="outline-btn"
                   onClick={() => downloadPackingSlipPdf(order.id, `packing-slip-${order.order_number}.pdf`)}
-                  title="Download and print official Delhivery shipping label & warehouse slip"
+                  title="Download and print official shipping label & warehouse slip"
                 >
-                  <Printer size={13} /> Print Delhivery Packing Slip
+                  <Printer size={13} /> Print Packing Slip
                 </button>
                 <button
                   type="button"
@@ -299,80 +299,6 @@ export default function Orders() {
   const [barcodeInput, setBarcodeInput] = useState('');
   const [discountValidationMsg, setDiscountValidationMsg] = useState('');
 
-  const toggleSelectOrder = (id, checked) => {
-    setSelectedOrderIds((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  };
-
-  const toggleSelectAll = (checked) => {
-    if (checked) {
-      setSelectedOrderIds(new Set(visibleOrders.map((o) => o.id)));
-    } else {
-      setSelectedOrderIds(new Set());
-    }
-  };
-
-  const allVisibleSelected = visibleOrders.length > 0 && visibleOrders.every((o) => selectedOrderIds.has(o.id));
-
-  const handleBatchStatus = async (nextStatus) => {
-    const ids = Array.from(selectedOrderIds);
-    if (!ids.length) return;
-    try {
-      await Promise.all(ids.map((id) => client.patch(`/orders/${id}/status`, { status: nextStatus })));
-      toast.success(`Updated ${ids.length} orders to ${nextStatus.replace('_', ' ')}`);
-      setSelectedOrderIds(new Set());
-      load();
-    } catch (err) {
-      toast.error(apiError(err, 'Failed to update some orders'));
-    }
-  };
-
-  const handleExportCsv = () => {
-    const list = selectedOrderIds.size > 0
-      ? visibleOrders.filter((o) => selectedOrderIds.has(o.id))
-      : visibleOrders;
-    if (!list.length) return;
-
-    const headers = ['Order Number', 'Customer Name', 'Customer Email', 'Status', 'Carrier', 'Tracking Number', 'Total Amount', 'Date', 'Shipping Address'];
-    const rows = list.map((o) => [
-      `"${o.order_number}"`,
-      `"${o.customer?.name || ''}"`,
-      `"${o.customer?.email || ''}"`,
-      `"${o.status}"`,
-      `"${o.tracking_company || 'Delhivery Express'}"`,
-      `"${o.tracking_number || ''}"`,
-      o.total_amount,
-      `"${formatDate(o.created_at)}"`,
-      `"${(o.shipping_address || o.delivery_location || '').replace(/"/g, '""')}"`,
-    ]);
-
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `reihh-orders-${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success(`Exported ${list.length} orders to CSV`);
-  };
-
-  const handleBatchPrintSlips = () => {
-    const ids = Array.from(selectedOrderIds);
-    if (!ids.length) return;
-    ids.forEach((id, idx) => {
-      const ord = orders.find((o) => o.id === id);
-      setTimeout(() => {
-        downloadPackingSlipPdf(id, `packing-slip-${ord?.order_number || id}.pdf`);
-      }, idx * 400);
-    });
-    toast.info(`Triggered packing slip download for ${ids.length} orders`);
-  };
-
   const load = () => {
     client.get('/orders', { params: { limit: 250 } })
       .then((res) => setOrders(res.data || []))
@@ -420,6 +346,80 @@ export default function Orders() {
     && Number.isFinite(order.delivery_latitude)
     && Number.isFinite(order.delivery_longitude)
   )), [visibleOrders]);
+
+  const toggleSelectOrder = (id, checked) => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (checked) => {
+    if (checked) {
+      setSelectedOrderIds(new Set(visibleOrders.map((o) => o.id)));
+    } else {
+      setSelectedOrderIds(new Set());
+    }
+  };
+
+  const allVisibleSelected = visibleOrders.length > 0 && visibleOrders.every((o) => selectedOrderIds.has(o.id));
+
+  const handleBatchStatus = async (nextStatus) => {
+    const ids = Array.from(selectedOrderIds);
+    if (!ids.length) return;
+    try {
+      await Promise.all(ids.map((id) => client.patch(`/orders/${id}/status`, { status: nextStatus })));
+      toast.success(`Updated ${ids.length} orders to ${nextStatus.replace('_', ' ')}`);
+      setSelectedOrderIds(new Set());
+      load();
+    } catch (err) {
+      toast.error(apiError(err, 'Failed to update some orders'));
+    }
+  };
+
+  const handleExportCsv = () => {
+    const list = selectedOrderIds.size > 0
+      ? visibleOrders.filter((o) => selectedOrderIds.has(o.id))
+      : visibleOrders;
+    if (!list.length) return;
+
+    const headers = ['Order Number', 'Customer Name', 'Customer Email', 'Status', 'Carrier', 'Tracking Number', 'Total Amount', 'Date', 'Shipping Address'];
+    const rows = list.map((o) => [
+      `"${o.order_number}"`,
+      `"${o.customer?.name || ''}"`,
+      `"${o.customer?.email || ''}"`,
+      `"${o.status}"`,
+      `"${o.tracking_company || 'Express Logistics'}"`,
+      `"${o.tracking_number || ''}"`,
+      o.total_amount,
+      `"${formatDate(o.created_at)}"`,
+      `"${(o.shipping_address || o.delivery_location || '').replace(/"/g, '""')}"`,
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `reihh-orders-${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Exported ${list.length} orders to CSV`);
+  };
+
+  const handleBatchPrintSlips = () => {
+    const ids = Array.from(selectedOrderIds);
+    if (!ids.length) return;
+    ids.forEach((id, idx) => {
+      const ord = orders.find((o) => o.id === id);
+      setTimeout(() => {
+        downloadPackingSlipPdf(id, `packing-slip-${ord?.order_number || id}.pdf`);
+      }, idx * 400);
+    });
+    toast.info(`Triggered packing slip download for ${ids.length} orders`);
+  };
 
   // Handle Customer Selection in New Order
   const handleCustomerSelect = (customerId) => {
@@ -620,7 +620,7 @@ export default function Orders() {
     setEditShippingOrder(order);
     setShippingForm({
       shipping_address: order.shipping_address || '',
-      tracking_company: order.tracking_company || 'Delhivery',
+      tracking_company: order.tracking_company || 'Express Logistics',
       tracking_number: order.tracking_number || '',
       notes: order.notes || '',
     });
@@ -632,7 +632,7 @@ export default function Orders() {
       await client.put(`/orders/${editShippingOrder.id}`, shippingForm);
       setEditShippingOrder(null);
       setNotice('Order shipping details updated.');
-      toast?.success('Delhivery tracking & shipping updated');
+      toast?.success('Carrier tracking & shipping updated');
       load();
     } catch (err) {
       setError(apiError(err, 'Could not update order details'));
@@ -653,7 +653,7 @@ export default function Orders() {
 
   return (
     <>
-      <PageHeader eyebrow="Sales" title="Orders" subtitle="Create orders, variant sizing, Delhivery packing slips, and automated invoicing.">
+      <PageHeader eyebrow="Sales" title="Orders" subtitle="Create orders, variant sizing, warehouse packing slips, and automated invoicing.">
         {canCreate && (
           <button
             className="primary-btn heading-btn"
@@ -678,7 +678,7 @@ export default function Orders() {
       {notice && <div className="notice success" style={{ background: '#eaf4f1', borderColor: 'var(--teal)', color: 'var(--teal-dark)' }}>{notice}</div>}
       {error && <div className="notice error">{error}</div>}
 
-      <div className="orders-toolbar">
+      <div className="orders-toolbar" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between' }}>
         <div className="order-status-tabs" role="tablist" aria-label="Filter orders by status">
           {tabs.map((tab) => (
             <button
@@ -693,9 +693,18 @@ export default function Orders() {
             </button>
           ))}
         </div>
-        <div className="order-view-toggle" role="group" aria-label="Order view">
-          <button type="button" className={view === 'orders' ? 'active' : ''} aria-label="Orders list" title="Orders list" onClick={() => setView('orders')}><List size={17} /></button>
-          <button type="button" disabled={status === 'simulations'} className={view === 'map' ? 'active' : ''} aria-label="Delivery map" title="Delivery map" onClick={() => setView('map')}><MapPinned size={17} /></button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
+          <input
+            className="filter-input"
+            placeholder="Search order #, customer, item..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ width: 220, padding: '7px 12px', fontSize: 12, borderRadius: 6 }}
+          />
+          <div className="order-view-toggle" role="group" aria-label="Order view">
+            <button type="button" className={view === 'orders' ? 'active' : ''} aria-label="Orders list" title="Orders list" onClick={() => setView('orders')}><List size={17} /></button>
+            <button type="button" disabled={status === 'simulations'} className={view === 'map' ? 'active' : ''} aria-label="Delivery map" title="Delivery map" onClick={() => setView('map')}><MapPinned size={17} /></button>
+          </div>
         </div>
       </div>
 
@@ -762,7 +771,7 @@ export default function Orders() {
                   <div style={{ padding: 2 }}>
                     <strong style={{ display: 'block', fontSize: 13, color: '#0e766e' }}>🏭 REIHH Central Fulfillment DC</strong>
                     <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Okhla Phase III, New Delhi 110020</div>
-                    <div style={{ fontSize: 11, marginTop: 4, fontWeight: 600 }}>Integrated with Delhivery Express Hub</div>
+                    <div style={{ fontSize: 11, marginTop: 4, fontWeight: 600 }}>Integrated with Central Logistics Hub</div>
                   </div>
                 </Popup>
               </CircleMarker>
@@ -798,7 +807,7 @@ export default function Orders() {
                         <div style={{ marginTop: 6, fontWeight: 700, fontSize: 13, color: 'var(--teal)' }}>{money(o.total_amount)}</div>
                         {o.tracking_number && (
                           <div style={{ marginTop: 4, fontSize: 11 }}>
-                            <strong>AWB:</strong> {o.tracking_number} ({o.tracking_company || 'Delhivery'})
+                            <strong>AWB:</strong> {o.tracking_number} ({o.tracking_company || 'Express Logistics'})
                           </div>
                         )}
                         <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
@@ -855,7 +864,7 @@ export default function Orders() {
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{selectedMapOrder.shipping_address || selectedMapOrder.delivery_location}</div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--teal)', marginTop: 6 }}>{money(selectedMapOrder.total_amount)}</div>
                 <div style={{ fontSize: 11, marginTop: 4, color: 'var(--muted)' }}>
-                  Carrier: <strong>{selectedMapOrder.tracking_company || 'Delhivery Express'}</strong>
+                  Carrier: <strong>{selectedMapOrder.tracking_company || 'Express Logistics'}</strong>
                 </div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
                   <button
@@ -992,7 +1001,30 @@ export default function Orders() {
             </div>
           )}
         </section>
-      ) : <EmptyState icon={ClipboardList} text={status === 'all' ? 'No orders recorded yet.' : `No ${status.replace('_', ' ')} orders.`} />}
+      ) : (
+        <div style={{ display: 'grid', placeItems: 'center', gap: 14, padding: '48px 0' }}>
+          <EmptyState
+            icon={ClipboardList}
+            text={
+              search.trim()
+                ? `No orders matching "${search}".`
+                : status === 'all'
+                ? 'No orders recorded yet.'
+                : `No ${status.replace('_', ' ')} orders.`
+            }
+          />
+          {(status !== 'all' || search.trim()) && (
+            <button
+              type="button"
+              className="outline-btn"
+              onClick={() => { setStatus('all'); setSearch(''); }}
+              style={{ fontSize: 12, borderRadius: 20, padding: '6px 16px' }}
+            >
+              Reset filters &amp; view all orders ({orders.length})
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Rich Order Creation Modal */}
       {modal && (
@@ -1199,7 +1231,7 @@ export default function Orders() {
                 <input
                   value={shippingForm.tracking_company}
                   onChange={(e) => setShippingForm({ ...shippingForm, tracking_company: e.target.value })}
-                  placeholder="e.g. Delhivery, Bluedart"
+                  placeholder="e.g. Express Logistics, Blue Dart"
                 />
               </label>
               <label>Courier AWB / Tracking #

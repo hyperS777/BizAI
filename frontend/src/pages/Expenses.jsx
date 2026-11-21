@@ -378,30 +378,32 @@ export default function Expenses() {
                       )}
                               </td>
                               {canEdit && (
-                                <td className="row-actions">
-                                  <button
-                                    className="text-btn"
-                                    onClick={() => { setForm({ ...expense, date: expense.date?.slice(0, 10) }); setModal(true); }}
-                                  >
-                                    Edit
-                                  </button>
-                                  {isScheduled && (
+                                <td style={{ textAlign: 'right' }}>
+                                  <div className="row-actions" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
                                     <button
                                       className="text-btn"
-                                      title="Cancel all future entries in this series"
-                                      onClick={() => cancelFutureSeries(expense.description)}
+                                      onClick={() => { setForm({ ...expense, date: expense.date?.slice(0, 10) }); setModal(true); }}
                                     >
-                                      Cancel series
+                                      Edit
                                     </button>
-                                  )}
-                                  {deleting === expense.id ? (
-                                    <>
-                                      <button className="text-btn danger" onClick={() => remove(expense.id)}>Confirm</button>
-                                      <button className="text-btn" onClick={() => setDeleting(null)}>Cancel</button>
-                                    </>
-                                  ) : (
-                                    <button className="text-btn danger" onClick={() => setDeleting(expense.id)}>Delete</button>
-                                  )}
+                                    {isScheduled && (
+                                      <button
+                                        className="text-btn"
+                                        title="Cancel all future entries in this series"
+                                        onClick={() => cancelFutureSeries(expense.description)}
+                                      >
+                                        Cancel series
+                                      </button>
+                                    )}
+                                    {deleting === expense.id ? (
+                                      <>
+                                        <button className="text-btn danger" onClick={() => remove(expense.id)}>Confirm</button>
+                                        <button className="text-btn" onClick={() => setDeleting(null)}>Cancel</button>
+                                      </>
+                                    ) : (
+                                      <button className="text-btn danger" onClick={() => setDeleting(expense.id)}>Delete</button>
+                                    )}
+                                  </div>
                                 </td>
                               )}
                             </tr>

@@ -37,7 +37,7 @@ const defaultPromptsByThread = {
     'Is our business profitable and healthy?',
   ],
   fulfillment: [
-    'What is our live delivery status with Delhivery?',
+    'What is our live courier delivery status?',
     'How many orders are in transit vs awaiting dispatch?',
     'Show active shipments across Delhi NCR.',
     'What was the latest order recorded?',
@@ -372,8 +372,8 @@ export default function AIAssistant() {
     if (t.includes('profit') || t.includes('expense') || t.includes('cogs') || t.includes('revenue') || t.includes('margin')) {
       actions.push({ label: 'P&L Reports', path: '/reports', icon: TrendingUp });
     }
-    if (t.includes('delhivery') || t.includes('shipping') || t.includes('tracking') || t.includes('courier')) {
-      actions.push({ label: 'Courier Tracker', path: '/orders', icon: Truck });
+    if (t.includes('delhivery') || t.includes('shipping') || t.includes('tracking') || t.includes('courier') || t.includes('logistics') || t.includes('delivery')) {
+      actions.push({ label: 'Logistics Tracker', path: '/orders', icon: Truck });
     }
     if (t.includes('customer') || t.includes('client') || t.includes('buyer')) {
       actions.push({ label: 'Customer CRM', path: '/customers', icon: Users });
@@ -386,7 +386,7 @@ export default function AIAssistant() {
       <PageHeader
         eyebrow="AI Intelligence"
         title="Conversational Business Advisor"
-        subtitle="Grounded in live database orders, catalog stock, customer ledger, and Delhivery courier tracking."
+        subtitle="Grounded in live database orders, catalog stock, customer ledger, and multi-carrier courier tracking."
       >
         {messages.length > 0 && (
           <button className="outline-btn heading-btn" onClick={clearChat} title="Clear conversation history">
