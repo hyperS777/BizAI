@@ -34,7 +34,7 @@ done
 # 2. Add backend and root directory to PYTHONPATH
 export PYTHONPATH="$(pwd)/backend:$(pwd):${PYTHONPATH}"
 
-PORT="${PORT:-8000}"
+PORT="${PORT:-${WEBSITES_PORT:-8000}}"
 echo "Starting FastAPI server on port $PORT..."
 
 # Try uvicorn via python module

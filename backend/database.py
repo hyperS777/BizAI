@@ -15,6 +15,9 @@ if database_url.startswith("postgres://"):
 elif database_url.startswith("postgresql://"):
     database_url = database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
 
+if "neon.tech" in database_url and "sslmode" not in database_url:
+    database_url += ("&" if "?" in database_url else "?") + "sslmode=require"
+
 connect_args = {}
 if database_url.startswith("sqlite"):
     connect_args = {"check_same_thread": False}

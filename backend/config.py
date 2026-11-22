@@ -57,7 +57,11 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> List[str]:
-        return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
+        raw = self.CORS_ORIGINS
+        if raw.startswith("CORS_ORIGINS="):
+            raw = raw[len("CORS_ORIGINS="):]
+        raw = raw.strip("\"' ")
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
     class Config:
         env_file = ".env"
