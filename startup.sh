@@ -3,26 +3,27 @@ set -e
 
 echo "=== BizAI Azure App Service Starting ==="
 
-# 1. Activate Oryx virtual environment if present
+# 1. Add .python_packages to PYTHONPATH if present
+if [ -d "/home/site/wwwroot/.python_packages/lib/site-packages" ]; then
+    echo "Found /home/site/wwwroot/.python_packages..."
+    export PYTHONPATH="/home/site/wwwroot/.python_packages/lib/site-packages:${PYTHONPATH}"
+fi
+if [ -d "$(pwd)/.python_packages/lib/site-packages" ]; then
+    echo "Found local .python_packages..."
+    export PYTHONPATH="$(pwd)/.python_packages/lib/site-packages:${PYTHONPATH}"
+fi
+
+# 2. Activate virtual environment if present
 if [ -f "/antenv/bin/activate" ]; then
-    echo "Found /antenv, activating..."
     source /antenv/bin/activate
 elif [ -f "/home/site/wwwroot/antenv/bin/activate" ]; then
-    echo "Found /home/site/wwwroot/antenv, activating..."
     source /home/site/wwwroot/antenv/bin/activate
 elif [ -f "./antenv/bin/activate" ]; then
-    echo "Found local antenv, activating..."
     source ./antenv/bin/activate
 fi
 
-# 2. Verify uvicorn is available, otherwise install dependencies
-if ! command -v uvicorn >/dev/null 2>&1; then
-    echo "uvicorn not found in PATH! Installing from requirements.txt..."
-    pip install --no-cache-dir -r requirements.txt
-fi
-
-# 3. Add backend directory to PYTHONPATH
-export PYTHONPATH="${PYTHONPATH}:$(pwd)/backend:$(pwd)"
+# 3. Add backend and root directory to PYTHONPATH
+export PYTHONPATH="$(pwd)/backend:$(pwd):${PYTHONPATH}"
 
 PORT="${PORT:-8000}"
 echo "Binding to 0.0.0.0:$PORT with uvicorn..."
