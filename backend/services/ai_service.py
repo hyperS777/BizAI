@@ -408,6 +408,14 @@ def _deep_reasoning_answer(
                 f"* **Seasonal Product Pivot**: Structured outerwear and heavier denim jackets historically see higher festive conversion rates than lightweight tops — bias your forward inventory capital 65% toward outerwear & denim sets and 35% toward base shirts.\n"
                 f"* **Working Capital Allocation**: Stagger supplier payments with a 30% advance on PO issuance and 70% upon warehouse receipt at the Okhla DC to optimize cash flow.\n\n"
             )
+        elif "next month" in q_norm or "upcoming month" in q_norm:
+            forward_note = (
+                f"---\n\n"
+                f"#### 🗓️ **Procurement Horizon (Next Month / 30-Day Restock Plan)**:\n"
+                f"* **Restock Velocity**: Focus capital on proven top-sellers (especially straight-fit luxury denim and tailored trench coats) which have demonstrated strong commercial conversion.\n"
+                f"* **Supplier Lead Times**: Place manufacturer POs within the next 5 business days to account for 10–14 day garment finishing and quality control inspection at Okhla DC.\n"
+                f"* **Seasonal Transition**: As North India transitions into cooler weather, customer demand shifts towards layering pieces — ensure balanced inventory of outerwear and coordinate sets.\n\n"
+            )
 
         return (
             f"> 🧠 **BizAI Live Data Grounding & Reasoning**\n"
@@ -738,6 +746,65 @@ def _deep_reasoning_answer(
             )
 
     # -------------------------------------------------------------
+    # 10B. TEMPORAL ORDER LOOKUPS (Yesterday, Today, Past 7 Days, This Week)
+    # -------------------------------------------------------------
+    if any(p in q_norm for p in ["yesterday", "today", "past 7 days", "last 7 days", "this week", "past week", "last week"]) and any(w in q_norm for w in ["order", "sale", "revenue", "how many", "done"]):
+        today_date = date.today()
+        if "yesterday" in q_norm:
+            target_date = today_date - timedelta(days=1)
+            time_label = f"Yesterday ({target_date.strftime('%d %b %Y')})"
+            orders_query = db.query(OrderModel).filter(
+                func.date(OrderModel.created_at) == target_date,
+                OrderModel.status != "cancelled"
+            ).all() if db else []
+        elif "today" in q_norm:
+            target_date = today_date
+            time_label = f"Today ({target_date.strftime('%d %b %Y')})"
+            orders_query = db.query(OrderModel).filter(
+                func.date(OrderModel.created_at) == target_date,
+                OrderModel.status != "cancelled"
+            ).all() if db else []
+        else:
+            target_date = today_date - timedelta(days=7)
+            time_label = f"the Past 7 Days (since {target_date.strftime('%d %b %Y')})"
+            orders_query = db.query(OrderModel).filter(
+                func.date(OrderModel.created_at) >= target_date,
+                OrderModel.status != "cancelled"
+            ).all() if db else []
+
+        if orders_query:
+            t_rev = sum(o.total_amount or 0 for o in orders_query)
+            o_lines = []
+            for o in orders_query[:6]:
+                cust = db.query(CustomerModel).filter(CustomerModel.id == o.customer_id).first() if db else None
+                c_name = cust.name if cust else "Direct Client"
+                o_lines.append(f"* `{o.order_number}`: **{o.status.upper()}** · INR {o.total_amount:,.0f} ({c_name})")
+            o_block = "\n".join(o_lines)
+            return (
+                f"> 🧠 **BizAI Live Data Grounding & Reasoning**\n"
+                f"> * Filtered order database for transactions on **{time_label}**.\n\n"
+                f"### 📅 Orders Recorded {time_label}\n\n"
+                f"* **Total Volume**: **{len(orders_query)} orders**\n"
+                f"* **Gross Revenue**: **INR {t_rev:,.0f}**\n\n"
+                f"#### Transaction Breakdown:\n"
+                f"{o_block}\n\n"
+                f"Full fulfillment statuses can be managed in the [Orders section](/orders)."
+            )
+        else:
+            latest_str = ""
+            if recent_orders:
+                lo = recent_orders[0]
+                latest_str = f"The most recent order on record is `{lo['order_number']}` placed by **{lo['customer']}** on **{lo['date']}** for **INR {lo['total']:,.0f}**."
+            return (
+                f"> 🧠 **BizAI Live Data Grounding & Reasoning**\n"
+                f"> * Queried real-time orders table for date timestamp: **{time_label}**.\n\n"
+                f"### 📅 Orders Recorded {time_label}\n\n"
+                f"**0 commercial orders** were logged for {time_label}.\n\n"
+                f"{latest_str}\n\n"
+                f"💡 *Tip: You can simulate live customer orders anytime via the Storefront simulator or view historical batches in [Orders](/orders).*"
+            )
+
+    # -------------------------------------------------------------
     # 11. GENERAL ORDER VOLUME & PIPELINE COUNT (When no customer name mentioned)
     # -------------------------------------------------------------
     if any(phrase in q_norm for phrase in ["how many order", "total orders", "order count", "number of order"]):
@@ -1048,6 +1115,10 @@ def _should_use_deep_reasoning_first(query: str, db: Session) -> bool:
 
     # 7. Logistics & Fulfillment
     if any(p in q_norm for p in ["delhivery", "shipping", "courier", "in transit", "logistics", "fulfillment"]):
+        return True
+
+    # 8. Temporal order & sales lookups
+    if any(p in q_norm for p in ["yesterday", "today", "past 7 days", "last 7 days", "this week", "past week", "last week"]):
         return True
 
     return False
