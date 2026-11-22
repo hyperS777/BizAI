@@ -399,6 +399,16 @@ def _deep_reasoning_answer(
         buy_block = "\n".join(buy_lines) or "* All active styles demonstrate balanced demand signals."
         skip_block = "\n".join(skip_lines) or "* Every SKU in the catalog has recorded paid customer conversions."
 
+        forward_note = ""
+        if "next to next" in q_norm or "two month" in q_norm or "2 month" in q_norm or "future month" in q_norm:
+            forward_note = (
+                f"---\n\n"
+                f"#### 🗓️ **Forward Procurement Horizon (60-Day Lead-Time Planning)**:\n"
+                f"* **Fabric Milling & Weaving Lead Time**: Premium luxury denim and structured outerwear require a 30–45 day supplier lead time. Issuing manufacturer POs now guarantees finished inventory arrives before next-to-next month's peak courier rush.\n"
+                f"* **Seasonal Product Pivot**: Structured outerwear and heavier denim jackets historically see higher festive conversion rates than lightweight tops — bias your forward inventory capital 65% toward outerwear & denim sets and 35% toward base shirts.\n"
+                f"* **Working Capital Allocation**: Stagger supplier payments with a 30% advance on PO issuance and 70% upon warehouse receipt at the Okhla DC to optimize cash flow.\n\n"
+            )
+
         return (
             f"> 🧠 **BizAI Live Data Grounding & Reasoning**\n"
             f"> * Analyzed {total_o} historical orders and catalog margins across {len(all_products)} active SKUs.\n"
@@ -412,6 +422,7 @@ def _deep_reasoning_answer(
             f"---\n\n"
             f"#### 🔴 **2. HOLD OFF / Do Not Buy (Zero Commercial Traction Yet)**\n"
             f"{skip_block}\n\n"
+            f"{forward_note}"
             f"---\n\n"
             f"#### 💡 **Strategic Retail Recommendations**:\n"
             f"1. **Core Focus**: Double down on structured denim and coordinating outerwear. Denim styles have a 60%+ gross margin and are driving over 50% of monthly sales.\n"
@@ -667,19 +678,39 @@ def _deep_reasoning_answer(
         or "who placed the first" in q_norm
         or "who was the first customer" in q_norm
     ):
-        if first_order:
+        target_first = first_order
+        if not target_first and db:
+            fo_record = db.query(OrderModel).order_by(OrderModel.created_at.asc()).first()
+            if fo_record:
+                cust = db.query(CustomerModel).filter(CustomerModel.id == fo_record.customer_id).first()
+                items = db.query(OrderItemModel).filter(OrderItemModel.order_id == fo_record.id).all()
+                items_str = ", ".join(f"{it.quantity}x {it.product.name if it.product else 'Garment'}" for it in items[:3])
+                target_first = {
+                    "order_number": fo_record.order_number,
+                    "customer": cust.name if cust else "Valued Client",
+                    "status": fo_record.status,
+                    "total": float(fo_record.total_amount or 0),
+                    "date": fo_record.created_at.strftime("%d %b %Y") if fo_record.created_at else "Launch Day",
+                    "items_summary": items_str or "Apparel piece",
+                }
+
+        if target_first:
             return (
                 f"> 🧠 **BizAI Live Data Grounding & Reasoning**\n"
                 f"> * Retrieved origin order record from chronological order index.\n\n"
                 f"### 📜 First Order Recorded (REIHH Studio)\n\n"
-                f"* **Order #**: `{first_order['order_number']}`\n"
-                f"* **Customer**: **{first_order['customer']}**\n"
-                f"* **Status**: **{first_order['status'].upper()}**\n"
-                f"* **Total Value**: **INR {first_order['total']:,.0f}**\n"
-                f"* **Date**: {first_order['date']}\n"
-                f"* **Items Purchased**: {first_order['items_summary']}\n\n"
+                f"* **Order #**: `{target_first['order_number']}`\n"
+                f"* **Customer**: **{target_first['customer']}**\n"
+                f"* **Status**: **{target_first['status'].upper()}**\n"
+                f"* **Total Value**: **INR {target_first['total']:,.0f}**\n"
+                f"* **Date**: {target_first['date']}\n"
+                f"* **Items Purchased**: {target_first['items_summary']}\n\n"
                 f"This inaugural order marked the commercial launch of REIHH Studio's digital operations."
             )
+        return (
+            f"> 🧠 **BizAI Live Data Grounding & Reasoning**\n\n"
+            f"No commercial orders have been recorded in the database yet."
+        )
 
     # -------------------------------------------------------------
     # 10. LATEST ORDER & RECENT ACTIVITY
@@ -835,13 +866,66 @@ def _ask_gemini(
         return None
 
 
+def _ask_azure_openai(
+    query: str,
+    snapshot: dict,
+    conversation_history: Optional[List[Dict[str, Any]]] = None,
+    api_key: Optional[str] = None,
+    endpoint: Optional[str] = None,
+    deployment: Optional[str] = None,
+    api_version: Optional[str] = None,
+) -> Optional[str]:
+    """Call Azure OpenAI (GPT-4o / GPT-4o-mini) for enterprise-grade intelligence."""
+    key = api_key or settings.AZURE_OPENAI_API_KEY
+    base_endpoint = (endpoint or settings.AZURE_OPENAI_ENDPOINT or "").strip().rstrip("/")
+    dep = deployment or settings.AZURE_OPENAI_DEPLOYMENT or "gpt-4o"
+    version = api_version or settings.AZURE_OPENAI_API_VERSION or "2024-08-01-preview"
+
+    if not key or not base_endpoint:
+        return None
+
+    try:
+        import httpx
+        url = f"{base_endpoint}/openai/deployments/{dep}/chat/completions?api-version={version}"
+        messages = [
+            {"role": "system", "content": _build_system_prompt(snapshot)},
+        ]
+        if conversation_history:
+            for msg in conversation_history[-8:]:
+                r = "user" if msg.get("role") == "user" else "assistant"
+                t = msg.get("text") or msg.get("content") or ""
+                if t:
+                    messages.append({"role": r, "content": t})
+        messages.append({"role": "user", "content": query})
+
+        headers = {
+            "api-key": key,
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "messages": messages,
+            "temperature": 0.3,
+            "max_tokens": 1000,
+        }
+        resp = httpx.post(url, headers=headers, json=payload, timeout=30.0)
+        if resp.status_code == 200:
+            data = resp.json()
+            return data["choices"][0]["message"]["content"]
+        else:
+            logger.warning("Azure OpenAI returned %s: %s", resp.status_code, resp.text[:200])
+            return None
+    except Exception as exc:
+        logger.warning("Azure OpenAI query failed: %s", exc)
+        return None
+
+
 def _ask_groq(
     query: str,
     snapshot: dict,
     conversation_history: Optional[List[Dict[str, Any]]] = None,
     api_key: Optional[str] = None,
 ) -> Optional[str]:
-    """Call Groq API for conversational AI responses."""
+    """Call Groq API with flagship 70B model first for deep analytical reasoning, with automatic fallbacks."""
     key = api_key or settings.GROQ_API_KEY
     if not key:
         return None
@@ -863,13 +947,22 @@ def _ask_groq(
                     messages.append({"role": r, "content": t})
 
         messages.append({"role": "user", "content": query})
-        completion = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=messages,
-            temperature=0.3,
-            max_tokens=700,
-        )
-        return completion.choices[0].message.content
+
+        # Try flagship 70B model first (10x smarter reasoning), then fallback
+        models_to_try = ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "llama-3.1-8b-instant"]
+        for model_name in models_to_try:
+            try:
+                completion = client.chat.completions.create(
+                    model=model_name,
+                    messages=messages,
+                    temperature=0.3,
+                    max_tokens=900,
+                )
+                return completion.choices[0].message.content
+            except Exception as e:
+                logger.info("Groq model %s attempt failed, trying next: %s", model_name, e)
+                continue
+        return None
     except Exception as exc:
         logger.warning("Groq AI query failed: %s", exc)
         return None
@@ -881,10 +974,21 @@ def _ask_model(
     conversation_history: Optional[List[Dict[str, Any]]] = None,
     db: Optional[Session] = None,
 ) -> Optional[str]:
-    """Check API keys from settings and DB, then try Gemini, then Groq."""
+    """Check API keys from settings and DB, prioritizing Azure OpenAI (GPT-4o), then Gemini, then Groq (70B)."""
+    azure_key = settings.AZURE_OPENAI_API_KEY
+    azure_endpoint = settings.AZURE_OPENAI_ENDPOINT
+    azure_deployment = settings.AZURE_OPENAI_DEPLOYMENT
     gemini_key = settings.GEMINI_API_KEY
     groq_key = settings.GROQ_API_KEY
     if db:
+        if not azure_key:
+            row = db.query(AppSetting).filter(AppSetting.key == "azure_openai_api_key").first()
+            if row and row.value:
+                azure_key = row.value.strip()
+        if not azure_endpoint:
+            row = db.query(AppSetting).filter(AppSetting.key == "azure_openai_endpoint").first()
+            if row and row.value:
+                azure_endpoint = row.value.strip()
         if not gemini_key:
             row = db.query(AppSetting).filter(AppSetting.key == "gemini_api_key").first()
             if row and row.value:
@@ -893,6 +997,15 @@ def _ask_model(
             row = db.query(AppSetting).filter(AppSetting.key == "groq_api_key").first()
             if row and row.value:
                 groq_key = row.value.strip()
+
+    # Prioritize Azure OpenAI (GPT-4o from Azure Education) if configured
+    if azure_key and azure_endpoint:
+        ans = _ask_azure_openai(
+            query, snapshot, conversation_history,
+            api_key=azure_key, endpoint=azure_endpoint, deployment=azure_deployment
+        )
+        if ans:
+            return ans
 
     return _ask_gemini(query, snapshot, conversation_history, api_key=gemini_key) or _ask_groq(query, snapshot, conversation_history, api_key=groq_key)
 
@@ -918,7 +1031,7 @@ def _should_use_deep_reasoning_first(query: str, db: Session) -> bool:
         return True
 
     # 3. Buying / Purchasing / Restock decisions
-    if any(p in q_norm for p in ["what should i buy", "what to buy", "not buy", "do not buy", "dont buy", "worth buying", "avoid buying"]):
+    if any(p in q_norm for p in ["what should i buy", "what to buy", "not buy", "do not buy", "dont buy", "worth buying", "avoid buying", "what should we buy", "buy for next", "what to stock", "reorder"]):
         return True
 
     # 4. Margins & Unit economics
@@ -930,7 +1043,7 @@ def _should_use_deep_reasoning_first(query: str, db: Session) -> bool:
         return True
 
     # 6. First order / latest order
-    if any(p in q_norm for p in ["first order", "latest order", "most recent order", "oldest order"]):
+    if any(p in q_norm for p in ["first order", "latest order", "most recent order", "oldest order", "earliest order", "last order", "newest order", "initial order"]):
         return True
 
     # 7. Logistics & Fulfillment
