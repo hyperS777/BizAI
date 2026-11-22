@@ -24,15 +24,17 @@ jobs:
         with:
           python-version: '3.11'
 
-      # Install all dependencies into .python_packages so Azure doesn't need to build at runtime
-      - name: Install dependencies into .python_packages
+      # Install all dependencies into both .python_packages and python_packages so they are never missed
+      - name: Install dependencies into python_packages
         run: |
           pip install --target=".python_packages/lib/site-packages" -r requirements.txt
+          cp -r .python_packages python_packages
                 
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
         with:
           name: python-app
+          include-hidden-files: true
           path: |
             .
 
