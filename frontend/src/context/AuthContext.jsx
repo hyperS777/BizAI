@@ -42,10 +42,16 @@ export function AuthProvider({ children }) {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
     localStorage.setItem('token', response.data.access_token);
+    if (response.data?.user) {
+      setUser(response.data.user);
+      setLoading(false);
+      return response.data.user;
+    }
     const authenticatedUser = await fetchUser();
     if (!authenticatedUser) {
       throw new Error('The API could not verify the signed-in user.');
     }
+    return authenticatedUser;
   };
 
   const logout = () => {

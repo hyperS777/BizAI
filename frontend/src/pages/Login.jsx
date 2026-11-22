@@ -69,10 +69,10 @@ export default function Login() {
           <h2>Sign in to your workspace</h2>
           <p className="muted">Sign in to access your business workspace.</p>
           <label>Email
-            <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} type="email" required />
+            <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} onFocus={warmupApi} type="email" required />
           </label>
           <label>Password
-            <span className="password-field"><input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} type={showPassword ? 'text' : 'password'} required /><button type="button" className="password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></span>
+            <span className="password-field"><input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} onFocus={warmupApi} type={showPassword ? 'text' : 'password'} required /><button type="button" className="password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></span>
           </label>
           {error && <p className="error">{error}</p>}
           {isWakingUp && (
@@ -93,7 +93,7 @@ export default function Login() {
               <span>Free-tier cloud server is spinning up from sleep (~30s). Please hold on a moment…</span>
             </div>
           )}
-          <button className="primary-btn" disabled={busy}>
+          <button className="primary-btn" disabled={busy} onMouseEnter={warmupApi}>
             {busy ? 'Signing in…' : 'Sign in'} <ChevronRight size={17} />
           </button>
           <a href="/store" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: 3, color: 'var(--ink)', fontSize: 12, textDecoration: 'none' }}>Shop the REIHH collection <ChevronRight size={14} /></a>
