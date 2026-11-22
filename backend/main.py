@@ -15,28 +15,40 @@ from routers import (
 logging.basicConfig(level=logging.INFO if settings.DEBUG else logging.WARNING)
 logger = logging.getLogger("bizai")
 
-Base.metadata.create_all(bind=engine)
-ensure_schema()
+def init_db_in_background():
+    """Run database table creation, schema migration, and catalog seeding safely in background."""
+    try:
+        logger.info("Initializing database schema and seed data in background...")
+        Base.metadata.create_all(bind=engine)
+        ensure_schema()
 
-from scripts.seed import seed_data
-seed_data()
+        from scripts.seed import seed_data
+        seed_data()
 
-from services.integration_service import ensure_default_settings
-from services.storefront_service import sync_all_reihh_catalog
-db = SessionLocal()
-try:
-    ensure_default_settings(db)
-    sync_all_reihh_catalog(db)
-except Exception as exc:
-    logger.warning("Could not auto-sync catalog on startup: %s", exc)
-finally:
-    db.close()
+        from services.integration_service import ensure_default_settings
+        from services.storefront_service import sync_all_reihh_catalog
+        db = SessionLocal()
+        try:
+            ensure_default_settings(db)
+            sync_all_reihh_catalog(db)
+        finally:
+            db.close()
+        logger.info("Database background initialization complete.")
+    except Exception as exc:
+        logger.warning("Background database initialization warning: %s", exc)
+
 
 app = FastAPI(
     title=settings.APP_NAME,
     description="API for BizAI Business Management Platform",
     version="1.0.0",
 )
+
+
+@app.on_event("startup")
+def on_startup():
+    import threading
+    threading.Thread(target=init_db_in_background, daemon=True).start()
 
 app.add_middleware(
     CORSMiddleware,
