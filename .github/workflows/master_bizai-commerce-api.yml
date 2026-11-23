@@ -24,19 +24,13 @@ jobs:
         with:
           python-version: '3.11'
 
-      # Create antenv virtualenv and install dependencies matching Azure Linux Oryx requirements
+      # Create antenv virtual environment matching Azure Linux Oryx requirements
       - name: Create antenv virtual environment and install dependencies
         run: |
           python -m venv antenv
           source antenv/bin/activate
           pip install --upgrade pip
-          pip install -r requirements.txt
-          mkdir -p .python_packages/lib/site-packages
-          cp -r antenv/lib/python3.11/site-packages/* .python_packages/lib/site-packages/ || true
-          mkdir -p python_packages/lib/site-packages
-          cp -r antenv/lib/python3.11/site-packages/* python_packages/lib/site-packages/ || true
-          mkdir -p __oryx_packages__/lib/python3.11/site-packages
-          cp -r antenv/lib/python3.11/site-packages/* __oryx_packages__/lib/python3.11/site-packages/ || true
+          pip install --no-cache-dir -r requirements.txt
                 
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4

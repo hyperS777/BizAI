@@ -2,6 +2,7 @@
 set +e
 
 echo "=== BizAI Azure App Service Starting ==="
+cd /home/site/wwwroot 2>/dev/null || cd "$(dirname "$0")"
 echo "Current directory: $(pwd)"
 
 # 1. Activate antenv virtual environment if present
