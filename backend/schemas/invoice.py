@@ -59,8 +59,8 @@ class InvoiceResponse(InvoiceBase):
     invoice_number: str
     public_token: Optional[str] = None
     status: str
-    total_amount: float
-    paid_amount: float
+    total_amount: Optional[float] = 0.0
+    paid_amount: Optional[float] = 0.0
     created_at: datetime
     updated_at: Optional[datetime] = None
     order: Optional[OrderResponse] = None

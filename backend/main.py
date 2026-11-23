@@ -127,3 +127,14 @@ def root():
 @app.get("/api/health")
 def health():
     return {"status": "ok", "service": "bizai-api"}
+
+
+@app.get("/api/migrate")
+def trigger_migration():
+    """Safety endpoint to trigger schema migration and table creation on demand."""
+    try:
+        Base.metadata.create_all(bind=engine)
+        ensure_schema()
+        return {"status": "ok", "message": "Schema migration executed successfully"}
+    except Exception as exc:
+        return {"status": "error", "detail": str(exc)}

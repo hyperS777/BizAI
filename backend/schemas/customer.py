@@ -5,7 +5,7 @@ from datetime import datetime
 
 class CustomerBase(BaseModel):
     name: str
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
     billing_address: Optional[str] = None
@@ -39,7 +39,7 @@ class CustomerUpdate(BaseModel):
 
 class CustomerResponse(CustomerBase):
     id: int
-    outstanding_balance: float
+    outstanding_balance: Optional[float] = 0.0
     created_at: datetime
     updated_at: Optional[datetime] = None
 

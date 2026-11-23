@@ -50,10 +50,22 @@ done
 export PYTHONPATH="$(pwd)/backend:$(pwd):${PYTHONPATH}"
 
 PORT="${PORT:-${WEBSITES_PORT:-8000}}"
-echo "Starting FastAPI server on port $PORT..."
+
+PYTHON_CMD="python"
+if ! command -v python >/dev/null 2>&1; then
+    if command -v python3 >/dev/null 2>&1; then
+        PYTHON_CMD="python3"
+    elif [ -x "/opt/python/3.11.10/bin/python" ]; then
+        PYTHON_CMD="/opt/python/3.11.10/bin/python"
+    elif [ -x "/opt/python/3.11/bin/python" ]; then
+        PYTHON_CMD="/opt/python/3.11/bin/python"
+    fi
+fi
+
+echo "Starting FastAPI server on port $PORT using $PYTHON_CMD..."
 
 # Try uvicorn via python module
-if python -m uvicorn main:app --host 0.0.0.0 --port "$PORT"; then
+if $PYTHON_CMD -m uvicorn main:app --host 0.0.0.0 --port "$PORT"; then
     exit 0
 fi
 

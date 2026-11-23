@@ -17,7 +17,7 @@ def get_customer(db: Session, customer_id: int) -> Optional[Customer]:
 def get_customers(
     db: Session, skip: int = 0, limit: int = 100, search: Optional[str] = None
 ) -> List[Customer]:
-    query = db.query(Customer).filter(Customer.is_active != False)
+    query = db.query(Customer).filter(or_(Customer.is_active.is_(True), Customer.is_active.is_(None)))
     if search:
         term = f"%{search}%"
         query = query.filter(

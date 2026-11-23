@@ -43,10 +43,13 @@ def get_db():
 
 
 def _migration_column_type(type_name: str, dialect_name: str) -> str:
-    if type_name == "DATETIME" and dialect_name == "postgresql":
-        return "TIMESTAMP WITH TIME ZONE"
-    if type_name == "BOOLEAN DEFAULT 0" and dialect_name == "postgresql":
-        return "BOOLEAN DEFAULT FALSE"
+    if dialect_name == "postgresql":
+        if "DATETIME" in type_name.upper():
+            type_name = type_name.replace("DATETIME", "TIMESTAMP WITH TIME ZONE")
+        if "BOOLEAN DEFAULT 0" in type_name.upper():
+            type_name = type_name.replace("BOOLEAN DEFAULT 0", "BOOLEAN DEFAULT FALSE")
+        elif "BOOLEAN DEFAULT 1" in type_name.upper():
+            type_name = type_name.replace("BOOLEAN DEFAULT 1", "BOOLEAN DEFAULT TRUE")
     return type_name
 
 
@@ -138,29 +141,61 @@ def ensure_schema():
     """Add newly introduced columns on existing SQLite/Postgres databases."""
     inspector = inspect(engine)
     existing_tables = set(inspector.get_table_names())
-    with engine.begin() as conn:
-        for table, columns in _EXTRA_COLUMNS.items():
-            if table not in existing_tables:
-                continue
+    dialect_name = engine.dialect.name
+
+    for table, columns in _EXTRA_COLUMNS.items():
+        if table not in existing_tables:
+            continue
+        try:
             present = {col["name"] for col in inspect(engine).get_columns(table)}
-            for name, typedef in columns:
-                if name in present:
-                    continue
-                column_type = _migration_column_type(typedef, engine.dialect.name)
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {column_type}"))
+        except Exception:
+            present = set()
 
-        unique_indexes = (
-            ("customers", "shopify_customer_id", "ux_customers_shopify_customer_id"),
-            ("products", "shopify_product_id", "ux_products_shopify_product_id"),
-            ("product_variants", "shopify_variant_id", "ux_variants_shopify_variant_id"),
-            ("product_variants", "shopify_inventory_item_id", "ux_variants_shopify_inventory_item_id"),
-            ("orders", "shopify_order_id", "ux_orders_shopify_order_id"),
-            ("invoices", "public_token", "ux_invoices_public_token"),
-            ("storefront_simulations", "delivery_token_hash", "ux_storefront_sim_delivery_token"),
-        )
-        for table, column, index_name in unique_indexes:
-            if table in existing_tables:
-                conn.execute(text(f"CREATE UNIQUE INDEX IF NOT EXISTS {index_name} ON {table} ({column})"))
+        for name, typedef in columns:
+            if name in present:
+                continue
+            column_type = _migration_column_type(typedef, dialect_name)
+            try:
+                with engine.begin() as conn:
+                    if dialect_name == "postgresql":
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {name} {column_type}"))
+                    else:
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {column_type}"))
+            except Exception as exc:
+                print(f"Migration note for column {name} in {table}: {exc}")
 
-        if "invoices" in existing_tables:
-            conn.execute(text("UPDATE invoices SET due_date = substr(due_date, 1, 10) WHERE due_date LIKE '% %' OR due_date LIKE '%T%'"))
+    unique_indexes = (
+        ("customers", "shopify_customer_id", "ux_customers_shopify_customer_id"),
+        ("products", "shopify_product_id", "ux_products_shopify_product_id"),
+        ("product_variants", "shopify_variant_id", "ux_variants_shopify_variant_id"),
+        ("product_variants", "shopify_inventory_item_id", "ux_variants_shopify_inventory_item_id"),
+        ("orders", "shopify_order_id", "ux_orders_shopify_order_id"),
+        ("invoices", "public_token", "ux_invoices_public_token"),
+        ("storefront_simulations", "delivery_token_hash", "ux_storefront_sim_delivery_token"),
+    )
+    for table, column, index_name in unique_indexes:
+        if table in existing_tables:
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(f"CREATE UNIQUE INDEX IF NOT EXISTS {index_name} ON {table} ({column})"))
+            except Exception as exc:
+                print(f"Migration note for index {index_name}: {exc}")
+
+    if "invoices" in existing_tables:
+        if dialect_name == "sqlite":
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("UPDATE invoices SET due_date = substr(due_date, 1, 10) WHERE due_date LIKE '% %' OR due_date LIKE '%T%'"))
+            except Exception as exc:
+                print(f"Migration note for invoice date normalization: {exc}")
+
+        # Also backfill public_token for any invoices missing it
+        try:
+            with engine.begin() as conn:
+                res = conn.execute(text("SELECT id FROM invoices WHERE public_token IS NULL")).fetchall()
+                for (inv_id,) in res:
+                    import secrets
+                    token = secrets.token_urlsafe(32)
+                    conn.execute(text("UPDATE invoices SET public_token = :t WHERE id = :id"), {"t": token, "id": inv_id})
+        except Exception:
+            pass
