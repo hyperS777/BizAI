@@ -4,12 +4,24 @@ set +e
 echo "=== BizAI Azure App Service Starting ==="
 echo "Current directory: $(pwd)"
 
-# 1. Add all potential package paths to PYTHONPATH and PATH
+# 1. Activate antenv virtual environment if present
+if [ -f "/home/site/wwwroot/antenv/bin/activate" ]; then
+    echo "Activating /home/site/wwwroot/antenv virtual environment..."
+    source /home/site/wwwroot/antenv/bin/activate
+elif [ -f "$(pwd)/antenv/bin/activate" ]; then
+    echo "Activating $(pwd)/antenv virtual environment..."
+    source "$(pwd)/antenv/bin/activate"
+fi
+
+# 2. Add all potential package paths to PYTHONPATH and PATH
 for p in \
-    "$(pwd)/.python_packages/lib/site-packages" \
-    "$(pwd)/python_packages/lib/site-packages" \
+    "/home/site/wwwroot/antenv/lib/python3.11/site-packages" \
+    "$(pwd)/antenv/lib/python3.11/site-packages" \
+    "/home/site/wwwroot/__oryx_packages__/lib/python3.11/site-packages" \
     "/home/site/wwwroot/.python_packages/lib/site-packages" \
     "/home/site/wwwroot/python_packages/lib/site-packages" \
+    "$(pwd)/.python_packages/lib/site-packages" \
+    "$(pwd)/python_packages/lib/site-packages" \
     "/antenv/lib/python3.11/site-packages"
 do
     if [ -d "$p" ]; then
@@ -19,10 +31,12 @@ do
 done
 
 for b in \
-    "$(pwd)/.python_packages/bin" \
-    "$(pwd)/python_packages/bin" \
+    "/home/site/wwwroot/antenv/bin" \
+    "$(pwd)/antenv/bin" \
     "/home/site/wwwroot/.python_packages/bin" \
     "/home/site/wwwroot/python_packages/bin" \
+    "$(pwd)/.python_packages/bin" \
+    "$(pwd)/python_packages/bin" \
     "/antenv/bin"
 do
     if [ -d "$b" ]; then
@@ -31,7 +45,7 @@ do
     fi
 done
 
-# 2. Add backend and root directory to PYTHONPATH
+# 3. Add backend and root directory to PYTHONPATH
 export PYTHONPATH="$(pwd)/backend:$(pwd):${PYTHONPATH}"
 
 PORT="${PORT:-${WEBSITES_PORT:-8000}}"
