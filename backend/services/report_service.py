@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 """Dashboard and analytics aggregations grounded in live records."""
 
 from calendar import monthrange
 from datetime import date, datetime, timedelta
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
