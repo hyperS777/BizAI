@@ -538,7 +538,7 @@ def build_business_snapshot(db: Session) -> dict:
     }
 
 
-def get_staff_performance(db: Session, limit: int = 10) -> List[dict]:
+def get_staff_performance(db: Session, limit: int = 10) -> list[dict]:
     from models.user import User
     rows = (
         db.query(

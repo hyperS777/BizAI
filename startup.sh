@@ -51,16 +51,24 @@ export PYTHONPATH="$(pwd)/backend:$(pwd):${PYTHONPATH}"
 
 PORT="${PORT:-${WEBSITES_PORT:-8000}}"
 
+# 4. Resolve working Python interpreter
 PYTHON_CMD="python"
-if ! command -v python >/dev/null 2>&1; then
-    if command -v python3 >/dev/null 2>&1; then
-        PYTHON_CMD="python3"
-    elif [ -x "/opt/python/3.11.10/bin/python" ]; then
-        PYTHON_CMD="/opt/python/3.11.10/bin/python"
-    elif [ -x "/opt/python/3.11/bin/python" ]; then
-        PYTHON_CMD="/opt/python/3.11/bin/python"
-    fi
+if ! $PYTHON_CMD -c "print(1)" >/dev/null 2>&1; then
+    for candidate in \
+        "python3" \
+        "/opt/python/3.11.18/bin/python" \
+        "/opt/python/3.11.10/bin/python" \
+        "/opt/python/3.11/bin/python" \
+        "/usr/local/bin/python3" \
+        "/usr/bin/python3"
+    do
+        if $candidate -c "print(1)" >/dev/null 2>&1; then
+            PYTHON_CMD="$candidate"
+            break
+        fi
+    done
 fi
+echo "Using Python binary: $PYTHON_CMD ($($PYTHON_CMD --version 2>&1))"
 
 echo "Starting FastAPI server on port $PORT using $PYTHON_CMD..."
 
