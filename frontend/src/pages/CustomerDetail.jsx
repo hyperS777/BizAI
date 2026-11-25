@@ -5,6 +5,17 @@ import client from '../api/client';
 import { EmptyState, PageHeader } from '../components/ui';
 import { apiError, formatDate, money } from '../utils/format';
 import { useToast } from '../context/ToastContext';
+import { subscribeWorkspaceSync } from '../utils/sync';
+
+const orderStatusLabel = (status) => ({
+  draft: 'Draft',
+  pending: 'Pending',
+  confirmed: 'Confirmed',
+  shipped: 'In transit',
+  delivered: 'Delivered',
+  returned: 'Returned',
+  cancelled: 'Cancelled',
+}[status] || String(status || '').replaceAll('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase()));
 
 export default function CustomerDetail() {
   const { customerId } = useParams();
@@ -17,7 +28,7 @@ export default function CustomerDetail() {
   const [notes, setNotes] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
 
-  useEffect(() => {
+  const loadProfile = () => {
     Promise.all([client.get(`/customers/${customerId}`), client.get(`/customers/${customerId}/orders`)])
       .then(([customerResponse, ordersResponse]) => {
         setCustomer(customerResponse.data);
@@ -25,6 +36,11 @@ export default function CustomerDetail() {
         setOrders(ordersResponse.data || []);
       })
       .catch((err) => setError(apiError(err, 'Could not load customer profile')));
+  };
+
+  useEffect(() => {
+    loadProfile();
+    return subscribeWorkspaceSync(loadProfile);
   }, [customerId]);
 
   const saveNotes = async () => {
@@ -148,7 +164,7 @@ export default function CustomerDetail() {
                       <strong>#{order.order_number}</strong>
                       <small>{formatDate(order.created_at)}</small>
                     </span>
-                    <span className={`status-pill ${order.status}`}>{order.status}</span>
+                    <span className={`status-pill ${order.status}`}>{orderStatusLabel(order.status)}</span>
                     <b>{money(order.total_amount)}</b>
                     <ChevronRight size={16} />
                   </summary>

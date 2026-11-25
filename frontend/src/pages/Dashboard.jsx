@@ -12,8 +12,16 @@ import { AuthContext } from '../context/AuthContext';
 import client from '../api/client';
 import { EmptyState, PageHeader } from '../components/ui';
 import { formatDate, money } from '../utils/format';
+import { subscribeWorkspaceSync } from '../utils/sync';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
+
+function getTimeGreeting() {
+  const hr = new Date().getHours();
+  if (hr < 12) return 'Good morning';
+  if (hr < 17) return 'Good afternoon';
+  return 'Good evening';
+}
 
 export default function Dashboard() {
   const { user, role } = useContext(AuthContext);
@@ -26,7 +34,7 @@ export default function Dashboard() {
   const [funnel, setFunnel] = useState(null);
   const canSeeStorefrontAnalytics = ['admin', 'manager'].includes(role);
 
-  useEffect(() => {
+  const loadDashboardData = () => {
     if (role === 'employee') {
       client.get('/products/low-stock')
         .then((stock) => setLowStock(stock.data || []))
@@ -39,13 +47,17 @@ export default function Dashboard() {
       client.get('/ai/summary'),
       client.get('/products/low-stock'),
     ])
-      .then(([dashboard, sales, ai, stock]) => {
+      .then(([dashboard, salesRes, ai, stock]) => {
         setMetrics(dashboard.data);
-        setSeries(sales.data.points || []);
+        setSeries(salesRes.data.points || []);
         setSummary(ai.data.summary);
         setLowStock(stock.data || []);
       })
       .catch((err) => setError(err.response?.data?.detail || 'Could not load live business data.'));
+  };
+
+  useEffect(() => {
+    loadDashboardData();
   }, [role]);
 
   const loadFunnel = () => {
@@ -57,9 +69,19 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadFunnel();
-    const timer = setInterval(loadFunnel, 10000);
-    return () => clearInterval(timer);
-  }, [canSeeStorefrontAnalytics]);
+    const timer = setInterval(() => {
+      loadFunnel();
+      loadDashboardData();
+    }, 10000);
+    const unsubscribe = subscribeWorkspaceSync(() => {
+      loadDashboardData();
+      loadFunnel();
+    });
+    return () => {
+      clearInterval(timer);
+      unsubscribe();
+    };
+  }, [canSeeStorefrontAnalytics, role]);
 
   const formatOrderStatus = (status) => ({
     draft: 'Draft',
@@ -94,7 +116,7 @@ export default function Dashboard() {
     <>
       <PageHeader
         eyebrow={new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-        title={`Good morning, ${user?.full_name?.split(' ')[0] || 'there'}.`}
+        title={`${getTimeGreeting()}, ${user?.full_name?.split(' ')[0] || 'there'}.`}
         subtitle={role === 'employee' ? 'Live pulse of customers, stock and orders.' : 'Live pulse of customers, stock, orders and profit.'}
       >
         {role !== 'employee' && <button className="outline-btn" onClick={() => navigate('/reports')}><Search size={16} /> View reports</button>}
@@ -126,7 +148,7 @@ export default function Dashboard() {
       </section>}
 
       {canSeeStorefrontAnalytics && (
-        <section className="panel live-storefront-pulse" style={{ marginBottom: 14 }}>
+        <section className="panel live-storefront-pulse" style={{ marginBottom: 20 }}>
           <div className="panel-heading" style={{ alignItems: 'center', marginBottom: 14 }}>
             <div>
               <p className="eyebrow" style={{ color: 'var(--teal)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>

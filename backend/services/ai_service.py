@@ -24,6 +24,29 @@ from models.expense import Expense as ExpenseModel
 from services.report_service import build_business_snapshot
 
 logger = logging.getLogger("bizai.ai")
+_LAST_AI_DIAGNOSTIC: dict = {"provider": "offline_fallback", "last_error": None}
+
+
+def get_ai_status(db: Optional[Session] = None) -> dict:
+    groq_key = (settings.GROQ_API_KEY or "").strip()
+    gemini_key = (settings.GEMINI_API_KEY or "").strip()
+    azure_key = (settings.AZURE_OPENAI_API_KEY or "").strip()
+    if db:
+        for key_name, target in (("groq_api_key", "groq"), ("gemini_api_key", "gemini"), ("azure_openai_api_key", "azure")):
+            row = db.query(AppSetting).filter(AppSetting.key == key_name).first()
+            if row and row.value and row.value.strip():
+                if target == "groq" and not groq_key:
+                    groq_key = row.value.strip()
+                elif target == "gemini" and not gemini_key:
+                    gemini_key = row.value.strip()
+                elif target == "azure" and not azure_key:
+                    azure_key = row.value.strip()
+    return {
+        "groq_configured": bool(groq_key),
+        "gemini_configured": bool(gemini_key),
+        "azure_openai_configured": bool(azure_key and (settings.AZURE_OPENAI_ENDPOINT or "").strip()),
+        **_LAST_AI_DIAGNOSTIC,
+    }
 
 
 def _format_inr(val: float) -> str:
@@ -1116,10 +1139,14 @@ def _ask_groq(
                 if resp.status_code == 200:
                     content = (resp.json().get("choices") or [{}])[0].get("message", {}).get("content")
                     if content:
+                        _LAST_AI_DIAGNOSTIC.update({"provider": f"groq:{model_name}", "last_error": None})
                         return content
                 else:
-                    logger.warning("Groq model %s returned %s: %s", model_name, resp.status_code, resp.text[:200])
+                    err_txt = f"Groq {model_name} HTTP {resp.status_code}: {resp.text[:220]}"
+                    _LAST_AI_DIAGNOSTIC.update({"provider": "groq_error", "last_error": err_txt})
+                    logger.warning(err_txt)
             except Exception as e:
+                _LAST_AI_DIAGNOSTIC.update({"provider": "groq_error", "last_error": str(e)})
                 logger.info("Groq model %s attempt failed, trying next: %s", model_name, e)
                 continue
         return None

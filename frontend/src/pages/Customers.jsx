@@ -6,6 +6,17 @@ import { EmptyState, Modal, PageHeader, ConfirmDialog } from '../components/ui';
 import { apiError, formatDate, money } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { emitWorkspaceSync, subscribeWorkspaceSync } from '../utils/sync';
+
+const orderStatusLabel = (status) => ({
+  draft: 'Draft',
+  pending: 'Pending',
+  confirmed: 'Confirmed',
+  shipped: 'In transit',
+  delivered: 'Delivered',
+  returned: 'Returned',
+  cancelled: 'Cancelled',
+}[status] || String(status || '').replaceAll('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase()));
 
 const TIERS = [
   { id: 'VIP', label: 'VIP Concierge Customer', color: '#8b5cf6' },
@@ -46,17 +57,22 @@ export default function Customers() {
   const [importing, setImporting] = useState(false);
   const [form, setForm] = useState(blank);
   const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const load = () => {
-    setLoading(true);
-    client.get('/customers', { params: { search: search || undefined } })
+  const load = (silent = false) => {
+    if (!silent) setLoading(true);
+    client.get('/customers')
       .then((res) => setCustomers(res.data || []))
       .catch((err) => setError(apiError(err, 'Could not load customers')))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, [search]);
+  useEffect(() => {
+    load();
+    return subscribeWorkspaceSync(() => load(true));
+  }, []);
 
   const openCreate = () => { setForm(blank); setModal({ type: 'form' }); };
   const openEdit = (customer) => {
@@ -71,10 +87,14 @@ export default function Customers() {
   };
 
   const openHistory = (customer) => {
-    client.get(`/customers/${customer.id}/orders`).then((res) => {
-      setHistory(res.data || []);
-      setModal({ type: 'history', customer });
-    });
+    setHistory([]);
+    setHistoryError('');
+    setHistoryLoading(true);
+    setModal({ type: 'history', customer });
+    client.get(`/customers/${customer.id}/orders`)
+      .then((res) => setHistory(res.data || []))
+      .catch((err) => setHistoryError(apiError(err, 'Could not load customer order history.')))
+      .finally(() => setHistoryLoading(false));
   };
 
   const save = async (event) => {
@@ -94,7 +114,8 @@ export default function Customers() {
       }
       setModal(null);
       setNotice('Customer profile saved.');
-      load();
+      emitWorkspaceSync('customers');
+      load(true);
     } catch (err) {
       setError(apiError(err, 'Could not save customer'));
       toast?.error(apiError(err, 'Could not save customer'));
@@ -113,7 +134,8 @@ export default function Customers() {
       await client.delete(`/customers/${customer.id}`);
       setNotice(`Customer ${customer.name} deleted.`);
       toast?.info(`Removed ${customer.name}`);
-      load();
+      emitWorkspaceSync('customers');
+      load(true);
     } catch (err) {
       setError(apiError(err, 'Could not delete customer'));
       toast?.error('Could not delete customer');
@@ -361,18 +383,48 @@ export default function Customers() {
       {/* Purchase History Modal */}
       {modal?.type === 'history' && (
         <Modal title={`${modal.customer.name} · Orders History`} onClose={() => setModal(null)}>
-          {history.length ? (
-            <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+          {historyLoading ? (
+            <div className="loading compact">Loading order history…</div>
+          ) : historyError ? (
+            <div className="notice error">{historyError}</div>
+          ) : history.length ? (
+            <div style={{ maxHeight: '60vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
               {history.map((order) => (
-                <div className="history-row" key={order.id}>
-                  <strong>#{order.order_number}</strong>
-                  <span className={`status-pill ${order.status}`}>{order.status}</span>
-                  <span>{formatDate(order.created_at)}</span>
-                  <b>{money(order.total_amount)}</b>
+                <div key={order.id} style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel-alt)' }}>
+                  <div className="history-row" style={{ marginBottom: 4 }}>
+                    <strong>#{order.order_number}</strong>
+                    <span className={`status-pill ${order.status}`}>{orderStatusLabel(order.status)}</span>
+                    <span>{formatDate(order.created_at)}</span>
+                    <b>{money(order.total_amount)}</b>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                    {(order.items || []).map((it) => `${it.quantity}× ${it.product?.name || `Item #${it.product_id}`}`).join(', ') || 'Apparel items'}
+                    {order.tracking_number ? ` · AWB: ${order.tracking_number}` : ''}
+                  </div>
                 </div>
               ))}
+              <button
+                type="button"
+                className="outline-btn"
+                style={{ alignSelf: 'flex-end', marginTop: 4 }}
+                onClick={() => { setModal(null); navigate(`/customers/${modal.customer.id}`); }}
+              >
+                Open Full 360° Profile →
+              </button>
             </div>
-          ) : <p className="muted">No orders recorded for this customer yet.</p>}
+          ) : (
+            <div>
+              <p className="muted">No orders recorded for this customer yet.</p>
+              <button
+                type="button"
+                className="outline-btn"
+                style={{ marginTop: 8 }}
+                onClick={() => { setModal(null); navigate(`/customers/${modal.customer.id}`); }}
+              >
+                View 360° Profile →
+              </button>
+            </div>
+          )}
         </Modal>
       )}
 

@@ -3,10 +3,10 @@
 from typing import List, Optional
 
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from models.customer import Customer
-from models.order import Order
+from models.order import Order, OrderItem
 from schemas.customer import CustomerCreate, CustomerUpdate
 
 
@@ -78,6 +78,12 @@ def delete_customer(db: Session, customer_id: int) -> Optional[str]:
 def get_customer_orders(db: Session, customer_id: int) -> List[Order]:
     return (
         db.query(Order)
+        .options(
+            joinedload(Order.items).joinedload(OrderItem.product),
+            joinedload(Order.items).joinedload(OrderItem.variant),
+            joinedload(Order.customer),
+            joinedload(Order.invoice),
+        )
         .filter(Order.customer_id == customer_id)
         .order_by(Order.created_at.desc())
         .all()

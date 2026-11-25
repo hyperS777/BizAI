@@ -219,7 +219,16 @@ def update_stock(
 
 
 def get_categories(db: Session) -> List[Category]:
-    return db.query(Category).order_by(Category.name.asc()).all()
+    legacy_names = {"Electronics", "Furniture", "Office Supplies"}
+    active_cat_ids = {
+        row[0]
+        for row in db.query(Product.category_id)
+        .filter(Product.is_active.is_(True), Product.category_id.isnot(None))
+        .distinct()
+        .all()
+    }
+    cats = db.query(Category).order_by(Category.name.asc()).all()
+    return [c for c in cats if c.name not in legacy_names and c.id in active_cat_ids]
 
 
 def create_category(db: Session, name: str, description: Optional[str] = None) -> Category:

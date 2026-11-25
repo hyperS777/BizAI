@@ -168,6 +168,48 @@ def delete_abandoned_checkout(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.get("/discounts")
+def read_public_discounts(db: Session = Depends(get_db)):
+    """Public list of active storefront coupon codes."""
+    from models.integration import DiscountCode
+    rows = db.query(DiscountCode).filter(DiscountCode.active.is_(True)).order_by(DiscountCode.code.asc()).all()
+    return [
+        {
+            "code": row.code,
+            "discount_type": row.discount_type,
+            "value": float(row.value or 0),
+            "description": row.description or "",
+        }
+        for row in rows
+        if row.usage_limit is None or (row.times_used or 0) < row.usage_limit
+    ]
+
+
+@router.post("/discounts/validate")
+def validate_public_discount(payload: dict, db: Session = Depends(get_db)):
+    """Public coupon code validation for the customer storefront."""
+    from models.integration import DiscountCode
+    from services.integration_service import apply_discount
+
+    code = (payload.get("code") or "").strip().upper()
+    subtotal = float(payload.get("subtotal", 0.0))
+    if not code:
+        raise HTTPException(status_code=400, detail="Coupon code is required")
+    try:
+        amount, normalized_code = apply_discount(db, code, subtotal)
+        row = db.query(DiscountCode).filter(DiscountCode.code == normalized_code).first()
+        return {
+            "valid": True,
+            "code": normalized_code,
+            "discount_type": row.discount_type if row else "percent",
+            "value": float(row.value) if row else 0.0,
+            "discount_amount": amount,
+            "description": row.description if row else "",
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.patch("/demo-delivery/{token}")
 def update_demo_delivery_status(token: str, payload: StorefrontDeliveryUpdate, db: Session = Depends(get_db)):
     try:

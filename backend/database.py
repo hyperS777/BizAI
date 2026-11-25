@@ -91,6 +91,7 @@ _EXTRA_COLUMNS = {
         ("delivery_latitude", "FLOAT"),
         ("delivery_longitude", "FLOAT"),
         ("delivery_updated_at", "DATETIME"),
+        ("channel", "VARCHAR(20) DEFAULT 'real'"),
     ],
     "invoices": [
         ("public_token", "VARCHAR(80)"),
@@ -203,3 +204,29 @@ def ensure_schema():
                     conn.execute(text("UPDATE invoices SET public_token = :t WHERE id = :id"), {"t": token, "id": inv_id})
         except Exception:
             pass
+
+    if "categories" in existing_tables and "products" in existing_tables:
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "DELETE FROM categories WHERE name IN ('Electronics', 'Furniture', 'Office Supplies') "
+                        "AND id NOT IN (SELECT DISTINCT category_id FROM products WHERE category_id IS NOT NULL)"
+                    )
+                )
+        except Exception as exc:
+            print(f"Migration note for legacy category cleanup: {exc}")
+
+    if "orders" in existing_tables:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("UPDATE orders SET channel = 'real' WHERE channel IS NULL"))
+                conn.execute(
+                    text(
+                        "UPDATE orders SET channel = 'demo' "
+                        "WHERE LOWER(COALESCE(notes, '')) LIKE '%demo%' "
+                        "OR id IN (SELECT order_id FROM storefront_simulations WHERE order_id IS NOT NULL)"
+                    )
+                )
+        except Exception as exc:
+            print(f"Migration note for order channel backfill: {exc}")

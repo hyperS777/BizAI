@@ -5,6 +5,7 @@ import { EmptyState, Modal, PageHeader } from '../components/ui';
 import { apiError, money } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { emitWorkspaceSync, subscribeWorkspaceSync } from '../utils/sync';
 
 const STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
 
@@ -55,6 +56,7 @@ export default function Products() {
   }, []);
 
   useEffect(() => { load(); }, [search, categoryId]);
+  useEffect(() => subscribeWorkspaceSync(() => { load(); }), [search, categoryId]);
 
   const syncCatalog = async () => {
     setSyncing(true);
@@ -153,6 +155,7 @@ export default function Products() {
         toast?.success(`Created garment "${payload.name}"`);
       }
       setModal(false);
+      emitWorkspaceSync('products');
       load();
     } catch (err) {
       setError(apiError(err, 'Could not save product'));
@@ -166,6 +169,7 @@ export default function Products() {
       await client.delete(`/products/${product.id}`);
       setNotice(`Product "${product.name}" archived.`);
       toast?.info(`Archived "${product.name}"`);
+      emitWorkspaceSync('products');
       load();
     } catch (err) {
       setError(apiError(err, 'Could not delete product'));
@@ -242,7 +246,9 @@ export default function Products() {
         >
           All Collections ({products.length})
         </button>
-        {categories.map((cat) => (
+        {categories
+          .filter((cat) => !['Electronics', 'Furniture', 'Office Supplies'].includes(cat.name))
+          .map((cat) => (
           <button
             key={cat.id}
             type="button"

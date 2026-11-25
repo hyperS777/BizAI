@@ -119,6 +119,7 @@ def create_order(db: Session, order: OrderCreate, user_id: int) -> Order:
         shipping_address=shipping_addr,
         shipping_amount=shipping_amt,
         notes=order.notes,
+        channel="demo" if (getattr(order, "channel", "real") == "demo") else "real",
         created_by=user_id,
         status=initial_status,
         delivery_latitude=lat,

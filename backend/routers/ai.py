@@ -6,10 +6,18 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.user import User
 from schemas.ai import AIQueryRequest, AIQueryResponse, AISummaryResponse
-from services.ai_service import answer_query, business_summary
+from services.ai_service import answer_query, business_summary, get_ai_status
 from utils.permissions import require_finance
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
+
+
+@router.get("/status")
+def ai_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_finance),
+):
+    return get_ai_status(db)
 
 
 @router.post("/chat", response_model=AIQueryResponse)

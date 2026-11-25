@@ -12,10 +12,12 @@ import { EmptyState, Modal, PageHeader, ConfirmDialog } from '../components/ui';
 import { apiError, formatDate, money } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { emitWorkspaceSync, subscribeWorkspaceSync } from '../utils/sync';
 
 const statusTabs = [
   { id: 'all', label: 'All orders' },
-  { id: 'draft', label: 'Drafts' },
+  { id: 'draft_real', label: 'Real Drafts' },
+  { id: 'draft_demo', label: 'Demo Drafts' },
   { id: 'abandoned', label: 'Abandoned' },
   { id: 'pending', label: 'Pending' },
   { id: 'confirmed', label: 'Confirmed' },
@@ -90,6 +92,11 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onE
         <td>
           <span className="order-expand-icon">{expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
           <strong>#{order.order_number}</strong>
+          {order.channel === 'demo' && (
+            <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 5px', borderRadius: 4, background: 'rgba(139,92,246,0.14)', color: '#7c3aed', fontWeight: 700 }}>
+              DEMO
+            </span>
+          )}
         </td>
         <td>
           <div className="order-customer-cell">
@@ -317,7 +324,10 @@ export default function Orders() {
   const [simulations, setSimulations] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
-  const [status, setStatus] = useState(() => searchParams.get('tab') || 'all');
+  const [status, setStatus] = useState(() => {
+    const t = searchParams.get('tab') || 'all';
+    return t === 'draft' ? 'draft_real' : t;
+  });
   const [search, setSearch] = useState(() => searchParams.get('q') || '');
   const [view, setView] = useState('orders');
   const [error, setError] = useState('');
@@ -348,7 +358,7 @@ export default function Orders() {
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam) setStatus(tabParam);
+    if (tabParam) setStatus(tabParam === 'draft' ? 'draft_real' : tabParam);
     const qParam = searchParams.get('q');
     if (qParam !== null) setSearch(qParam);
     if (searchParams.get('action') === 'new') setModal(true);
@@ -361,6 +371,11 @@ export default function Orders() {
     client.get('/storefront/abandoned-checkouts', { params: { limit: 150 } })
       .then((res) => setAbandoned(res.data || []))
       .catch(() => {});
+    if (canSeeSimulations) {
+      client.get('/storefront/simulations')
+        .then((res) => setSimulations(res.data || []))
+        .catch(() => {});
+    }
   };
 
   useEffect(() => {
@@ -368,15 +383,15 @@ export default function Orders() {
     client.get('/products').then((res) => setProducts(res.data || []));
   }, []);
 
-  useEffect(() => {
-    if (canSeeSimulations) client.get('/storefront/simulations').then((res) => setSimulations(res.data || [])).catch(() => {});
-  }, [canSeeSimulations]);
-
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [canSeeSimulations]);
   useEffect(() => {
     const timer = window.setInterval(load, 15_000);
-    return () => window.clearInterval(timer);
-  }, []);
+    const unsub = subscribeWorkspaceSync(load);
+    return () => {
+      window.clearInterval(timer);
+      unsub();
+    };
+  }, [canSeeSimulations]);
 
   const openAbandonedCount = useMemo(
     () => abandoned.filter((c) => c.recovery_status === 'abandoned').length,
@@ -385,13 +400,24 @@ export default function Orders() {
 
   const statusCounts = useMemo(() => orders.reduce((counts, order) => {
     counts[order.status] = (counts[order.status] || 0) + 1;
+    if (order.status === 'draft') {
+      if (order.channel === 'demo') counts.draft_demo += 1;
+      else counts.draft_real += 1;
+    }
     counts.all += 1;
     return counts;
-  }, { all: 0, abandoned: openAbandonedCount, simulations: simulations.length }), [orders, openAbandonedCount, simulations.length]);
+  }, { all: 0, draft_real: 0, draft_demo: 0, abandoned: openAbandonedCount, simulations: simulations.length }), [orders, openAbandonedCount, simulations.length]);
 
   const tabs = canSeeSimulations ? [...statusTabs, { id: 'simulations', label: 'Demo runs' }] : statusTabs;
   const visibleOrders = useMemo(() => {
-    let list = status === 'all' ? orders : orders.filter((order) => order.status === status);
+    let list = orders;
+    if (status === 'draft_real') {
+      list = orders.filter((order) => order.status === 'draft' && order.channel !== 'demo');
+    } else if (status === 'draft_demo') {
+      list = orders.filter((order) => order.status === 'draft' && order.channel === 'demo');
+    } else if (status !== 'all') {
+      list = orders.filter((order) => order.status === status);
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((order) =>
@@ -434,8 +460,9 @@ export default function Orders() {
     if (!ids.length) return;
     try {
       await Promise.all(ids.map((id) => client.patch(`/orders/${id}/status`, { status: nextStatus })));
-      toast.success(`Updated ${ids.length} orders to ${nextStatus.replace('_', ' ')}`);
+      toast.success(`Updated ${ids.length} orders to ${orderStatusLabel(nextStatus)}`);
       setSelectedOrderIds(new Set());
+      emitWorkspaceSync('orders');
       load();
     } catch (err) {
       toast.error(apiError(err, 'Failed to update some orders'));
@@ -615,6 +642,7 @@ export default function Orders() {
       await client.patch(`/orders/${order.id}/status`, { status: 'returned' });
       setNotice(`Order #${order.order_number} processed as Returned. Inventory restocked.`);
       toast?.info(`Order #${order.order_number} returned; stock replenished.`);
+      emitWorkspaceSync('orders');
       load();
     } catch (err) {
       setError(apiError(err, 'Could not process return'));
@@ -622,11 +650,12 @@ export default function Orders() {
     }
   };
 
-  const save = async (event, orderStatus = 'pending') => {
+  const save = async (event, orderStatus = 'pending', orderChannel = 'real') => {
     event.preventDefault();
     try {
-      await client.post('/orders', {
+      const { data: created } = await client.post('/orders', {
         status: orderStatus,
+        channel: orderChannel,
         customer_id: Number(form.customer_id),
         shipping_address: form.shipping_address || null,
         discount_code: appliedDiscount?.code || form.discount_code || null,
@@ -640,9 +669,15 @@ export default function Orders() {
             quantity: Number(item.quantity || 1),
           })),
       });
+      setOrders((prev) => [created, ...prev]);
       setModal(false);
-      setNotice(orderStatus === 'draft' ? 'Draft order saved successfully.' : 'New order created successfully.');
-      toast?.success(orderStatus === 'draft' ? 'Draft order saved' : 'Order created successfully');
+      const label = orderStatus === 'draft'
+        ? (orderChannel === 'demo' ? 'Demo draft order saved.' : 'Real draft order saved.')
+        : 'New order created successfully.';
+      setNotice(label);
+      toast?.success(label);
+      if (orderStatus === 'draft') setStatus(orderChannel === 'demo' ? 'draft_demo' : 'draft_real');
+      emitWorkspaceSync('orders');
       load();
     } catch (err) {
       setError(apiError(err, 'Could not create order'));
@@ -652,8 +687,10 @@ export default function Orders() {
 
   const changeStatus = async (order, next) => {
     try {
-      await client.patch(`/orders/${order.id}/status`, { status: next });
-      toast?.success(`Order #${order.order_number} marked as ${next}`);
+      const { data: updated } = await client.patch(`/orders/${order.id}/status`, { status: next });
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? updated : o)));
+      toast?.success(`Order #${order.order_number} marked as ${orderStatusLabel(next)}`);
+      emitWorkspaceSync('orders');
       load();
     } catch (err) {
       setError(apiError(err, 'Could not update status'));
@@ -670,9 +707,11 @@ export default function Orders() {
     const order = cancelModalOrder;
     setCancelModalOrder(null);
     try {
-      await client.patch(`/orders/${order.id}/status`, { status: 'cancelled' });
+      const { data: updated } = await client.patch(`/orders/${order.id}/status`, { status: 'cancelled' });
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? updated : o)));
       setNotice(`Order #${order.order_number} cancelled and stock reversed.`);
       toast?.info(`Order #${order.order_number} cancelled; stock restored.`);
+      emitWorkspaceSync('orders');
       load();
     } catch (err) {
       setError(apiError(err, 'Could not cancel order'));
@@ -693,10 +732,12 @@ export default function Orders() {
   const saveShippingUpdate = async (e) => {
     e.preventDefault();
     try {
-      await client.put(`/orders/${editShippingOrder.id}`, shippingForm);
+      const { data: updated } = await client.put(`/orders/${editShippingOrder.id}`, shippingForm);
+      setOrders((prev) => prev.map((o) => (o.id === editShippingOrder.id ? updated : o)));
       setEditShippingOrder(null);
       setNotice('Order shipping details updated.');
       toast?.success('Carrier tracking & shipping updated');
+      emitWorkspaceSync('orders');
       load();
     } catch (err) {
       setError(apiError(err, 'Could not update order details'));
@@ -708,6 +749,7 @@ export default function Orders() {
     try {
       await client.post('/invoices', { order_id: order.id });
       toast?.success(`GST Tax Invoice generated for #${order.order_number}`);
+      emitWorkspaceSync('orders');
       load();
     } catch (err) {
       setError(apiError(err, 'Could not create invoice'));
@@ -718,10 +760,11 @@ export default function Orders() {
   const recoverAbandonedCheckout = async (checkout, targetStatus = 'draft') => {
     try {
       const { data } = await client.post(`/storefront/abandoned-checkouts/${checkout.id}/convert`, { status: targetStatus });
-      const msg = `Recovered ${checkout.checkout_token} as ${targetStatus === 'draft' ? 'Draft' : 'Pending'} order #${data.order_number}.`;
+      const msg = `Recovered ${checkout.checkout_token} as ${targetStatus === 'draft' ? 'Demo Draft' : 'Pending'} order #${data.order_number}.`;
       setNotice(msg);
       toast?.success(msg);
-      setStatus(targetStatus === 'draft' ? 'draft' : 'pending');
+      setStatus(targetStatus === 'draft' ? 'draft_demo' : 'pending');
+      emitWorkspaceSync('orders');
       load();
     } catch (err) {
       toast?.error(apiError(err, 'Could not recover abandoned checkout'));
@@ -731,7 +774,9 @@ export default function Orders() {
   const dismissAbandonedCheckout = async (checkout) => {
     try {
       await client.delete(`/storefront/abandoned-checkouts/${checkout.id}`);
+      setAbandoned((prev) => prev.filter((c) => c.id !== checkout.id));
       toast?.info(`Dismissed abandoned checkout ${checkout.checkout_token}`);
+      emitWorkspaceSync('orders');
       load();
     } catch (err) {
       toast?.error(apiError(err, 'Could not dismiss checkout'));
@@ -765,6 +810,7 @@ export default function Orders() {
       toast?.success(`Delhivery updated #${data.order_number} → ${orderStatusLabel(data.order_status)}`);
       setNotice(`Delhivery carrier scan applied: #${data.order_number} is now ${orderStatusLabel(data.order_status)} (${data.location}).`);
       setDelhiveryOrder(null);
+      emitWorkspaceSync('orders');
       load();
     } catch (err) {
       toast?.error(apiError(err, 'Could not apply Delhivery scan'));
@@ -1433,9 +1479,17 @@ export default function Orders() {
                 className="outline-btn"
                 type="button"
                 disabled={!form.customer_id || subtotal <= 0}
-                onClick={(event) => save(event, 'draft')}
+                onClick={(event) => save(event, 'draft', 'demo')}
               >
-                Save draft
+                Save Demo Draft
+              </button>
+              <button
+                className="outline-btn"
+                type="button"
+                disabled={!form.customer_id || subtotal <= 0}
+                onClick={(event) => save(event, 'draft', 'real')}
+              >
+                Save Real Draft
               </button>
               <button className="primary-btn" type="submit" disabled={!form.customer_id || subtotal <= 0}>
                 Create Order ({money(grandTotal)})

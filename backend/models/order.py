@@ -56,6 +56,7 @@ class Order(Base):
     shipping_amount = Column(Float, default=0.0)
     total_amount = Column(Float, default=0.0)
     notes = Column(Text, nullable=True)
+    channel = Column(String(20), default="real", nullable=False)  # real | demo
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

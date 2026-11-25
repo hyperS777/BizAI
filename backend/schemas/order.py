@@ -83,6 +83,7 @@ class OrderItemResponse(OrderItemBase):
 class OrderBase(BaseModel):
     customer_id: int
     notes: Optional[str] = None
+    channel: str = "real"
 
 
 class OrderCreate(OrderBase):
@@ -91,6 +92,7 @@ class OrderCreate(OrderBase):
     shipping_address: Optional[str] = None
     shipping_amount: Optional[float] = 0.0
     status: OrderStatus = OrderStatus.PENDING
+    channel: str = "real"
 
 
 class OrderUpdate(BaseModel):
@@ -110,6 +112,7 @@ class OrderResponse(OrderBase):
     id: int
     order_number: str
     status: str
+    channel: str = "real"
     subtotal_amount: float = 0
     discount_code: Optional[str] = None
     discount_amount: float = 0

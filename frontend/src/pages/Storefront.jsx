@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import client from '../api/client';
 import { apiError, money } from '../utils/format';
+import { emitWorkspaceSync } from '../utils/sync';
 import './Storefront.css';
 
 function ProductSilhouette({ title = '', size = 26, style = {} }) {
@@ -145,6 +146,7 @@ export default function Storefront() {
   const [discountInput, setDiscountInput] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState(null);
   const [discountError, setDiscountError] = useState('');
+  const [publicCoupons, setPublicCoupons] = useState([]);
 
   /* ── fetch catalog + live visitor 60s heartbeat ── */
   useEffect(() => {
@@ -158,6 +160,9 @@ export default function Storefront() {
       .then(({ data }) => setProducts(data.products || []))
       .catch(() => setError('The REIHH collection is temporarily unavailable. Please reload.'))
       .finally(() => setLoading(false));
+    client.get('/storefront/discounts')
+      .then(({ data }) => setPublicCoupons(Array.isArray(data) ? data : []))
+      .catch(() => {});
     return () => clearInterval(heartbeat);
   }, [sessionId]);
 
@@ -275,16 +280,29 @@ export default function Storefront() {
     });
   };
 
-  const applyDiscount = () => {
-    const code = discountInput.trim().toUpperCase();
-    const match = DISCOUNT_CODES[code];
-    if (!match) {
-      setDiscountError('Invalid code. Try REIHH10, WELCOME, or DEMO20.');
+  const applyDiscount = async (overrideCode) => {
+    const code = (overrideCode || discountInput).trim().toUpperCase();
+    if (!code) return;
+    setDiscountInput(code);
+    try {
+      const { data } = await client.post('/storefront/discounts/validate', { code, subtotal });
+      setAppliedDiscount({
+        code: data.code,
+        type: data.discount_type,
+        value: data.value,
+        label: data.description || (data.discount_type === 'percent' ? `${data.value}% off (${data.code})` : `₹${data.value} off (${data.code})`),
+      });
+      setDiscountError('');
+    } catch (err) {
+      const fallback = DISCOUNT_CODES[code];
+      if (fallback && !err.response) {
+        setAppliedDiscount({ ...fallback, code });
+        setDiscountError('');
+        return;
+      }
+      setDiscountError(err.response?.data?.detail || 'Invalid or inactive coupon code.');
       setAppliedDiscount(null);
-      return;
     }
-    setAppliedDiscount({ ...match, code });
-    setDiscountError('');
   };
 
   const removeDiscount = () => {
@@ -304,7 +322,7 @@ export default function Storefront() {
       shipping_address: c.address || null,
       discount_code: appliedDiscount?.code || null,
       items: cart.map((line) => ({ variant_id: line.variant.id, quantity: line.quantity })),
-    }).catch(() => {});
+    }).then(() => emitWorkspaceSync('abandoned')).catch(() => {});
   };
 
   useEffect(() => {
@@ -389,6 +407,7 @@ export default function Storefront() {
             setCart([]);
             setAppliedDiscount(null);
             setCheckoutStep(3);
+            emitWorkspaceSync('storefront_order');
           } catch (verifyErr) {
             setCheckoutError(apiError(verifyErr, 'Payment verification failed. Please try again.'));
           } finally {
@@ -448,6 +467,7 @@ export default function Storefront() {
       setCart([]);
       setAppliedDiscount(null);
       setCheckoutStep(3);
+      emitWorkspaceSync('storefront_order');
     } catch (err) {
       setCheckoutError(apiError(err, 'Could not complete demo order. Please retry.'));
     } finally {
@@ -976,7 +996,7 @@ export default function Storefront() {
               {appliedDiscount ? `Applied: ${appliedDiscount.code}` : 'Have a discount code?'}
             </button>
             {discountOpen && (
-              <div className="discount-input-row">
+              <div className="discount-input-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
                 {appliedDiscount ? (
                   <div className="discount-applied">
                     <Check size={14} />
@@ -985,13 +1005,39 @@ export default function Storefront() {
                   </div>
                 ) : (
                   <>
-                    <input
-                      value={discountInput}
-                      onChange={(e) => setDiscountInput(e.target.value.toUpperCase())}
-                      placeholder="REIHH10"
-                      onKeyDown={(e) => e.key === 'Enter' && applyDiscount()}
-                    />
-                    <button type="button" className="discount-apply-btn" onClick={applyDiscount}>Apply</button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input
+                        value={discountInput}
+                        onChange={(e) => setDiscountInput(e.target.value.toUpperCase())}
+                        placeholder="Enter coupon code"
+                        onKeyDown={(e) => e.key === 'Enter' && applyDiscount()}
+                        style={{ flex: 1 }}
+                      />
+                      <button type="button" className="discount-apply-btn" onClick={() => applyDiscount()}>Apply</button>
+                    </div>
+                    {publicCoupons.length > 0 && (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, color: 'var(--store-muted)' }}>Available:</span>
+                        {publicCoupons.slice(0, 4).map((c) => (
+                          <button
+                            key={c.code}
+                            type="button"
+                            onClick={() => applyDiscount(c.code)}
+                            style={{
+                              fontSize: 11,
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              border: '1px dashed var(--store-accent, #0e766e)',
+                              background: 'transparent',
+                              cursor: 'pointer',
+                              fontWeight: 600,
+                            }}
+                          >
+                            {c.code} ({c.discount_type === 'percent' ? `${c.value}%` : `₹${c.value}`})
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </>
                 )}
                 {discountError && <p className="discount-error">{discountError}</p>}

@@ -368,6 +368,20 @@ def update_discount(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.delete("/discounts/{discount_id}")
+def delete_discount(
+    discount_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_integration_admin),
+):
+    row = db.query(DiscountCode).filter(DiscountCode.id == discount_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Coupon code not found")
+    db.delete(row)
+    db.commit()
+    return {"ok": True, "id": discount_id}
+
+
 @router.post("/discounts/validate")
 def validate_discount_code(
     payload: dict,

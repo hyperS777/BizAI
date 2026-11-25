@@ -427,6 +427,7 @@ def create_storefront_simulation(
             notes="Demo storefront checkout — no real payment.",
             items=order_items,
             discount_code=(discount_code or "").strip().upper() or None,
+            channel="demo",
         ),
         user_id,
     )
@@ -1000,6 +1001,7 @@ def convert_abandoned_checkout(db: Session, checkout_id: int, user_id: int, targ
             notes=f"Recovered from abandoned checkout {row.checkout_token}",
             items=order_items,
             status=status_enum,
+            channel="demo",
         ),
         user_id,
     )

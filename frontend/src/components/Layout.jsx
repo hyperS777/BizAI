@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, Bell, Check, CircleDollarSign, ClipboardList, FileBarChart,
   LayoutDashboard, LogOut, Menu, Moon, Package, Receipt, Search, Settings,
-  ShoppingBag, Sparkles, Sun, UserRound, Users, Warehouse, X, ExternalLink
+  ShoppingBag, Sparkles, Sun, Tag, UserRound, Users, Warehouse, X, ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import client from '../api/client';
@@ -18,6 +18,7 @@ const navGroups = [
       { label: 'Products', to: '/products', icon: Package },
       { label: 'Inventory', to: '/inventory', icon: Warehouse },
       { label: 'Customers', to: '/customers', icon: Users },
+      { label: 'Discounts', to: '/discounts', icon: Tag, roles: ['admin', 'manager'] },
     ],
   },
   {

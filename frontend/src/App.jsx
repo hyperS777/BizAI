@@ -18,6 +18,7 @@ import AIAssistant from './pages/AIAssistant';
 import UsersPage from './pages/Users';
 import { Profile, Settings } from './pages/Settings';
 import Integrations from './pages/Integrations';
+import Discounts from './pages/Discounts';
 import Storefront from './pages/Storefront';
 import DeliveryDemo from './pages/DeliveryDemo';
 import TrackOrder from './pages/TrackOrder';
@@ -61,6 +62,7 @@ export default function App() {
               <Route path="/reports" element={<RequireRoles roles={['admin', 'manager', 'accountant']}><Reports /></RequireRoles>} />
               <Route path="/ai" element={<RequireRoles roles={['admin', 'manager', 'accountant']}><AIAssistant /></RequireRoles>} />
               <Route path="/users" element={<RequireRoles roles={['admin']}><UsersPage /></RequireRoles>} />
+              <Route path="/discounts" element={<RequireRoles roles={['admin', 'manager']}><Discounts /></RequireRoles>} />
               <Route path="/integrations" element={<RequireRoles roles={['admin', 'manager']}><Integrations /></RequireRoles>} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/profile" element={<Profile />} />
