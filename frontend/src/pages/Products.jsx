@@ -24,6 +24,7 @@ const blank = {
   tags: '',
   image_url: '',
   gallery_urls: '',
+  metafields_json: '',
   variants: [],
 };
 
@@ -550,6 +551,75 @@ export default function Products() {
                   Single SKU item. Click "+ Generate Standard Sizes" to create garment size variants.
                 </p>
               )}
+            </div>
+
+            {/* Garment Metafields (Shopify-style Custom Attributes) */}
+            <div style={{ border: '1px solid var(--border)', padding: 12, borderRadius: 8, background: 'var(--panel-alt)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>Garment Metafields (Fabric, Fit &amp; Care)</h4>
+                  <small style={{ color: 'var(--muted)', fontSize: 11 }}>Custom key-value attributes shown to shoppers.</small>
+                </div>
+                <button
+                  type="button"
+                  className="outline-btn"
+                  style={{ padding: '4px 10px', minHeight: 28, fontSize: 11 }}
+                  onClick={() => {
+                    let list = [];
+                    try { list = JSON.parse(form.metafields_json || '[]'); } catch { list = []; }
+                    if (!Array.isArray(list)) list = [];
+                    list.push({ key: '', value: '' });
+                    setForm((p) => ({ ...p, metafields_json: JSON.stringify(list) }));
+                  }}
+                >
+                  + Add Attribute
+                </button>
+              </div>
+              {(() => {
+                let list = [];
+                try { list = JSON.parse(form.metafields_json || '[]'); } catch { list = []; }
+                if (!Array.isArray(list) || !list.length) {
+                  return <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>No custom attributes yet (e.g. Fabric: 100% Cotton, Fit: Relaxed).</p>;
+                }
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {list.map((mf, i) => (
+                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr 28px', gap: 6, alignItems: 'center' }}>
+                        <input
+                          placeholder="Key (e.g. Fabric)"
+                          value={mf.key || ''}
+                          onChange={(e) => {
+                            const next = [...list];
+                            next[i] = { ...next[i], key: e.target.value };
+                            setForm((p) => ({ ...p, metafields_json: JSON.stringify(next) }));
+                          }}
+                          style={{ fontSize: 12, padding: '5px 8px' }}
+                        />
+                        <input
+                          placeholder="Value (e.g. 100% Organic Cotton)"
+                          value={mf.value || ''}
+                          onChange={(e) => {
+                            const next = [...list];
+                            next[i] = { ...next[i], value: e.target.value };
+                            setForm((p) => ({ ...p, metafields_json: JSON.stringify(next) }));
+                          }}
+                          style={{ fontSize: 12, padding: '5px 8px' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = list.filter((_, idx) => idx !== i);
+                            setForm((p) => ({ ...p, metafields_json: JSON.stringify(next) }));
+                          }}
+                          style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', padding: 2 }}
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
 
             <button className="primary-btn" type="submit" style={{ marginTop: 8 }}>

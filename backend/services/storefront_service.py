@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from config import settings
 from models.customer import Customer
-from models.integration import AbandonedCheckout, IntegrationEvent, StorefrontAnalyticsEvent, StorefrontSimulation
+from models.integration import AbandonedCheckout, GiftCard, IntegrationEvent, StorefrontAnalyticsEvent, StorefrontSimulation
 from models.invoice import Invoice
 from models.order import Order, OrderStatus
 from models.product import Category, Product, ProductVariant
@@ -414,6 +414,7 @@ def create_storefront_simulation(
     discount_code: str | None = None,
     payment_method: str | None = "demo_card",
     customer_phone: str | None = None,
+    gift_card_code: str | None = None,
 ) -> dict:
     if not settings.STOREFRONT_SIMULATION_ENABLED:
         raise ValueError("Customer simulation is disabled")
@@ -470,6 +471,15 @@ def create_storefront_simulation(
         user_id,
     )
     order = update_order_status(db, order.id, OrderStatus.CONFIRMED)
+    gc_norm = (gift_card_code or "").strip().upper()
+    if gc_norm:
+        gc = db.query(GiftCard).filter(GiftCard.code == gc_norm).first()
+        if not gc or not gc.active or float(gc.current_balance or 0) <= 0:
+            raise ValueError("Gift card is invalid or has insufficient balance")
+        gc_applied = round(min(float(gc.current_balance), float(order.total_amount or 0)), 2)
+        gc.current_balance = round(float(gc.current_balance) - gc_applied, 2)
+        order.total_amount = round(max(0.0, float(order.total_amount or 0) - gc_applied), 2)
+        order.notes = f"{order.notes or ''} | Gift Card {gc.code}: -INR {gc_applied:.2f}".strip(" |")
     origin = _checkpoint_for_status("ready_to_pack", requested_address)
     order.shipping_address = requested_address
     order.tracking_company = "Delhivery Express"

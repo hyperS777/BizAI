@@ -1,6 +1,7 @@
 """Admin-controlled integration settings and activity."""
 
 import json
+import secrets
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -8,13 +9,15 @@ from sqlalchemy.orm import Session
 
 from config import settings
 from database import get_db
-from models.integration import DiscountCode, StorefrontSimulation
+from models.integration import DiscountCode, GiftCard, StorefrontSimulation
 from models.order import Order, OrderStatus
 from models.user import User
 from schemas.integration import (
     DelhiverySimulatePayload,
     DiscountPayload,
     DiscountResponse,
+    GiftCardPayload,
+    GiftCardResponse,
     IntegrationDashboard,
     SettingsUpdate,
     WebhookPayload,
@@ -404,3 +407,80 @@ def validate_discount_code(
         }
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/gift-cards", response_model=list[GiftCardResponse])
+def list_gift_cards(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_integration_reader),
+):
+    return db.query(GiftCard).order_by(GiftCard.created_at.desc()).all()
+
+
+@router.post("/gift-cards", response_model=GiftCardResponse)
+def create_gift_card(
+    payload: GiftCardPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_integration_admin),
+):
+    raw_code = (payload.code or "").strip().upper().replace(" ", "")
+    if not raw_code:
+        raw_code = f"GIFT-{secrets.token_hex(2).upper()}-{secrets.token_hex(2).upper()}"
+    if db.query(GiftCard).filter(GiftCard.code == raw_code).first():
+        raise HTTPException(status_code=400, detail="Gift card code already exists")
+    balance = round(float(payload.current_balance if payload.current_balance is not None else payload.initial_balance), 2)
+    row = GiftCard(
+        code=raw_code,
+        initial_balance=round(float(payload.initial_balance), 2),
+        current_balance=balance,
+        recipient_name=payload.recipient_name,
+        recipient_email=payload.recipient_email,
+        note=payload.note,
+        active=payload.active,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.patch("/gift-cards/{gift_card_id}", response_model=GiftCardResponse)
+def update_gift_card(
+    gift_card_id: int,
+    payload: GiftCardPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_integration_admin),
+):
+    row = db.query(GiftCard).filter(GiftCard.id == gift_card_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Gift card not found")
+    if payload.code:
+        norm = payload.code.strip().upper().replace(" ", "")
+        dup = db.query(GiftCard).filter(GiftCard.code == norm, GiftCard.id != gift_card_id).first()
+        if dup:
+            raise HTTPException(status_code=400, detail="Gift card code already exists")
+        row.code = norm
+    row.initial_balance = round(float(payload.initial_balance), 2)
+    if payload.current_balance is not None:
+        row.current_balance = round(float(payload.current_balance), 2)
+    row.recipient_name = payload.recipient_name
+    row.recipient_email = payload.recipient_email
+    row.note = payload.note
+    row.active = payload.active
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.delete("/gift-cards/{gift_card_id}")
+def delete_gift_card(
+    gift_card_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_integration_admin),
+):
+    row = db.query(GiftCard).filter(GiftCard.id == gift_card_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Gift card not found")
+    db.delete(row)
+    db.commit()
+    return {"ok": True, "id": gift_card_id}

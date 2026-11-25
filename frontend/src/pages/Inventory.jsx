@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Package, RefreshCw, AlertTriangle, ArrowUpDown, FileSpreadsheet, Printer, Check, Plus, Minus } from 'lucide-react';
+import { Package, RefreshCw, AlertTriangle, ArrowUpDown, FileSpreadsheet, Printer, Check, Plus, Minus, MapPin } from 'lucide-react';
 import client from '../api/client';
 import { EmptyState, Modal, PageHeader } from '../components/ui';
 import { apiError, formatDate, money } from '../utils/format';
@@ -35,12 +35,24 @@ export default function Inventory() {
   const [supplierName, setSupplierName] = useState('Okhla Garment Manufacturing Co.');
   const [deliveryDate, setDeliveryDate] = useState(() => new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10));
   const [receivingPo, setReceivingPo] = useState(false);
+  const [viewMode, setViewMode] = useState('ledger'); // 'ledger' | 'locations'
+  const [locations, setLocations] = useState([]);
+  const [allocations, setAllocations] = useState([]);
+  const [locModal, setLocModal] = useState(false);
+  const [newLoc, setNewLoc] = useState({ name: '', code: '', city: '', address: '' });
+  const [allocBusy, setAllocBusy] = useState(false);
 
   const load = () => {
-    Promise.all([client.get('/products'), client.get('/products/history')])
-      .then(([p, h]) => {
+    Promise.all([
+      client.get('/products'),
+      client.get('/products/history'),
+      client.get('/products/locations/stock').catch(() => ({ data: { locations: [], allocations: [] } })),
+    ])
+      .then(([p, h, l]) => {
         setProducts(p.data || []);
         setHistory(h.data || []);
+        setLocations(l.data?.locations || []);
+        setAllocations(l.data?.allocations || []);
       })
       .catch((err) => setError(apiError(err)));
   };
@@ -168,10 +180,61 @@ export default function Inventory() {
     }
   };
 
+  const handleCreateLocation = async (e) => {
+    e.preventDefault();
+    setAllocBusy(true);
+    try {
+      await client.post('/products/locations', newLoc);
+      setNewLoc({ name: '', code: '', city: '', address: '' });
+      setLocModal(false);
+      toast?.success('Warehouse / Store location added');
+      emitWorkspaceSync('products');
+      load();
+    } catch (err) {
+      toast?.error(apiError(err, 'Could not add location'));
+    } finally {
+      setAllocBusy(false);
+    }
+  };
+
+  const handleAllocateStock = async (productId, locationId, qty) => {
+    try {
+      await client.post(`/products/${productId}/locations/allocate`, {
+        location_id: locationId,
+        stock_qty: Math.max(0, Number(qty) || 0),
+      });
+      setAllocations((prev) => {
+        const idx = prev.findIndex((a) => a.product_id === productId && a.location_id === locationId);
+        if (idx >= 0) {
+          const copy = [...prev];
+          copy[idx] = { ...copy[idx], stock_qty: Math.max(0, Number(qty) || 0) };
+          return copy;
+        }
+        return [...prev, { product_id: productId, location_id: locationId, stock_qty: Math.max(0, Number(qty) || 0) }];
+      });
+      toast?.success('Location stock updated');
+    } catch (err) {
+      toast?.error(apiError(err, 'Could not allocate location stock'));
+    }
+  };
+
   return (
     <>
-      <PageHeader eyebrow="Warehouse" title="Inventory" subtitle="Live stock on hand, minimum thresholds, variant tracking, and audit ledger.">
+      <PageHeader eyebrow="Warehouse" title="Inventory" subtitle="Live stock on hand, multi-location warehouses, minimum thresholds, and audit ledger.">
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="segmented-control">
+            <button type="button" className={`segmented-btn ${viewMode === 'ledger' ? 'active' : ''}`} onClick={() => setViewMode('ledger')}>
+              <Package size={13} /> Stock Ledger
+            </button>
+            <button type="button" className={`segmented-btn ${viewMode === 'locations' ? 'active' : ''}`} onClick={() => setViewMode('locations')}>
+              <MapPin size={13} /> Locations ({locations.length})
+            </button>
+          </div>
+          {viewMode === 'locations' && canEdit && (
+            <button className="primary-btn heading-btn" onClick={() => setLocModal(true)}>
+              <Plus size={14} /> Add Location
+            </button>
+          )}
           <button
             className="outline-btn heading-btn"
             onClick={() => setPoModal(true)}
@@ -190,6 +253,68 @@ export default function Inventory() {
 
       {notice && <div className="notice success" style={{ background: '#eaf4f1', borderColor: 'var(--teal)', color: 'var(--teal-dark)' }}>{notice}</div>}
       {error && <div className="notice error">{error}</div>}
+
+      {viewMode === 'locations' && (
+        <section className="panel" style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 16 }}>Multi-Location Stock Allocation</h3>
+              <small style={{ color: 'var(--muted)' }}>Split inventory across flagship warehouses and retail studios.</small>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 18 }}>
+            {locations.map((loc) => (
+              <div key={loc.id} style={{ padding: 14, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-hover)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <strong style={{ fontSize: 13.5 }}>{loc.name}</strong>
+                  <code style={{ fontSize: 11 }}>{loc.code}</code>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{loc.city || 'India'} {loc.is_default ? '· Default Hub' : ''}</div>
+              </div>
+            ))}
+          </div>
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Total On Hand</th>
+                  {locations.map((loc) => (
+                    <th key={loc.id}>{loc.code} ({loc.city || loc.name})</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {products.slice(0, 25).map((p) => (
+                  <tr key={p.id}>
+                    <td><strong>{p.name}</strong><div style={{ fontSize: 11, color: 'var(--muted)' }}>{p.sku}</div></td>
+                    <td><strong>{p.stock_qty}</strong></td>
+                    {locations.map((loc) => {
+                      const alloc = allocations.find((a) => a.product_id === p.id && a.location_id === loc.id);
+                      const val = alloc ? alloc.stock_qty : (loc.is_default ? p.stock_qty : 0);
+                      return (
+                        <td key={loc.id}>
+                          <input
+                            type="number"
+                            min="0"
+                            defaultValue={val}
+                            disabled={!canEdit}
+                            onBlur={(e) => {
+                              const nextVal = Number(e.target.value);
+                              if (nextVal !== val) handleAllocateStock(p.id, loc.id, nextVal);
+                            }}
+                            style={{ width: 74, padding: '4px 8px', fontSize: 12 }}
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {/* Filter and sorting controls */}
       <div className="toolbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -525,6 +650,30 @@ export default function Inventory() {
               )}
             </div>
           </div>
+        </Modal>
+      )}
+
+      {locModal && (
+        <Modal title="Add Warehouse or Retail Location" onClose={() => setLocModal(false)}>
+          <form className="stack-form" onSubmit={handleCreateLocation}>
+            <label>Location Name*
+              <input required value={newLoc.name} onChange={(e) => setNewLoc({ ...newLoc, name: e.target.value })} placeholder="e.g. Bengaluru Indiranagar Store" />
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <label>Location Code*
+                <input required value={newLoc.code} onChange={(e) => setNewLoc({ ...newLoc, code: e.target.value.toUpperCase() })} placeholder="e.g. BLR-ST" />
+              </label>
+              <label>City
+                <input value={newLoc.city} onChange={(e) => setNewLoc({ ...newLoc, city: e.target.value })} placeholder="Bengaluru" />
+              </label>
+            </div>
+            <label>Address
+              <input value={newLoc.address} onChange={(e) => setNewLoc({ ...newLoc, address: e.target.value })} placeholder="100 Feet Road, Indiranagar" />
+            </label>
+            <button className="primary-btn" type="submit" disabled={allocBusy}>
+              <MapPin size={14} /> {allocBusy ? 'Saving…' : 'Create Location'}
+            </button>
+          </form>
         </Modal>
       )}
     </>

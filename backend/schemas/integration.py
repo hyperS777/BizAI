@@ -100,6 +100,7 @@ class StorefrontSimulationCreate(BaseModel):
     items: List[StorefrontSimulationItem] = Field(min_length=1, max_length=30)
     session_id: str = Field(min_length=4, max_length=80)
     discount_code: Optional[str] = Field(default=None, max_length=40)
+    gift_card_code: Optional[str] = Field(default=None, max_length=40)
     payment_method: Optional[str] = Field(default="demo_card", max_length=50)
     customer_phone: Optional[str] = Field(default=None, max_length=40)
 
@@ -167,3 +168,28 @@ class DelhiverySimulatePayload(BaseModel):
     status: str = Field(min_length=2, max_length=60)
     location: Optional[str] = Field(default=None, max_length=200)
     note: Optional[str] = Field(default=None, max_length=400)
+
+
+class GiftCardPayload(BaseModel):
+    code: Optional[str] = None
+    initial_balance: float = Field(gt=0)
+    current_balance: Optional[float] = Field(default=None, ge=0)
+    recipient_name: Optional[str] = None
+    recipient_email: Optional[str] = None
+    note: Optional[str] = None
+    active: bool = True
+
+
+class GiftCardResponse(BaseModel):
+    id: int
+    code: str
+    initial_balance: float
+    current_balance: float
+    recipient_name: Optional[str] = None
+    recipient_email: Optional[str] = None
+    note: Optional[str] = None
+    active: bool
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

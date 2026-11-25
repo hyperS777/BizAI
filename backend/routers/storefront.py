@@ -51,6 +51,7 @@ def create_customer_simulation(payload: StorefrontSimulationCreate, db: Session 
             payload.discount_code,
             payload.payment_method,
             customer_phone=payload.customer_phone,
+            gift_card_code=payload.gift_card_code,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -208,6 +209,29 @@ def validate_public_discount(payload: dict, db: Session = Depends(get_db)):
         }
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/gift-cards/validate")
+def validate_public_gift_card(payload: dict, db: Session = Depends(get_db)):
+    """Public gift card balance check & validation for storefront checkout."""
+    from models.integration import GiftCard
+
+    code = (payload.get("code") or "").strip().upper()
+    subtotal = float(payload.get("subtotal", 0.0))
+    if not code:
+        raise HTTPException(status_code=400, detail="Gift card code is required")
+    row = db.query(GiftCard).filter(GiftCard.code == code).first()
+    if not row or not row.active:
+        raise HTTPException(status_code=400, detail="Gift card is invalid or paused")
+    if float(row.current_balance or 0) <= 0:
+        raise HTTPException(status_code=400, detail="This gift card has ₹0 remaining balance")
+    applicable = round(min(float(row.current_balance or 0), max(subtotal, 0.0)), 2)
+    return {
+        "valid": True,
+        "code": row.code,
+        "current_balance": float(row.current_balance or 0),
+        "applicable_amount": applicable,
+    }
 
 
 @router.patch("/demo-delivery/{token}")

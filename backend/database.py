@@ -68,6 +68,7 @@ _EXTRA_COLUMNS = {
         ("image_url", "VARCHAR(500)"),
         ("shopify_product_id", "VARCHAR(80)"),
         ("gallery_urls", "TEXT"),
+        ("metafields_json", "TEXT"),
     ],
     "order_items": [
         ("variant_id", "INTEGER"),

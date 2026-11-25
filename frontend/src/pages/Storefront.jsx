@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowRight, Check, ChevronDown, ChevronUp, Clock, CreditCard, DollarSign, MessageCircle, QrCode, ShieldCheck,
+  ArrowRight, Check, ChevronDown, ChevronUp, Clock, CreditCard, DollarSign, Gift, MessageCircle, QrCode, ShieldCheck,
   Heart, Minus, Package, Plus, Search, ShoppingBag, Smartphone, Star, Truck, X,
 } from 'lucide-react';
 import client from '../api/client';
@@ -141,12 +141,15 @@ export default function Storefront() {
     }
   });
 
-  /* ── discount ── */
+  /* ── discount & gift card ── */
   const [discountOpen, setDiscountOpen] = useState(false);
   const [discountInput, setDiscountInput] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState(null);
   const [discountError, setDiscountError] = useState('');
   const [publicCoupons, setPublicCoupons] = useState([]);
+  const [giftCardInput, setGiftCardInput] = useState('');
+  const [appliedGiftCard, setAppliedGiftCard] = useState(null);
+  const [giftCardError, setGiftCardError] = useState('');
 
   /* ── fetch catalog + live visitor 60s heartbeat ── */
   useEffect(() => {
@@ -238,7 +241,11 @@ export default function Storefront() {
       ? Math.round(subtotal * appliedDiscount.value / 100)
       : Math.min(appliedDiscount.value, subtotal)
     : 0;
-  const orderTotal = Math.max(0, subtotal - discountAmount);
+  const afterDiscount = Math.max(0, subtotal - discountAmount);
+  const giftCardAmount = appliedGiftCard
+    ? Math.min(Number(appliedGiftCard.current_balance || 0), afterDiscount)
+    : 0;
+  const orderTotal = Math.max(0, afterDiscount - giftCardAmount);
 
   const selectedVariant = (product) => {
     const currentId = selectedVariants[product.id];
@@ -309,6 +316,25 @@ export default function Storefront() {
     setAppliedDiscount(null);
     setDiscountInput('');
     setDiscountError('');
+  };
+
+  const applyGiftCard = async () => {
+    const code = giftCardInput.trim().toUpperCase();
+    if (!code) return;
+    try {
+      const { data } = await client.post('/storefront/gift-cards/validate', { code, subtotal: afterDiscount });
+      setAppliedGiftCard(data);
+      setGiftCardError('');
+    } catch (err) {
+      setGiftCardError(err.response?.data?.detail || 'Invalid or depleted gift card code.');
+      setAppliedGiftCard(null);
+    }
+  };
+
+  const removeGiftCard = () => {
+    setAppliedGiftCard(null);
+    setGiftCardInput('');
+    setGiftCardError('');
   };
 
   const syncAbandonedCheckout = (overrideCustomer) => {
@@ -452,6 +478,7 @@ export default function Storefront() {
         customer_phone: customer.phone || '+91 98765 43210',
         session_id: sessionId,
         discount_code: appliedDiscount?.code || null,
+        gift_card_code: appliedGiftCard?.code || null,
         payment_method: paymentMethod,
         items: cart.map((line) => ({ variant_id: line.variant.id, quantity: line.quantity })),
       });
@@ -466,6 +493,7 @@ export default function Storefront() {
       });
       setCart([]);
       setAppliedDiscount(null);
+      setAppliedGiftCard(null);
       setCheckoutStep(3);
       emitWorkspaceSync('storefront_order');
     } catch (err) {
@@ -1045,6 +1073,29 @@ export default function Storefront() {
             )}
           </div>
 
+          {/* Gift Card redemption */}
+          <div className="discount-section" style={{ marginTop: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 12, fontWeight: 600 }}>
+              <Gift size={13} /> Redeem Gift Card
+            </div>
+            {appliedGiftCard ? (
+              <div className="discount-applied">
+                <span><Check size={13} /> {appliedGiftCard.code} (Balance: {money(appliedGiftCard.current_balance)})</span>
+                <button type="button" onClick={removeGiftCard}><X size={13} /></button>
+              </div>
+            ) : (
+              <div className="discount-input-row">
+                <input
+                  value={giftCardInput}
+                  onChange={(e) => setGiftCardInput(e.target.value.toUpperCase())}
+                  placeholder="Gift card code (e.g. GIFT-XXXX)"
+                />
+                <button type="button" onClick={applyGiftCard}>Apply</button>
+              </div>
+            )}
+            {giftCardError && <p className="discount-error">{giftCardError}</p>}
+          </div>
+
           {/* Review summary */}
           <div className="review-customer">
             <p><strong>Deliver to:</strong> {customer.name} ({customer.email})</p>
@@ -1057,6 +1108,12 @@ export default function Storefront() {
               <div className="discount-row">
                 <span>Discount ({appliedDiscount.code})</span>
                 <span>−{money(discountAmount)}</span>
+              </div>
+            )}
+            {appliedGiftCard && (
+              <div className="discount-row">
+                <span>Gift Card ({appliedGiftCard.code})</span>
+                <span>−{money(giftCardAmount)}</span>
               </div>
             )}
             <div className="total-row"><span>Total</span><span>{money(orderTotal)}</span></div>
@@ -1123,6 +1180,40 @@ export default function Storefront() {
             </div>
           ))}
         </div>
+
+        {/* Complete Your Look — Checkout Upsell Strip */}
+        {(() => {
+          const inCartIds = new Set(cart.map((c) => c.product.id));
+          const upsells = products
+            .filter((p) => !inCartIds.has(p.id) && p.variants?.some((v) => v.available))
+            .slice(0, 3);
+          if (!cart.length || !upsells.length) return null;
+          return (
+            <div style={{ margin: '12px 0', padding: '10px 12px', borderRadius: 8, background: 'rgba(14, 118, 110, 0.06)', border: '1px solid rgba(14, 118, 110, 0.16)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, color: 'var(--store-accent, #0e766e)' }}>
+                Complete Your Look · Quick Add
+              </div>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {upsells.map((up) => (
+                  <div key={up.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {up.image_url && <img src={up.image_url} alt="" style={{ width: 38, height: 46, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{up.title}</div>
+                      <small style={{ color: 'var(--store-muted)', fontSize: 11 }}>{money(up.price)}</small>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => addToCart(up)}
+                      style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid var(--store-accent, #0e766e)', background: 'transparent', color: 'var(--store-accent, #0e766e)', fontSize: 11, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
+                    >
+                      + Add
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         <div className="cart-summary">
           <div><span>Subtotal</span><span>{money(subtotal)}</span></div>

@@ -42,6 +42,7 @@ class Product(Base):
     option2_name = Column(String(50), default="Size")
     image_url = Column(String(500), nullable=True)
     gallery_urls = Column(Text, nullable=True)
+    metafields_json = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -104,3 +105,26 @@ class ProductVariant(Base):
 
     def __repr__(self):
         return f"<ProductVariant {self.sku}>"
+
+
+class InventoryLocation(Base):
+    __tablename__ = "inventory_locations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(120), nullable=False)
+    code = Column(String(30), unique=True, nullable=False, index=True)
+    city = Column(String(80), nullable=True)
+    address = Column(Text, nullable=True)
+    is_default = Column(Boolean, default=False)
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ProductLocationStock(Base):
+    __tablename__ = "product_location_stocks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    location_id = Column(Integer, ForeignKey("inventory_locations.id", ondelete="CASCADE"), nullable=False, index=True)
+    stock_qty = Column(Integer, default=0, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

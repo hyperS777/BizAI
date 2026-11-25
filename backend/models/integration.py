@@ -124,3 +124,17 @@ class AbandonedCheckout(Base):
     recovered_order_id = Column(Integer, ForeignKey("orders.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class GiftCard(Base):
+    __tablename__ = "gift_cards"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(40), unique=True, nullable=False, index=True)
+    initial_balance = Column(Float, nullable=False)
+    current_balance = Column(Float, nullable=False)
+    recipient_name = Column(String(150), nullable=True)
+    recipient_email = Column(String(255), nullable=True)
+    note = Column(String(255), nullable=True)
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

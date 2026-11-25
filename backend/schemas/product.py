@@ -79,6 +79,7 @@ class ProductBase(BaseModel):
     option2_name: Optional[str] = "Size"
     image_url: Optional[str] = None
     gallery_urls: Optional[str] = None
+    metafields_json: Optional[str] = None
     is_active: Optional[bool] = True
 
 
@@ -103,6 +104,7 @@ class ProductUpdate(BaseModel):
     option2_name: Optional[str] = None
     image_url: Optional[str] = None
     gallery_urls: Optional[str] = None
+    metafields_json: Optional[str] = None
     is_active: Optional[bool] = None
     variants: Optional[List[VariantUpsert]] = None
 
@@ -143,3 +145,24 @@ class InventoryMovementResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class InventoryLocationCreate(BaseModel):
+    name: str
+    code: str
+    city: Optional[str] = None
+    address: Optional[str] = None
+    is_default: bool = False
+
+
+class InventoryLocationResponse(InventoryLocationCreate):
+    id: int
+    active: bool = True
+
+    class Config:
+        from_attributes = True
+
+
+class LocationStockAllocate(BaseModel):
+    location_id: int
+    stock_qty: int = Field(ge=0)

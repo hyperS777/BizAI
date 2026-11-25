@@ -9,6 +9,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from database import get_db
+from models.product import InventoryLocation, Product, ProductLocationStock
 from models.user import User
 from schemas.product import (
     ProductCreate,
@@ -18,6 +19,9 @@ from schemas.product import (
     CategoryCreate,
     StockAdjust,
     InventoryMovementResponse,
+    InventoryLocationCreate,
+    InventoryLocationResponse,
+    LocationStockAllocate,
 )
 from services.product_service import (
     get_products,
@@ -80,6 +84,107 @@ def read_inventory_history(
     current_user: User = Depends(require_staff),
 ):
     return get_inventory_history(db, product_id=product_id)
+
+
+def _ensure_default_locations(db: Session) -> List[InventoryLocation]:
+    rows = db.query(InventoryLocation).order_by(InventoryLocation.is_default.desc(), InventoryLocation.id.asc()).all()
+    if not rows:
+        defaults = [
+            InventoryLocation(
+                name="Delhi Okhla Flagship Warehouse",
+                code="DEL-WH",
+                city="New Delhi",
+                address="Okhla Industrial Phase II, New Delhi 110020",
+                is_default=True,
+                active=True,
+            ),
+            InventoryLocation(
+                name="Mumbai Bandra Studio",
+                code="BOM-ST",
+                city="Mumbai",
+                address="Chapel Road, Bandra West, Mumbai 400050",
+                is_default=False,
+                active=True,
+            ),
+        ]
+        db.add_all(defaults)
+        db.commit()
+        rows = db.query(InventoryLocation).order_by(InventoryLocation.is_default.desc(), InventoryLocation.id.asc()).all()
+    return rows
+
+
+@router.get("/locations", response_model=List[InventoryLocationResponse])
+def read_inventory_locations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff),
+):
+    return _ensure_default_locations(db)
+
+
+@router.post("/locations", response_model=InventoryLocationResponse)
+def create_inventory_location(
+    payload: InventoryLocationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_manager),
+):
+    code = payload.code.strip().upper().replace(" ", "-")
+    if db.query(InventoryLocation).filter(InventoryLocation.code == code).first():
+        raise HTTPException(status_code=400, detail="Location code already exists")
+    row = InventoryLocation(
+        name=payload.name.strip(),
+        code=code,
+        city=payload.city,
+        address=payload.address,
+        is_default=payload.is_default,
+        active=True,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.get("/locations/stock")
+def read_location_stock_matrix(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff),
+):
+    locs = _ensure_default_locations(db)
+    allocs = db.query(ProductLocationStock).all()
+    return {
+        "locations": [InventoryLocationResponse.model_validate(l) for l in locs],
+        "allocations": [
+            {"product_id": a.product_id, "location_id": a.location_id, "stock_qty": a.stock_qty}
+            for a in allocs
+        ],
+    }
+
+
+@router.post("/{product_id}/locations/allocate")
+def allocate_location_stock(
+    product_id: int,
+    payload: LocationStockAllocate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_manager),
+):
+    prod = db.query(Product).filter(Product.id == product_id).first()
+    if not prod:
+        raise HTTPException(status_code=404, detail="Product not found")
+    loc = db.query(InventoryLocation).filter(InventoryLocation.id == payload.location_id).first()
+    if not loc:
+        raise HTTPException(status_code=404, detail="Location not found")
+    row = (
+        db.query(ProductLocationStock)
+        .filter(ProductLocationStock.product_id == product_id, ProductLocationStock.location_id == payload.location_id)
+        .first()
+    )
+    if row:
+        row.stock_qty = payload.stock_qty
+    else:
+        row = ProductLocationStock(product_id=product_id, location_id=payload.location_id, stock_qty=payload.stock_qty)
+        db.add(row)
+    db.commit()
+    return {"product_id": product_id, "location_id": payload.location_id, "stock_qty": payload.stock_qty}
 
 
 @router.post("", response_model=ProductResponse)
