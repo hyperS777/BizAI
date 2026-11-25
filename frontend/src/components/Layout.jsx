@@ -23,7 +23,7 @@ const navGroups = [
   {
     title: 'Co-Pilot AI',
     items: [
-      { label: 'AI Advisor', to: '/ai', icon: Sparkles },
+      { label: 'AI Advisor', to: '/ai', icon: Sparkles, roles: ['admin', 'manager', 'accountant'] },
     ],
   },
   {

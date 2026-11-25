@@ -145,8 +145,9 @@ export function Settings() {
             {settingsNotice && <div className="notice success" style={{ background: '#eaf4f1', borderColor: 'var(--teal)', color: 'var(--teal-dark)' }}>{settingsNotice}</div>}
             {error && <div className="notice error">{error}</div>}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16 }}>
-              {/* Left Column: Business Profile & Credentials */}
+            <div style={{ display: 'grid', gridTemplateColumns: can(['admin']) ? '1.4fr 1fr' : '1fr', gap: 16 }}>
+              {/* Left Column: Business Profile & Credentials (Admin only) */}
+              {can(['admin']) && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {/* Business Profile Panel */}
                 <section className="panel">
@@ -292,6 +293,7 @@ export function Settings() {
                   </form>
                 </section>
               </div>
+              )}
 
                     {/* Right Column: Appearance, Notifications, Demo Controls */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
