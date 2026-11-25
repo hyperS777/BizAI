@@ -87,10 +87,13 @@ export default function Integrations() {
   const [funnel, setFunnel] = useState(null);
   const [analyticsDays, setAnalyticsDays] = useState(30);
 
-  /* ── Demo orders ── */
+  /* ── Demo orders & Delhivery simulator ── */
   const [simulations, setSimulations] = useState(null);
   const [simsLoading, setSimsLoading] = useState(false);
   const [expandedSim, setExpandedSim] = useState(null);
+  const [simOrders, setSimOrders] = useState([]);
+  const [delhiveryPush, setDelhiveryPush] = useState({ awb: '', status: 'In Transit', location: 'Delhi Okhla Hub', note: '' });
+  const [delhiveryBusy, setDelhiveryBusy] = useState(false);
 
   const load = () => {
     return client.get('/integrations/dashboard').then((res) => {
@@ -100,7 +103,16 @@ export default function Integrations() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    client.get('/orders?limit=50').then(({ data: rows }) => {
+      setSimOrders(rows || []);
+      const firstOpen = (rows || []).find((o) => !['cancelled', 'returned', 'delivered'].includes(o.status));
+      if (firstOpen) {
+        setDelhiveryPush((prev) => ({ ...prev, awb: firstOpen.tracking_number || firstOpen.order_number }));
+      }
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     client.get(`/storefront/analytics?days=${analyticsDays}`)
@@ -163,6 +175,39 @@ export default function Integrations() {
       setNotice('Discount code added.');
     } catch (err) {
       setError(apiError(err, 'Could not add discount code'));
+    }
+  };
+
+  const toggleDiscount = async (item) => {
+    try {
+      await client.patch(`/integrations/discounts/${item.id}`, {
+        code: item.code,
+        discount_type: item.discount_type,
+        value: item.value,
+        active: !item.active,
+        usage_limit: item.usage_limit ?? null,
+        description: item.description ?? '',
+      });
+      await load();
+      setNotice(`Discount ${item.code} ${item.active ? 'paused' : 'activated'}.`);
+    } catch (err) {
+      setError(apiError(err, 'Could not update discount status'));
+    }
+  };
+
+  const pushDelhiveryUpdate = async (event) => {
+    event.preventDefault();
+    setDelhiveryBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const { data: res } = await client.post('/integrations/delhivery/simulate', delhiveryPush);
+      await load();
+      setNotice(`Delhivery update sent to site: Order #${res.order_number} is now "${res.order_status}" at ${res.location}.`);
+    } catch (err) {
+      setError(apiError(err, 'Could not push Delhivery status'));
+    } finally {
+      setDelhiveryBusy(false);
     }
   };
 
@@ -487,6 +532,48 @@ export default function Integrations() {
               </form>
             </div>
 
+            {/* Delhivery Live Courier Webhook & Simulator */}
+            <div className="panel-section">
+              <div className="panel-subsection-heading"><Package size={16} /> Delhivery Webhook &amp; Live Status Simulator</div>
+              <p className="muted" style={{ fontSize: 12.5, marginBottom: 10 }}>
+                Webhook Endpoint: <code>POST /api/integrations/delhivery/webhook</code> (signed with <code>X-Delhivery-Signature</code>). Or push a live scan below to test real-time order &amp; tracking updates:
+              </p>
+              {isAdmin && (
+                <form className="integration-form" onSubmit={pushDelhiveryUpdate}>
+                  <label className="field"><span>Order / Delhivery AWB</span>
+                    <input
+                      required
+                      list="delhivery-order-refs"
+                      value={delhiveryPush.awb}
+                      onChange={(e) => setDelhiveryPush({ ...delhiveryPush, awb: e.target.value })}
+                      placeholder="148... or ORD-..."
+                    />
+                    <datalist id="delhivery-order-refs">
+                      {simOrders.map((o) => (
+                        <option key={o.id} value={o.tracking_number || o.order_number}>
+                          {o.order_number} · {o.customer?.name || 'Customer'} ({o.status})
+                        </option>
+                      ))}
+                    </datalist>
+                  </label>
+                  <label className="field"><span>Delhivery Scan</span>
+                    <select value={delhiveryPush.status} onChange={(e) => setDelhiveryPush({ ...delhiveryPush, status: e.target.value })}>
+                      <option value="Confirmed">Manifested / Confirmed</option>
+                      <option value="In Transit">In Transit</option>
+                      <option value="Out for Delivery">Out for Delivery</option>
+                      <option value="Delivered">Delivered</option>
+                      <option value="RTO">RTO / Returned</option>
+                    </select>
+                  </label>
+                  <label className="field"><span>Hub Location</span><input value={delhiveryPush.location} onChange={(e) => setDelhiveryPush({ ...delhiveryPush, location: e.target.value })} /></label>
+                  <label className="field"><span>Note</span><input value={delhiveryPush.note} onChange={(e) => setDelhiveryPush({ ...delhiveryPush, note: e.target.value })} placeholder="Scan update note" /></label>
+                  <button className="primary-btn" disabled={delhiveryBusy || !delhiveryPush.awb.trim()}>
+                    {delhiveryBusy ? 'Sending…' : 'Send Status to Site'}
+                  </button>
+                </form>
+              )}
+            </div>
+
             {/* Webhooks */}
             <div className="panel-section">
               <div className="panel-subsection-heading"><Webhook size={16} /> Outbound webhooks</div>
@@ -532,13 +619,20 @@ export default function Integrations() {
               {data.discounts?.length ? (
                 <div className="table-wrap">
                   <table className="data-table">
-                    <thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Status</th></tr></thead>
+                    <thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Status</th>{isAdmin && <th />}</tr></thead>
                     <tbody>{data.discounts.map((item) => (
                       <tr key={item.id}>
                         <td><strong>{item.code}</strong></td>
                         <td>{item.discount_type === 'percent' ? `${item.value}%` : money(item.value)}</td>
                         <td>{item.times_used}{item.usage_limit ? ` / ${item.usage_limit}` : ''}</td>
                         <td><span className={`sim-status-badge ${item.active ? 'sim-status-delivered' : 'sim-status-returned_to_store'}`}>{item.active ? 'Active' : 'Inactive'}</span></td>
+                        {isAdmin && (
+                          <td style={{ textAlign: 'right' }}>
+                            <button type="button" className="text-btn" onClick={() => toggleDiscount(item)}>
+                              {item.active ? 'Pause' : 'Activate'}
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}</tbody>
                   </table>

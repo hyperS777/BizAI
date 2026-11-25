@@ -1,15 +1,18 @@
 """Admin-controlled integration settings and activity."""
 
 import json
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from config import settings
 from database import get_db
-from models.integration import DiscountCode
+from models.integration import DiscountCode, StorefrontSimulation
+from models.order import Order, OrderStatus
 from models.user import User
 from schemas.integration import (
+    DelhiverySimulatePayload,
     DiscountPayload,
     DiscountResponse,
     IntegrationDashboard,
@@ -37,6 +40,7 @@ from services.shopify_service import (
     sync_shopify_store,
     verify_shopify_signature,
 )
+from services.order_service import update_order_status
 from utils.permissions import require_integration_admin, require_integration_reader, require_staff
 
 router = APIRouter(prefix="/api/integrations", tags=["integrations"])
@@ -137,6 +141,159 @@ async def receive_delivery_location(request: Request, db: Session = Depends(get_
         return process_delivery_update(db, event_id, payload)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _delhivery_value(payload: dict, *keys: str):
+    """Read common Delhivery fields from direct and nested webhook payloads."""
+    shipment = payload.get("Shipment") or payload.get("shipment") or payload
+    for key in keys:
+        value = shipment.get(key) if isinstance(shipment, dict) else None
+        if isinstance(value, dict):
+            value = value.get("Status") or value.get("status")
+        if value not in (None, ""):
+            return str(value)
+    return ""
+
+
+def _apply_delhivery_status_update(
+    db: Session,
+    order: Order,
+    raw_status: str,
+    location: str = "",
+    note: str = "",
+    source_event: str = "delhivery.status_updated",
+):
+    if order.status in {OrderStatus.CANCELLED.value, OrderStatus.RETURNED.value}:
+        return {"status": "ignored", "order_number": order.order_number, "order_status": order.status, "reason": "order is closed"}
+
+    normalized = raw_status.lower().replace("-", " ").replace("_", " ").strip()
+    if any(term in normalized for term in ("delivered", "delivery completed")):
+        target = OrderStatus.DELIVERED
+    elif any(term in normalized for term in ("return", "rto")):
+        target = OrderStatus.RETURNED
+    elif any(term in normalized for term in ("transit", "out for delivery", "dispatched", "picked up", "shipped")):
+        target = OrderStatus.SHIPPED
+    else:
+        target = OrderStatus.CONFIRMED
+
+    # Advance through the business lifecycle so stock and invoice rules remain intact.
+    if order.status == OrderStatus.DRAFT.value:
+        order = update_order_status(db, order.id, OrderStatus.PENDING)
+    progression = [OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.SHIPPED, OrderStatus.DELIVERED]
+    if target == OrderStatus.RETURNED:
+        if order.status == OrderStatus.PENDING.value:
+            order = update_order_status(db, order.id, OrderStatus.CONFIRMED)
+        if order.status == OrderStatus.CONFIRMED.value:
+            order = update_order_status(db, order.id, OrderStatus.SHIPPED)
+        order = update_order_status(db, order.id, OrderStatus.RETURNED)
+    else:
+        current_index = next((i for i, item in enumerate(progression) if item.value == order.status), 0)
+        target_index = progression.index(target)
+        for next_status in progression[current_index + 1:target_index + 1]:
+            order = update_order_status(db, order.id, next_status)
+
+    now = datetime.now(timezone.utc)
+    if not order.tracking_company:
+        order.tracking_company = "Delhivery Express"
+    order.delivery_location = (location or "").strip() or order.delivery_location or "Delhi NCR Hub"
+    order.delivery_updated_at = now
+
+    sim = db.query(StorefrontSimulation).filter(StorefrontSimulation.order_id == order.id).first()
+    if sim:
+        sim_status_map = {
+            OrderStatus.CONFIRMED.value: "packed",
+            OrderStatus.SHIPPED.value: "out_for_delivery" if "out for" in normalized else "packed",
+            OrderStatus.DELIVERED.value: "delivered",
+            OrderStatus.RETURNED.value: "returned_to_store",
+        }
+        sim.delivery_status = sim_status_map.get(order.status, sim.delivery_status)
+        sim.current_location = order.delivery_location
+        sim.delivery_agent_name = "Delhivery Express"
+        if note:
+            sim.delivery_note = note
+        sim.delivery_updated_at = now
+        try:
+            history = json.loads(sim.checkpoint_log or "[]")
+        except json.JSONDecodeError:
+            history = []
+        history.append({
+            "label": order.delivery_location,
+            "status": sim.delivery_status,
+            "agent_name": "Delhivery Express",
+            "note": note or f"Delhivery scan: {raw_status}",
+            "at": now.isoformat(),
+        })
+        sim.checkpoint_log = json.dumps(history[-20:])
+
+    emit_event(
+        db,
+        source_event,
+        "order",
+        order.id,
+        {"awb": order.tracking_number, "status": raw_status, "location": order.delivery_location},
+        commit=False,
+    )
+    db.commit()
+    return {
+        "status": "processed",
+        "order_id": order.id,
+        "order_number": order.order_number,
+        "order_status": order.status,
+        "awb": order.tracking_number,
+        "location": order.delivery_location,
+    }
+
+
+@router.post("/delhivery/webhook")
+async def receive_delhivery_webhook(request: Request, db: Session = Depends(get_db)):
+    """Apply a signed Delhivery AWB status update to the owner and public tracking views."""
+    body = await request.body()
+    secret = settings.DELHIVERY_WEBHOOK_SECRET or settings.DELIVERY_WEBHOOK_SECRET
+    if not secret:
+        raise HTTPException(status_code=503, detail="Delhivery webhook secret is not configured")
+    signature = request.headers.get("x-delhivery-signature") or request.headers.get("x-bizai-signature", "")
+    if not verify_shopify_signature(body, signature, secret):
+        raise HTTPException(status_code=401, detail="Invalid Delhivery webhook signature")
+    try:
+        payload = json.loads(body)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=400, detail="Webhook body must be valid JSON") from exc
+
+    awb = _delhivery_value(payload, "AWB", "awb", "waybill", "tracking_number", "order_number")
+    raw_status = _delhivery_value(payload, "Status", "status", "StatusType", "status_type")
+    if not awb or not raw_status:
+        raise HTTPException(status_code=422, detail="Delhivery webhook requires AWB and status")
+    order = db.query(Order).filter((Order.tracking_number == awb) | (Order.order_number == awb)).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="No order matches this Delhivery AWB")
+    location = _delhivery_value(payload, "Location", "location", "City", "city")
+    note = _delhivery_value(payload, "Instructions", "instructions", "note")
+    return _apply_delhivery_status_update(db, order, raw_status, location=location, note=note)
+
+
+@router.post("/delhivery/simulate")
+def simulate_delhivery_status(
+    payload: DelhiverySimulatePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_integration_admin),
+):
+    """Push a live Delhivery courier scan event to an order from the owner console."""
+    order = None
+    if payload.order_id:
+        order = db.query(Order).filter(Order.id == payload.order_id).first()
+    elif payload.awb:
+        ref = payload.awb.strip().lstrip("#")
+        order = db.query(Order).filter((Order.tracking_number == ref) | (Order.order_number == ref.upper())).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order or AWB not found")
+    return _apply_delhivery_status_update(
+        db,
+        order,
+        payload.status,
+        location=payload.location or "",
+        note=payload.note or f"Delhivery scan pushed by {current_user.full_name or current_user.email}",
+        source_event="delhivery.simulated_scan",
+    )
 
 
 @router.get("/settings")

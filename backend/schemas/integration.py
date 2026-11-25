@@ -145,3 +145,25 @@ class StorefrontDeliveryUpdate(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AbandonedCheckoutPayload(BaseModel):
+    session_id: str = Field(min_length=4, max_length=80)
+    customer_name: Optional[str] = Field(default=None, max_length=150)
+    customer_email: Optional[str] = Field(default=None, max_length=255)
+    customer_phone: Optional[str] = Field(default=None, max_length=40)
+    shipping_address: Optional[str] = Field(default=None, max_length=500)
+    discount_code: Optional[str] = Field(default=None, max_length=40)
+    items: List[StorefrontSimulationItem] = Field(min_length=1, max_length=30)
+
+
+class AbandonedCheckoutConvertRequest(BaseModel):
+    status: str = Field(default="draft")  # draft | pending
+
+
+class DelhiverySimulatePayload(BaseModel):
+    order_id: Optional[int] = None
+    awb: Optional[str] = None
+    status: str = Field(min_length=2, max_length=60)
+    location: Optional[str] = Field(default=None, max_length=200)
+    note: Optional[str] = Field(default=None, max_length=400)

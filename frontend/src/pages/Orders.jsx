@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   MapPin, MapPinned, ClipboardList, List, ChevronDown, ChevronRight,
   Package, FileText, ExternalLink, Truck, Printer, XCircle, Edit3, Trash2, Tag, Plus, Check,
-  Clock3, Download, MessageCircle, RotateCcw, Barcode,
+  Clock3, Download, MessageCircle, RotateCcw, Barcode, ShoppingCart,
 } from 'lucide-react';
 import { CircleMarker, MapContainer, Popup, TileLayer, ZoomControl, useMap, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -14,6 +15,8 @@ import { useToast } from '../context/ToastContext';
 
 const statusTabs = [
   { id: 'all', label: 'All orders' },
+  { id: 'draft', label: 'Drafts' },
+  { id: 'abandoned', label: 'Abandoned' },
   { id: 'pending', label: 'Pending' },
   { id: 'confirmed', label: 'Confirmed' },
   { id: 'shipped', label: 'In transit' },
@@ -23,6 +26,7 @@ const statusTabs = [
 ];
 
 const STATUS_COLORS = {
+  draft: '#64748b',
   pending: '#f59e0b',
   confirmed: '#3b82f6',
   shipped: '#8b5cf6',
@@ -30,6 +34,25 @@ const STATUS_COLORS = {
   returned: '#a855f7',
   cancelled: '#ef4444',
 };
+
+const orderStatusLabel = (status) => ({
+  draft: 'Draft',
+  pending: 'Pending',
+  confirmed: 'Confirmed',
+  shipped: 'In transit',
+  delivered: 'Delivered',
+  returned: 'Returned',
+  cancelled: 'Cancelled',
+}[status] || String(status || '').replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()));
+
+const deliveryStageLabel = (status) => ({
+  ready_to_pack: 'Ready to pack',
+  packed: 'Packed',
+  out_for_delivery: 'Out for delivery',
+  delivered: 'Delivered',
+  failed_delivery: 'Failed attempt',
+  returned_to_store: 'Returned',
+}[status] || String(status || '').replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()));
 
 function MapBounds({ orders }) {
   const map = useMap();
@@ -45,8 +68,10 @@ function MapBounds({ orders }) {
 }
 
 /* Expandable order row */
-function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onEditShipping, onCancelOrder, onReturnOrder, isSelected, onToggleSelect }) {
+function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onEditShipping, onCancelOrder, onReturnOrder, onDelhiveryScan, isSelected, onToggleSelect }) {
   const [expanded, setExpanded] = useState(false);
+  const isAllocated = ['confirmed', 'shipped', 'delivered', 'returned'].includes(order.status);
+  const isDispatched = ['shipped', 'delivered', 'returned'].includes(order.status);
 
   return (
     <>
@@ -80,11 +105,11 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onE
               onChange={(e) => { e.stopPropagation(); onChangeStatus(order, e.target.value); }}
             >
               {[order.status, ...(order.allowed_next_statuses || [])].filter((v, i, a) => a.indexOf(v) === i).map((v) => (
-                <option key={v} value={v}>{v.replace('_', ' ')}</option>
+                <option key={v} value={v}>{orderStatusLabel(v)}</option>
               ))}
             </select>
           ) : (
-            <span className={`status-pill ${order.status}`}>{order.status}</span>
+            <span className={`status-pill ${order.status}`}>{orderStatusLabel(order.status)}</span>
           )}
         </td>
         <td className="delivery-cell">
@@ -95,8 +120,11 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onE
         </td>
         <td><strong>{money(order.total_amount)}</strong></td>
         <td>{formatDate(order.created_at)}</td>
-        <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'right' }}>
-          {canInvoice && !order.invoice && order.status !== 'cancelled' && (
+        <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+          {canStatus && order.status === 'draft' && (
+            <button className="text-btn" onClick={() => onChangeStatus(order, 'pending')}>Open Order</button>
+          )}
+          {canInvoice && !order.invoice && !['draft', 'cancelled'].includes(order.status) && (
             <button className="text-btn" onClick={() => onInvoice(order)}>Invoice</button>
           )}
           {order.invoice && <span className="status-pill delivered" style={{ fontSize: 11 }}>Invoiced</span>}
@@ -112,25 +140,27 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onE
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10, marginTop: 8 }}>
                   <div style={{ padding: '8px 12px', borderRadius: 6, background: 'var(--panel-alt)', border: '1px solid var(--border)' }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--teal)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Check size={12} /> 1. Placed
+                      <Check size={12} /> {order.status === 'draft' ? '1. Draft Saved' : '1. Placed'}
                     </div>
                     <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{formatDate(order.created_at)}</div>
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>{order.customer?.name || 'Customer'}</div>
                   </div>
 
                   <div style={{ padding: '8px 12px', borderRadius: 6, background: 'var(--panel-alt)', border: '1px solid var(--border)' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: order.status !== 'pending' ? 'var(--teal)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      {order.status !== 'pending' ? <Check size={12} /> : '○'} 2. Allocated
+                    <div style={{ fontSize: 11, fontWeight: 700, color: isAllocated ? 'var(--teal)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {isAllocated ? <Check size={12} /> : '○'} 2. Allocated
                     </div>
-                    <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{order.status !== 'pending' ? 'Stock Reserved' : 'Pending Allocation'}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>
+                      {order.status === 'draft' ? 'Draft (No Stock Held)' : isAllocated ? 'Stock Reserved' : 'Pending Allocation'}
+                    </div>
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>Okhla Phase III DC</div>
                   </div>
 
                   <div style={{ padding: '8px 12px', borderRadius: 6, background: 'var(--panel-alt)', border: '1px solid var(--border)' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: ['shipped', 'delivered'].includes(order.status) ? 'var(--teal)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      {['shipped', 'delivered'].includes(order.status) ? <Check size={12} /> : '○'} 3. Dispatched
+                    <div style={{ fontSize: 11, fontWeight: 700, color: isDispatched ? 'var(--teal)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {isDispatched ? <Check size={12} /> : '○'} 3. Dispatched
                     </div>
-                    <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{order.tracking_company || 'Express Logistics'}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{order.tracking_company || 'Delhivery Express'}</div>
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>AWB: {order.tracking_number || 'Awaiting dispatch'}</div>
                   </div>
 
@@ -138,7 +168,9 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onE
                     <div style={{ fontSize: 11, fontWeight: 700, color: order.status === 'delivered' ? 'var(--teal)' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
                       {order.status === 'delivered' ? <Check size={12} /> : '○'} 4. Delivered
                     </div>
-                    <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{order.status === 'delivered' ? 'Delivered to Customer' : 'In Fulfillment'}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>
+                      {order.status === 'delivered' ? 'Delivered to Customer' : order.status === 'returned' ? 'Returned' : order.status === 'cancelled' ? 'Cancelled' : 'In Fulfillment'}
+                    </div>
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>{order.delivery_location || 'Destination'}</div>
                   </div>
                 </div>
@@ -232,6 +264,16 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onE
                 >
                   <Edit3 size={13} /> Edit Address &amp; Tracking
                 </button>
+                {canStatus && !['cancelled', 'returned'].includes(order.status) && (
+                  <button
+                    type="button"
+                    className="outline-btn"
+                    onClick={() => onDelhiveryScan(order)}
+                    title="Send a Delhivery carrier scan event to update order status"
+                  >
+                    <Truck size={13} /> Delhivery Scan
+                  </button>
+                )}
                 {order.status !== 'cancelled' && order.status !== 'delivered' && order.status !== 'returned' && canStatus && (
                   <button
                     type="button"
@@ -265,22 +307,27 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onE
 export default function Orders() {
   const { can } = useAuth();
   const toast = useToast();
+  const [searchParams] = useSearchParams();
   const canCreate = can(['admin', 'manager', 'employee']);
   const canStatus = can(['admin', 'manager']);
   const canInvoice = can(['admin', 'manager', 'accountant']);
   const canSeeSimulations = can(['admin', 'manager']);
   const [orders, setOrders] = useState([]);
+  const [abandoned, setAbandoned] = useState([]);
   const [simulations, setSimulations] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
-  const [status, setStatus] = useState('all');
-  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState(() => searchParams.get('tab') || 'all');
+  const [search, setSearch] = useState(() => searchParams.get('q') || '');
   const [view, setView] = useState('orders');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [modal, setModal] = useState(false);
+  const [modal, setModal] = useState(() => searchParams.get('action') === 'new');
   const [editShippingOrder, setEditShippingOrder] = useState(null);
   const [shippingForm, setShippingForm] = useState({ shipping_address: '', tracking_company: '', tracking_number: '', notes: '' });
+  const [delhiveryOrder, setDelhiveryOrder] = useState(null);
+  const [delhiveryForm, setDelhiveryForm] = useState({ status: 'In Transit', location: 'Gurugram Hub, Haryana', note: '' });
+  const [delhiveryBusy, setDelhiveryBusy] = useState(false);
 
   // Rich Order Creation State
   const [form, setForm] = useState({
@@ -299,10 +346,21 @@ export default function Orders() {
   const [barcodeInput, setBarcodeInput] = useState('');
   const [discountValidationMsg, setDiscountValidationMsg] = useState('');
 
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam) setStatus(tabParam);
+    const qParam = searchParams.get('q');
+    if (qParam !== null) setSearch(qParam);
+    if (searchParams.get('action') === 'new') setModal(true);
+  }, [searchParams]);
+
   const load = () => {
     client.get('/orders', { params: { limit: 250 } })
       .then((res) => setOrders(res.data || []))
       .catch((err) => setError(apiError(err)));
+    client.get('/storefront/abandoned-checkouts', { params: { limit: 150 } })
+      .then((res) => setAbandoned(res.data || []))
+      .catch(() => {});
   };
 
   useEffect(() => {
@@ -320,13 +378,18 @@ export default function Orders() {
     return () => window.clearInterval(timer);
   }, []);
 
+  const openAbandonedCount = useMemo(
+    () => abandoned.filter((c) => c.recovery_status === 'abandoned').length,
+    [abandoned],
+  );
+
   const statusCounts = useMemo(() => orders.reduce((counts, order) => {
     counts[order.status] = (counts[order.status] || 0) + 1;
     counts.all += 1;
     return counts;
-  }, { all: 0, simulations: simulations.length }), [orders, simulations.length]);
+  }, { all: 0, abandoned: openAbandonedCount, simulations: simulations.length }), [orders, openAbandonedCount, simulations.length]);
 
-  const tabs = canSeeSimulations ? [...statusTabs, { id: 'simulations', label: 'Simulations' }] : statusTabs;
+  const tabs = canSeeSimulations ? [...statusTabs, { id: 'simulations', label: 'Demo runs' }] : statusTabs;
   const visibleOrders = useMemo(() => {
     let list = status === 'all' ? orders : orders.filter((order) => order.status === status);
     if (search.trim()) {
@@ -559,10 +622,11 @@ export default function Orders() {
     }
   };
 
-  const save = async (event) => {
+  const save = async (event, orderStatus = 'pending') => {
     event.preventDefault();
     try {
       await client.post('/orders', {
+        status: orderStatus,
         customer_id: Number(form.customer_id),
         shipping_address: form.shipping_address || null,
         discount_code: appliedDiscount?.code || form.discount_code || null,
@@ -577,8 +641,8 @@ export default function Orders() {
           })),
       });
       setModal(false);
-      setNotice('New order created successfully.');
-      toast?.success('Order created successfully');
+      setNotice(orderStatus === 'draft' ? 'Draft order saved successfully.' : 'New order created successfully.');
+      toast?.success(orderStatus === 'draft' ? 'Draft order saved' : 'Order created successfully');
       load();
     } catch (err) {
       setError(apiError(err, 'Could not create order'));
@@ -651,28 +715,95 @@ export default function Orders() {
     }
   };
 
+  const recoverAbandonedCheckout = async (checkout, targetStatus = 'draft') => {
+    try {
+      const { data } = await client.post(`/storefront/abandoned-checkouts/${checkout.id}/convert`, { status: targetStatus });
+      const msg = `Recovered ${checkout.checkout_token} as ${targetStatus === 'draft' ? 'Draft' : 'Pending'} order #${data.order_number}.`;
+      setNotice(msg);
+      toast?.success(msg);
+      setStatus(targetStatus === 'draft' ? 'draft' : 'pending');
+      load();
+    } catch (err) {
+      toast?.error(apiError(err, 'Could not recover abandoned checkout'));
+    }
+  };
+
+  const dismissAbandonedCheckout = async (checkout) => {
+    try {
+      await client.delete(`/storefront/abandoned-checkouts/${checkout.id}`);
+      toast?.info(`Dismissed abandoned checkout ${checkout.checkout_token}`);
+      load();
+    } catch (err) {
+      toast?.error(apiError(err, 'Could not dismiss checkout'));
+    }
+  };
+
+  const openDelhiveryModal = (order) => {
+    setDelhiveryOrder(order);
+    const defaultStatus = order.status === 'confirmed' ? 'In Transit'
+      : order.status === 'shipped' ? 'Out for Delivery'
+        : order.status === 'delivered' ? 'Delivered'
+          : 'Confirmed';
+    setDelhiveryForm({
+      status: defaultStatus,
+      location: order.delivery_location || 'Delhi NCR Okhla Hub',
+      note: `Delhivery scan for #${order.order_number}`,
+    });
+  };
+
+  const submitDelhiveryScan = async (e) => {
+    e.preventDefault();
+    if (!delhiveryOrder) return;
+    setDelhiveryBusy(true);
+    try {
+      const { data } = await client.post('/integrations/delhivery/simulate', {
+        order_id: delhiveryOrder.id,
+        status: delhiveryForm.status,
+        location: delhiveryForm.location,
+        note: delhiveryForm.note,
+      });
+      toast?.success(`Delhivery updated #${data.order_number} → ${orderStatusLabel(data.order_status)}`);
+      setNotice(`Delhivery carrier scan applied: #${data.order_number} is now ${orderStatusLabel(data.order_status)} (${data.location}).`);
+      setDelhiveryOrder(null);
+      load();
+    } catch (err) {
+      toast?.error(apiError(err, 'Could not apply Delhivery scan'));
+    } finally {
+      setDelhiveryBusy(false);
+    }
+  };
+
   return (
     <>
-      <PageHeader eyebrow="Sales" title="Orders" subtitle="Create orders, variant sizing, warehouse packing slips, and automated invoicing.">
-        {canCreate && (
+      <PageHeader eyebrow="Sales" title="Orders" subtitle="Create orders, manage drafts & abandoned checkouts, Delhivery tracking, and GST invoicing.">
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
-            className="primary-btn heading-btn"
-            onClick={() => {
-              setForm({
-                customer_id: '',
-                shipping_address: '',
-                discount_code: '',
-                shipping_amount: 0,
-                notes: '',
-                items: [{ product_id: '', variant_id: '', quantity: 1, unit_price: 0 }],
-              });
-              setAppliedDiscount(null);
-              setModal(true);
-            }}
+            className="outline-btn heading-btn"
+            onClick={() => window.open('/store/demo', '_blank')}
+            title="Place a demo customer order on the REIHH storefront"
           >
-            <Plus size={14} /> New order
+            <ShoppingCart size={14} /> Demo Store Order ↗
           </button>
-        )}
+          {canCreate && (
+            <button
+              className="primary-btn heading-btn"
+              onClick={() => {
+                setForm({
+                  customer_id: '',
+                  shipping_address: '',
+                  discount_code: '',
+                  shipping_amount: 0,
+                  notes: '',
+                  items: [{ product_id: '', variant_id: '', quantity: 1, unit_price: 0 }],
+                });
+                setAppliedDiscount(null);
+                setModal(true);
+              }}
+            >
+              <Plus size={14} /> New order
+            </button>
+          )}
+        </div>
       </PageHeader>
 
       {notice && <div className="notice success" style={{ background: '#eaf4f1', borderColor: 'var(--teal)', color: 'var(--teal-dark)' }}>{notice}</div>}
@@ -687,7 +818,7 @@ export default function Orders() {
               role="tab"
               aria-selected={status === tab.id}
               className={status === tab.id ? 'order-tab active' : 'order-tab'}
-              onClick={() => { setStatus(tab.id); if (tab.id === 'simulations') setView('orders'); }}
+              onClick={() => { setStatus(tab.id); if (tab.id === 'simulations' || tab.id === 'abandoned') setView('orders'); }}
             >
               {tab.label}<span>{tab.id === 'simulations' ? simulations.length : statusCounts[tab.id] || 0}</span>
             </button>
@@ -703,30 +834,119 @@ export default function Orders() {
           />
           <div className="order-view-toggle" role="group" aria-label="Order view">
             <button type="button" className={view === 'orders' ? 'active' : ''} aria-label="Orders list" title="Orders list" onClick={() => setView('orders')}><List size={17} /></button>
-            <button type="button" disabled={status === 'simulations'} className={view === 'map' ? 'active' : ''} aria-label="Delivery map" title="Delivery map" onClick={() => setView('map')}><MapPinned size={17} /></button>
+            <button type="button" disabled={status === 'simulations' || status === 'abandoned'} className={view === 'map' ? 'active' : ''} aria-label="Delivery map" title="Delivery map" onClick={() => setView('map')}><MapPinned size={17} /></button>
           </div>
         </div>
       </div>
 
-      {status === 'simulations' ? simulations.length ? (
+      {status === 'abandoned' ? abandoned.length ? (
+        <section className="panel table-panel order-table-panel">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Checkout</th>
+                <th>Customer</th>
+                <th>Items in Cart</th>
+                <th>Value</th>
+                <th>Status</th>
+                <th>Last Active</th>
+                <th style={{ textAlign: 'right' }}>Recovery Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {abandoned.map((chk) => {
+                const itemsText = (chk.items || []).map((it) => `${it.quantity}x ${it.title}`).join(', ');
+                const waPhone = (chk.customer_phone || '').replace(/[^0-9]/g, '');
+                const waMsg = encodeURIComponent(`Hi ${chk.customer_name || 'there'}! You left ${itemsText || 'items'} in your REIHH Studio bag (${money(chk.total_amount)}). Complete your order with 10% off using code REIHH10.`);
+                const isRecovered = chk.recovery_status === 'recovered';
+                return (
+                  <tr key={chk.id}>
+                    <td><strong>{chk.checkout_token}</strong></td>
+                    <td>
+                      <div className="order-customer-cell">
+                        <strong>{chk.customer_name || 'Guest Shopper'}</strong>
+                        <small>{chk.customer_email || chk.customer_phone || 'No contact entered yet'}</small>
+                      </div>
+                    </td>
+                    <td style={{ maxWidth: 260, fontSize: 12 }}>{itemsText || 'Cart items'}</td>
+                    <td><strong>{money(chk.total_amount)}</strong></td>
+                    <td>
+                      <span className={`status-pill ${isRecovered ? 'delivered' : 'pending'}`}>
+                        {isRecovered ? 'Recovered' : 'Not recovered'}
+                      </span>
+                    </td>
+                    <td>{formatDate(chk.updated_at || chk.created_at)}</td>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                        {!isRecovered && canCreate && (
+                          <>
+                            <button className="text-btn" onClick={() => recoverAbandonedCheckout(chk, 'draft')}>
+                              Save as Draft
+                            </button>
+                            <button className="text-btn" onClick={() => recoverAbandonedCheckout(chk, 'pending')}>
+                              Create Order
+                            </button>
+                          </>
+                        )}
+                        <a
+                          className="text-btn"
+                          href={`https://wa.me/${waPhone}?text=${waMsg}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Send WhatsApp recovery reminder"
+                        >
+                          WhatsApp
+                        </a>
+                        {canStatus && (
+                          <button className="text-btn danger" onClick={() => dismissAbandonedCheckout(chk)} title="Dismiss">
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      ) : (
+        <div style={{ display: 'grid', placeItems: 'center', gap: 12, padding: '48px 0' }}>
+          <EmptyState icon={ShoppingCart} text="No abandoned checkouts yet. Open Storefront Checkout without paying to see them appear here automatically." />
+          <button className="outline-btn" onClick={() => window.open('/store/demo', '_blank')}>Open Demo Storefront ↗</button>
+        </div>
+      ) : status === 'simulations' ? simulations.length ? (
         <section className="panel table-panel order-table-panel simulation-table-panel">
           <table className="data-table">
-            <thead><tr><th>Simulation</th><th>Customer</th><th>Items</th><th>Total</th><th>Created</th><th>Delivery</th></tr></thead>
-            <tbody>{simulations.map((sim) => (
-              <tr key={sim.id}>
-                <td><strong>{sim.reference}</strong></td>
-                <td>
-                  <div className="order-customer-cell">
-                    <strong>{sim.customer_name}</strong>
-                    <small>{sim.customer_email}</small>
-                  </div>
-                </td>
-                <td>{sim.items}</td>
-                <td>{money(sim.total_amount)}</td>
-                <td>{formatDate(sim.created_at)}</td>
-                <td><span className="status-pill shipped">{sim.delivery_status}</span></td>
-              </tr>
-            ))}</tbody>
+            <thead><tr><th>Simulation</th><th>Customer</th><th>Items</th><th>Total</th><th>Created</th><th>Delivery Status</th></tr></thead>
+            <tbody>{simulations.map((sim) => {
+              const itemsText = Array.isArray(sim.items)
+                ? sim.items.map((it) => `${it.quantity}x ${it.title}`).join(', ')
+                : String(sim.items || '');
+              return (
+                <tr key={sim.id}>
+                  <td>
+                    <a href={`/track/${encodeURIComponent(sim.reference)}`} target="_blank" rel="noreferrer" style={{ fontWeight: 700, color: 'var(--teal)' }}>
+                      {sim.reference} <ExternalLink size={11} style={{ display: 'inline' }} />
+                    </a>
+                  </td>
+                  <td>
+                    <div className="order-customer-cell">
+                      <strong>{sim.customer_name}</strong>
+                      <small>{sim.customer_email}</small>
+                    </div>
+                  </td>
+                  <td style={{ maxWidth: 260, fontSize: 12 }}>{itemsText}</td>
+                  <td>{money(sim.total_amount)}</td>
+                  <td>{formatDate(sim.created_at)}</td>
+                  <td>
+                    <span className={`status-pill ${sim.delivery_status === 'delivered' ? 'delivered' : sim.delivery_status === 'returned_to_store' ? 'returned' : 'shipped'}`}>
+                      {deliveryStageLabel(sim.delivery_status)}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}</tbody>
           </table>
         </section>
       ) : <EmptyState icon={Package} text="No simulated storefront checkouts." /> : view === 'map' ? (
@@ -924,6 +1144,7 @@ export default function Orders() {
                   onEditShipping={openEditShipping}
                   onCancelOrder={cancelOrder}
                   onReturnOrder={returnOrder}
+                  onDelhiveryScan={openDelhiveryModal}
                 />
               ))}
             </tbody>
@@ -1207,9 +1428,19 @@ export default function Orders() {
               <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="e.g. Leave package with guard" />
             </label>
 
-            <button className="primary-btn" type="submit" disabled={!form.customer_id || subtotal <= 0}>
-              Create Order ({money(grandTotal)})
-            </button>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <button
+                className="outline-btn"
+                type="button"
+                disabled={!form.customer_id || subtotal <= 0}
+                onClick={(event) => save(event, 'draft')}
+              >
+                Save draft
+              </button>
+              <button className="primary-btn" type="submit" disabled={!form.customer_id || subtotal <= 0}>
+                Create Order ({money(grandTotal)})
+              </button>
+            </div>
           </form>
         </Modal>
       )}
@@ -1249,6 +1480,47 @@ export default function Orders() {
               />
             </label>
             <button className="primary-btn" type="submit">Update Shipping Details</button>
+          </form>
+        </Modal>
+      )}
+
+      {/* Delhivery Courier Scan Simulator Modal */}
+      {delhiveryOrder && (
+        <Modal title={`Delhivery Carrier Update · #${delhiveryOrder.order_number}`} onClose={() => setDelhiveryOrder(null)}>
+          <form className="stack-form" onSubmit={submitDelhiveryScan}>
+            <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>
+              Push a Delhivery Express status scan to update this order&apos;s live status, map pin, and public customer tracking page (<code>/track/{delhiveryOrder.tracking_number || delhiveryOrder.order_number}</code>).
+            </p>
+            <label>Delhivery Scan Status
+              <select
+                value={delhiveryForm.status}
+                onChange={(e) => setDelhiveryForm({ ...delhiveryForm, status: e.target.value })}
+              >
+                <option value="Confirmed">Manifested / Confirmed at DC</option>
+                <option value="In Transit">Dispatched / In Transit</option>
+                <option value="Out for Delivery">Out for Delivery</option>
+                <option value="Delivered">Delivered (OTP Verified)</option>
+                <option value="RTO Returned">RTO / Returned to Origin</option>
+              </select>
+            </label>
+            <label>Hub / City Location
+              <input
+                value={delhiveryForm.location}
+                onChange={(e) => setDelhiveryForm({ ...delhiveryForm, location: e.target.value })}
+                placeholder="e.g. Gurugram Mother Hub, Mumbai Hub"
+                required
+              />
+            </label>
+            <label>Scan Note
+              <input
+                value={delhiveryForm.note}
+                onChange={(e) => setDelhiveryForm({ ...delhiveryForm, note: e.target.value })}
+                placeholder="Courier checkpoint note"
+              />
+            </label>
+            <button className="primary-btn" type="submit" disabled={delhiveryBusy}>
+              {delhiveryBusy ? 'Sending to site…' : 'Send Delhivery Status to Site'}
+            </button>
           </form>
         </Modal>
       )}

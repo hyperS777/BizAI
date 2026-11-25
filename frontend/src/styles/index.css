@@ -1318,6 +1318,11 @@ select {
   color: #8a6a1d
 }
 
+.status-pill.draft {
+  background: #eef2f7;
+  color: #475569
+}
+
 .status-pill.confirmed,
 .status-pill.sent,
 .status-pill.paid,
@@ -2356,6 +2361,11 @@ body {
 [data-theme='dark'] .status-pill.pending {
   background: #403821;
   color: #f1ce78;
+}
+
+[data-theme='dark'] .status-pill.draft {
+  background: #293542;
+  color: #cbd5e1;
 }
 
 [data-theme='dark'] .status-pill.overdue,
@@ -3450,7 +3460,7 @@ body {
 
 .storefront-pulse-metrics {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 12px;
 }
 

@@ -38,6 +38,20 @@ npm run dev
 
 Open http://localhost:5173 and sign in as `admin@bizai.com` / `admin123`.
 
+## Azure App Service
+
+Deploy the repository root to a Linux Python App Service (not the `frontend` folder). The included `.deployment` now enables Oryx to install `requirements.txt`, and `startup.sh` starts the root `main:app` entry point. In **Configuration > General settings**, use this startup command:
+
+```text
+bash /home/site/wwwroot/startup.sh
+```
+
+Set these App Settings before restarting: `DATABASE_URL` (a production PostgreSQL URL), `SECRET_KEY`, `CORS_ORIGINS` (the exact frontend origin), and any optional provider keys such as `GROQ_API_KEY`, `GEMINI_API_KEY`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `DELHIVERY_API_KEY`, and `DELHIVERY_WEBHOOK_SECRET`.
+
+Deploy the React frontend separately (Azure Static Web Apps, Vercel, or another static host) using `frontend` as its root, and set its build-time `VITE_API_URL` to `https://YOUR-API.azurewebsites.net/api`. Do not use `localhost` in either production setting. Verify the backend first at `https://YOUR-API.azurewebsites.net/api/health`.
+
+For Delhivery, configure its delivery-status webhook to `POST https://YOUR-API.azurewebsites.net/api/integrations/delhivery/webhook`, sign the raw payload with `DELHIVERY_WEBHOOK_SECRET` in the `X-Delhivery-Signature` header, and include an AWB plus status. Supported states are mapped to the owner order lifecycle (confirmed, shipped, delivered, returned); the public read-only tracking payload is available at `/api/storefront/tracking/{AWB}`.
+
 Other seeded accounts:
 
 - Manager: `manager@bizai.com` / `manager123`

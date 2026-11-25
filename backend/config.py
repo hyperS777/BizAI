@@ -5,6 +5,7 @@ Loads settings from environment variables using pydantic-settings.
 
 import os
 from pathlib import Path
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 from typing import List
 
@@ -45,6 +46,7 @@ class Settings(BaseSettings):
     # Real Courier / Logistics (Delhivery)
     DELHIVERY_API_KEY: str = ""
     DELHIVERY_CLIENT_ID: str = "REIHH_STUDIO_DELHI"
+    DELHIVERY_WEBHOOK_SECRET: str = ""
 
     # Shopify Admin API and webhook signing
     SHOPIFY_STORE_DOMAIN: str = ""
@@ -54,6 +56,18 @@ class Settings(BaseSettings):
     DELIVERY_WEBHOOK_SECRET: str = ""
     PUBLIC_API_BASE_URL: str = ""
     STOREFRONT_SIMULATION_ENABLED: bool = True
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def normalize_debug_value(cls, value):
+        """Accept common cloud-host values such as 'release' and 'production'."""
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"release", "production", "prod", "off", "no"}:
+                return False
+            if normalized in {"development", "dev", "debug", "on", "yes"}:
+                return True
+        return value
 
     @property
     def cors_origins_list(self) -> List[str]:

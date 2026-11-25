@@ -103,3 +103,24 @@ class DiscountCode(Base):
     times_used = Column(Integer, default=0)
     description = Column(String(200), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class AbandonedCheckout(Base):
+    __tablename__ = "abandoned_checkouts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String(80), unique=True, nullable=False, index=True)
+    checkout_token = Column(String(40), unique=True, nullable=False, index=True)
+    customer_name = Column(String(150), nullable=True)
+    customer_email = Column(String(255), nullable=True)
+    customer_phone = Column(String(40), nullable=True)
+    shipping_address = Column(Text, nullable=True)
+    items = Column(Text, nullable=False)  # JSON array of cart items
+    subtotal_amount = Column(Float, default=0.0, nullable=False)
+    discount_code = Column(String(40), nullable=True)
+    total_amount = Column(Float, default=0.0, nullable=False)
+    currency = Column(String(3), default="INR", nullable=False)
+    recovery_status = Column(String(24), default="abandoned", nullable=False)  # abandoned | recovered | dismissed
+    recovered_order_id = Column(Integer, ForeignKey("orders.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

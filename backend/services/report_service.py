@@ -3,7 +3,7 @@ from __future__ import annotations
 """Dashboard and analytics aggregations grounded in live records."""
 
 from calendar import monthrange
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 
 from sqlalchemy import func
@@ -11,8 +11,21 @@ from sqlalchemy.orm import Session
 
 from models.customer import Customer
 from models.expense import Expense
+from models.integration import AbandonedCheckout
 from models.order import Order, OrderItem, OrderStatus
 from models.product import Product
+
+IST_OFFSET = timedelta(hours=5, minutes=30)
+
+
+def _ist_today() -> date:
+    return (datetime.now(timezone.utc) + IST_OFFSET).date()
+
+
+def _utc_bounds_for_ist_dates(start: date, end: date):
+    start_utc = datetime.combine(start, datetime.min.time()) - IST_OFFSET
+    end_utc = datetime.combine(end, datetime.max.time()) - IST_OFFSET
+    return start_utc, end_utc
 
 
 def _month_bounds(ref: Optional[date] = None):
@@ -32,21 +45,22 @@ def _previous_month_bounds(ref: Optional[date] = None):
 
 
 def sales_between(db: Session, start: date, end: date):
+    start_utc, end_utc = _utc_bounds_for_ist_dates(start, end)
     q = db.query(func.coalesce(func.sum(Order.total_amount), 0), func.count(Order.id)).filter(
-        Order.created_at >= datetime.combine(start, datetime.min.time()),
-        Order.created_at <= datetime.combine(end, datetime.max.time()),
-        Order.status != OrderStatus.CANCELLED.value,
+        Order.created_at >= start_utc,
+        Order.created_at <= end_utc,
+        Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value]),
     )
     total, count = q.one()
     return float(total or 0), int(count or 0)
 
 
 def get_dashboard_metrics(db: Session):
-    today = date.today()
+    today = _ist_today()
 
     total_sales = float(
         db.query(func.coalesce(func.sum(Order.total_amount), 0))
-        .filter(Order.status != OrderStatus.CANCELLED.value)
+        .filter(Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value]))
         .scalar()
         or 0
     )
@@ -72,7 +86,7 @@ def get_dashboard_metrics(db: Session):
         .select_from(OrderItem)
         .join(Product, Product.id == OrderItem.product_id)
         .join(Order, Order.id == OrderItem.order_id)
-        .filter(Order.status != OrderStatus.CANCELLED.value)
+        .filter(Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value]))
         .scalar()
         or 0
     )
@@ -103,7 +117,7 @@ def get_dashboard_metrics(db: Session):
         .join(OrderItem, OrderItem.product_id == Product.id)
         .join(Order, Order.id == OrderItem.order_id)
         .filter(
-            Order.status != OrderStatus.CANCELLED.value,
+            Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value]),
             Product.is_active == True,
             OrderItem.total_price > 0,
         )
@@ -145,6 +159,15 @@ def get_dashboard_metrics(db: Session):
     prev_sales, prev_orders = sales_between(db, prev_start, prev_end)
 
     daily_sales, daily_orders = sales_between(db, today, today)
+    draft_orders = int(
+        db.query(func.count(Order.id)).filter(Order.status == OrderStatus.DRAFT.value).scalar() or 0
+    )
+    abandoned_orders = int(
+        db.query(func.count(AbandonedCheckout.id))
+        .filter(AbandonedCheckout.recovery_status == "abandoned")
+        .scalar()
+        or 0
+    )
 
     bottom_rows = (
         db.query(
@@ -156,7 +179,7 @@ def get_dashboard_metrics(db: Session):
         .join(OrderItem, OrderItem.product_id == Product.id)
         .join(Order, Order.id == OrderItem.order_id)
         .filter(
-            Order.status != OrderStatus.CANCELLED.value,
+            Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value]),
             Product.is_active == True,
             OrderItem.total_price > 0,
         )
@@ -184,6 +207,8 @@ def get_dashboard_metrics(db: Session):
             "total_customers": total_customers,
             "daily_sales": daily_sales,
             "daily_orders": daily_orders,
+            "draft_orders": draft_orders,
+            "abandoned_orders": abandoned_orders,
             "monthly_sales": month_sales,
             "monthly_orders": month_orders,
             "previous_month_sales": prev_sales,
@@ -221,7 +246,7 @@ def get_sales_series(db: Session, days: int = 30, start_date: Optional[date] = N
         .filter(
             Order.created_at >= datetime.combine(start, datetime.min.time()),
             Order.created_at <= datetime.combine(end, datetime.max.time()),
-            Order.status != OrderStatus.CANCELLED.value,
+            Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value]),
         )
         .group_by(func.date(Order.created_at))
         .all()
@@ -237,7 +262,7 @@ def get_sales_series(db: Session, days: int = 30, start_date: Optional[date] = N
 
 def get_pnl_data(db: Session, start_date: Optional[date] = None, end_date: Optional[date] = None) -> dict:
     today = date.today()
-    q_orders = db.query(Order).filter(Order.status != OrderStatus.CANCELLED.value)
+    q_orders = db.query(Order).filter(Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value]))
     q_expenses = db.query(Expense).filter(Expense.date <= today)
 
     if start_date:
@@ -295,7 +320,7 @@ def get_top_products(db: Session, limit: int = 10):
         .join(OrderItem, OrderItem.product_id == Product.id)
         .join(Order, Order.id == OrderItem.order_id)
         .filter(
-            Order.status != OrderStatus.CANCELLED.value,
+            Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value]),
             Product.is_active == True,
             OrderItem.total_price > 0,
         )
@@ -327,7 +352,7 @@ def get_customer_activity(db: Session, limit: int = 10):
             func.count(Order.id).label("order_count"),
             func.coalesce(func.sum(Order.total_amount), 0).label("total_spent"),
         )
-        .outerjoin(Order, (Order.customer_id == Customer.id) & (Order.status != OrderStatus.CANCELLED.value))
+        .outerjoin(Order, (Order.customer_id == Customer.id) & (Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value])))
         .group_by(Customer.id, Customer.name, Customer.email)
         .order_by(func.coalesce(func.sum(Order.total_amount), 0).desc())
         .limit(limit)

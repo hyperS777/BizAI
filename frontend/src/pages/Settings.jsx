@@ -264,12 +264,23 @@ export function Settings() {
                             placeholder="Delhivery bearer token"
                           />
                         </label>
-                        <label>Gemini / Groq AI Key
+                        <label>Groq AI API Key
                           <input
                             type={showKeys ? 'text' : 'password'}
-                            value={companySettings.gemini_api_key || companySettings.groq_api_key || ''}
+                            value={companySettings.groq_api_key || ''}
+                            onChange={(e) => setCompanySettings({ ...companySettings, groq_api_key: e.target.value })}
+                            placeholder="gsk_..."
+                          />
+                        </label>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10, marginTop: 10 }}>
+                        <label>Google Gemini API Key (Optional)
+                          <input
+                            type={showKeys ? 'text' : 'password'}
+                            value={companySettings.gemini_api_key || ''}
                             onChange={(e) => setCompanySettings({ ...companySettings, gemini_api_key: e.target.value })}
-                            placeholder="AI API Key"
+                            placeholder="AIza..."
                           />
                         </label>
                       </div>

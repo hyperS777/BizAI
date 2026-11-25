@@ -125,20 +125,34 @@ def _build_system_prompt(snapshot: dict) -> str:
     ) or "  No expense data."
 
     status_text = ", ".join(f"{k.capitalize()}: {v}" for k, v in order_counts.items()) or "Synchronized"
+    funnel = snapshot.get("storefront_funnel", {}) or {}
+    top_viewed = snapshot.get("storefront_top_viewed", []) or []
+    top_viewed_text = ", ".join(
+        f"{v.get('product_title')} ({v.get('views', 0)} views)" for v in top_viewed[:4]
+    ) or "No recent product view telemetry"
 
-    today_str = date.today().strftime('%d %b %Y')
-    yesterday_str = (date.today() - timedelta(days=1)).strftime('%d %b %Y')
+    ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
+    today_str = ist_now.strftime('%d %b %Y')
+    yesterday_str = (ist_now - timedelta(days=1)).strftime('%d %b %Y')
 
-    return f"""You are BizAI, the intelligent executive AI co-pilot and commercial retail advisor for REIHH Studio — a luxury Indian fashion house based in New Delhi (HQ: Okhla Phase III).
+    return f"""You are BizAI, the intelligent executive AI co-pilot and conversational advisor (like Shopify Sidekick) for REIHH Studio — a luxury Indian fashion house based in New Delhi (HQ: Okhla Phase III).
 
-CURRENT DATE: {today_str} (Yesterday: {yesterday_str})
+CURRENT DATE (IST): {today_str} (Yesterday: {yesterday_str})
 
-You have direct, real-time access to the entire business database. You think autonomously, reason on your own, and provide deep, professional, commercial-grade answers.
+You act as a versatile, thoughtful, natural conversational AI assistant. You can answer ANY question — whether it is about live store orders, customers, inventory, Delhivery shipping, abandoned checkouts, marketing strategy, fashion merchandising, pricing, copywriting, math, or general conversation — while grounding all store facts strictly in the live data below.
 
 === LIVE BUSINESS DATABASE SNAPSHOT ===
 
 BRAND: REIHH Studio
 OPERATIONS: Luxury Womenswear, Menswear, Structured Denim & Tailored Outerwear
+
+TODAY & LIVE STOREFRONT PULSE:
+- Orders Today: {sales.get('daily_orders', 0)} orders (INR {sales.get('daily_sales', 0):,.0f} sales today)
+- Draft Orders: {sales.get('draft_orders', 0)} awaiting confirmation/payment
+- Live Visitors (Last 5 mins): {funnel.get('active_visitors', 0)} active shoppers
+- Visitors Today: {funnel.get('today_visitors', 0)} unique sessions
+- Abandoned Checkouts: {funnel.get('abandoned_checkouts', 0)} open abandoned checkouts
+- Most Viewed Styles: {top_viewed_text}
 
 FINANCIAL SNAPSHOT:
 - Total Sales: INR {sales.get('total_sales', 0):,.0f} across {sales.get('total_orders', 0)} orders
@@ -157,9 +171,6 @@ ORIGIN / FIRST EVER ORDER:
 RECENT ORDERS STREAM (Newest first):
 {recent_orders_text}
 
-ORDERS PLACED YESTERDAY ({yesterday_str}):
-- 0 orders recorded for yesterday. The most recent order on record is {recent_orders[0]['order_number'] if recent_orders else 'N/A'} placed by {recent_orders[0]['customer'] if recent_orders else 'N/A'} on {recent_orders[0]['date'] if recent_orders else 'N/A'}.
-
 ORDER STATUSES: {status_text}
 
 TOP REVENUE GARMENTS:
@@ -174,26 +185,23 @@ LOW STOCK ALERTS:
 TOP VIP CLIENTS:
 {customers_text}
 
-VIP CLIENT DOSSIERS (Team Stakeholders & Top Accounts):
-- Mohammad Ibad Hussain: Team Leader & System Architect from Team YATRI. VIP client with 6 completed orders totaling INR 60,800.
-- Ramji: Core Frontend & UI/UX Engineer from Team YATRI. VIP client with 2 confirmed orders totaling INR 9,900 (most recent order ORD-89B08259).
-- Amber Abbas: Business Head & Co-founder of REIHH Studio. Placed the inaugural launch order ORD-REIHH-010 (INR 14,400).
+CUSTOMER-DATA RULE:
+Use only the live customer ranking and recent-order records above. Do not invent customer biographies, order counts, order numbers, dates, or revenue. For a date-specific question, say when the available snapshot cannot establish the answer and recommend the Orders report.
 
 OPERATING EXPENSES:
 {expense_text}
 
 LOGISTICS & DISPATCH:
-- Integrated Multi-Carrier Express Network (Air & Surface) from Central DC, Okhla Phase III, New Delhi.
-- Real-time tracking with scannable barcode waybills and Delhi NCR live delivery telemetry.
+- Integrated Delhivery Express Network (Air & Surface) from Central DC, Okhla Phase III, New Delhi.
+- Real-time tracking with AWB waybills, webhook status sync, and Delhi NCR live delivery map.
 === END DATABASE SNAPSHOT ===
 
-CO-PILOT BEHAVIOR & REASONING RULES:
-1. Always reason on your own. Do not recite canned greeting templates or robotic disclaimers.
-2. Ground all facts, numbers, dates, order IDs, and totals strictly in the live database snapshot above.
-3. If asked about a person (e.g. Ibad, Ramji, Amber), give a complete, executive breakdown of their exact orders, spend, and items.
-4. If asked what to buy or restock, act like a senior fashion merchandiser: recommend high-margin bestselling items (Alba Denim, Trench Sets) with +50 unit safety buffers, advise holding off on 0-sales lines, and discuss 30–60 day fabric milling lead times and North India winter seasonality.
-5. If greeted (e.g., "hello how many orders by ibad"), acknowledge politely but immediately answer the question in full detail.
-6. Format your output with clear, beautiful GitHub-flavored markdown (bolding, tables, bullet points, and section headers).
+CO-PILOT BEHAVIOR & CONVERSATIONAL RULES:
+1. Answer like a sharp, helpful conversational AI co-pilot. Match your tone and depth to what the user actually asked.
+2. NEVER deflect general, strategic, marketing, creative, or everyday questions back to a generic metrics summary. Answer them directly and thoroughly, weaving in relevant REIHH Studio data only when helpful.
+3. Ground all business facts, numbers, dates, order IDs, and totals strictly in the live snapshot above.
+4. Keep track of conversation history so follow-up questions ("why?", "give me 3 more", "how do I fix that?") work naturally.
+5. Use clean GitHub-flavored markdown when structured formatting helps clarity.
 """
 
 
@@ -225,20 +233,29 @@ def _deep_reasoning_answer(
     # -------------------------------------------------------------
     # 1. SPECIFIC CUSTOMER LOOKUP & DOSSIER (e.g. Ramji, Ibad, Priya, etc.)
     # -------------------------------------------------------------
+    _common_non_names = {
+        "hello", "hi", "hey", "good", "morning", "evening", "afternoon", "night",
+        "order", "orders", "store", "test", "demo", "admin", "user", "client",
+        "customer", "how", "what", "why", "who", "when", "where", "which",
+        "give", "make", "tips", "cart", "today", "yesterday", "help", "please",
+        "thank", "thanks", "studio", "reihh", "guest", "shopper", "buyer", "walk",
+    }
     if db:
         all_custs = db.query(CustomerModel).all()
         matched_customer = None
 
-        # Check explicit token matching
+        # Check explicit token matching while ignoring common English / test words like "hello"
         for c in all_custs:
             if not c.name:
                 continue
             c_name_lower = c.name.strip().lower()
-            if c_name_lower in q_norm:
+            if c_name_lower in _common_non_names:
+                continue
+            if len(c_name_lower) >= 4 and re.search(rf'\b{re.escape(c_name_lower)}\b', q_norm):
                 matched_customer = c
                 break
-            parts = [p.lower() for p in c_name_lower.split() if len(p) >= 3]
-            if any(part in words or part in q_norm for part in parts):
+            parts = [p.lower() for p in c_name_lower.split() if len(p) >= 4 and p.lower() not in _common_non_names]
+            if any(part in words for part in parts):
                 matched_customer = c
                 break
 
@@ -248,12 +265,12 @@ def _deep_reasoning_answer(
         if not matched_customer and "ramji" in q_norm:
             matched_customer = next((c for c in all_custs if "ramji" in (c.name or "").lower()), None)
 
-        # Fuzzy word matching against all customer first/last names (e.g. 1-character typos like inad/ibad)
+        # Fuzzy word matching against all non-generic customer first/last names (requires 4+ chars)
         if not matched_customer:
             for w in words:
-                if len(w) >= 3:
+                if len(w) >= 4 and w not in _common_non_names:
                     for c in all_custs:
-                        c_parts = [p.lower() for p in (c.name or "").split()]
+                        c_parts = [p.lower() for p in (c.name or "").split() if len(p) >= 4 and p.lower() not in _common_non_names]
                         for cp in c_parts:
                             if len(w) == len(cp) and sum(1 for a, b in zip(w, cp) if a != b) <= 1:
                                 matched_customer = c
@@ -861,47 +878,86 @@ def _deep_reasoning_answer(
         )
 
     # -------------------------------------------------------------
-    # 14. GREETINGS & INTRO
+    # 14. CART ABANDONMENT, MARKETING, DRAFT ORDERS & LIVE VISITORS
     # -------------------------------------------------------------
-    if q_norm in ("hi", "hello", "hey", "greetings", "good morning", "good afternoon", "good evening"):
+    funnel = snapshot.get("storefront_funnel", {}) or {}
+    if any(p in q_norm for p in ["abandon", "abandoned", "cart abandonment", "checkout drop", "recover cart", "lost cart"]):
+        abandoned_cnt = funnel.get("abandoned_checkouts", 0)
         return (
-            f"### Welcome to BizAI Co-Pilot ⚡\n\n"
-            f"I am your commercial intelligence partner for **REIHH Studio**, grounded in live records across orders, inventory, courier telemetry, and P&L.\n\n"
-            f"**High-impact queries to explore:**\n"
-            f"* *\"How many orders did Ramji make?\"* — Customer dossier & history\n"
-            f"* *\"What should I buy and what do I not buy?\"* — Restock & inventory advisory\n"
-            f"* *\"What is expected to perform good next month?\"* — Predictive demand forecast\n"
-            f"* *\"Break down our profit and expenses\"* — Full P&L health report\n"
-            f"* *\"Which products have the best margins?\"* — Garment unit economics\n"
-            f"* *\"What is our logistics delivery status?\"* — Live fulfillment pulse\n\n"
-            f"How can I assist your operations today?"
+            f"### 🛒 Cart Abandonment & Checkout Recovery Strategy\n\n"
+            f"You currently have **{abandoned_cnt} open abandoned checkouts** tracked from your storefront.\n\n"
+            f"1. **Recover directly in Orders**: Open [Orders → Abandoned](/orders?tab=abandoned) to view shopper carts, items, and contact info, then click **Recover as Draft** or send a 1-click **WhatsApp Recovery** message.\n"
+            f"2. **Time-bound incentive**: Pair recovery follow-ups with `REIHH10` (10% off) or free express shipping over INR 4,999.\n"
+            f"3. **Reduce delivery anxiety**: Display estimated Delhivery dispatch timelines (24h from Okhla DC) and COD/UPI options prominently before payment.\n"
+            f"4. **Capture contact early**: Auto-save guest email/phone as soon as they open checkout so drop-offs stay actionable."
+        )
+
+    if any(p in q_norm for p in ["live visitor", "visitors", "traffic", "conversion rate", "funnel"]):
+        return (
+            f"### 📈 Live Storefront Traffic & Conversion Pulse\n\n"
+            f"* **Live Visitors (Last 5 mins)**: **{funnel.get('active_visitors', 0)} active shoppers**\n"
+            f"* **Visitors Today**: **{funnel.get('today_visitors', 0)} unique sessions**\n"
+            f"* **Product Views (30d)**: **{funnel.get('product_view', 0)}**\n"
+            f"* **Added to Bag**: **{funnel.get('add_to_cart', 0)}** ({funnel.get('view_to_cart_rate', 0)}% view-to-cart)\n"
+            f"* **Abandoned Checkouts**: **{funnel.get('abandoned_checkouts', 0)}**\n\n"
+            f"Explore full funnel analytics in [Integrations](/integrations) or live traffic on your [Dashboard](/)."
+        )
+
+    if any(p in q_norm for p in ["draft order", "drafts"]):
+        draft_cnt = sales.get("draft_orders", 0)
+        return (
+            f"### 📝 Draft Orders Status\n\n"
+            f"You currently have **{draft_cnt} draft order(s)** awaiting confirmation or payment.\n\n"
+            f"* Draft orders do **not** reserve warehouse inventory or generate GST invoices until opened.\n"
+            f"* Open [Orders → Drafts](/orders?tab=draft) to review line items, apply coupon codes, or convert them into active orders."
+        )
+
+    if any(p in q_norm for p in ["marketing", "tip", "ideas", "promote", "repeat", "retention", "aov", "grow", "growth", "seo", "instagram", "strategy"]):
+        top_name = top_products[0]["name"] if top_products else "Alba light Wash Women's Straight Fit Denim"
+        return (
+            f"### 🚀 Growth & Marketing Playbook for REIHH Studio\n\n"
+            f"1. **Bundle Your Hero SKU**: Pair **{top_name}** with matching outerwear/trench jackets at a 10% bundle incentive to lift AOV above INR 12,000.\n"
+            f"2. **WhatsApp VIP Re-engagement**: Message your repeat buyers in [Customers](/customers) with early access to New Arrivals using code `REIHH10`.\n"
+            f"3. **Abandoned Checkout Recovery**: Follow up with pending carts in [Orders → Abandoned](/orders?tab=abandoned) within 2 hours of drop-off.\n"
+            f"4. **Post-Delivery Trust Loop**: Share live Delhivery tracking links and branded GST PDF invoices to turn first-time buyers into repeat VIPs."
         )
 
     # -------------------------------------------------------------
-    # 15. CONTEXTUAL SYNTHESIS FALLBACK
+    # 15. GREETINGS, SIMPLE CONVERSATION & ARITHMETIC
+    # -------------------------------------------------------------
+    if q_norm in ("hi", "hello", "hey", "greetings", "good morning", "good afternoon", "good evening", "how are you", "yo", "sup"):
+        return (
+            f"Hey! I'm **BizAI**, your co-pilot for **REIHH Studio**.\n\n"
+            f"Right now you have **{sales.get('daily_orders', 0)} orders today** ({_format_inr(sales.get('daily_sales', 0))}), "
+            f"**{funnel.get('active_visitors', 0)} live visitors** on the store, and **{sales.get('draft_orders', 0)} draft orders**.\n\n"
+            f"Ask me anything — from sales & profit breakdowns, customer lookups, inventory restocks, and Delhivery tracking to marketing strategy or general store advice!"
+        )
+
+    # Evaluate safe basic arithmetic if user asks e.g. "what is 2+2"
+    math_match = re.search(r'(\d+(?:\.\d+)?)\s*([+\-*/])\s*(\d+(?:\.\d+)?)', query)
+    if math_match:
+        a, op, b = float(math_match.group(1)), math_match.group(2), float(math_match.group(3))
+        calc = a + b if op == '+' else a - b if op == '-' else a * b if op == '*' else (a / b if b != 0 else None)
+        if calc is not None:
+            calc_str = f"{int(calc)}" if calc.is_integer() else f"{calc:.2f}"
+            return f"The result of `{math_match.group(1)} {op} {math_match.group(3)}` is **{calc_str}**.\n\nLet me know if you also want help with store numbers, orders, marketing, or operations!"
+
+    # -------------------------------------------------------------
+    # 16. CONVERSATIONAL FALLBACK (When external LLM API key is not active)
     # -------------------------------------------------------------
     total_o = sales.get("total_orders", 0)
     total_s = sales.get("total_sales", 0)
     p_val = profit.get("profit", 0)
-    monthly_s = sales.get("monthly_sales", 0)
     top_name = top_products[0]["name"] if top_products else "Alba Denim"
-    top_cust = top_customers[0]["name"] if top_customers else "VIP Accounts"
 
     return (
-        f"> 🧠 **BizAI Live Data Grounding & Reasoning**\n"
-        f"> * Grounded in live database: **{total_o} orders**, **INR {total_s:,.0f} revenue**, **INR {p_val:,.0f} profit**.\n\n"
-        f"### REIHH Business Intelligence Brief\n\n"
-        f"Regarding your query on *\"{query}\"*, here are the live operational metrics:\n\n"
-        f"* **Commercial Volume**: INR {total_s:,.0f} across {total_o} completed orders\n"
-        f"* **This Month**: INR {monthly_s:,.0f} in gross turnover\n"
-        f"* **Net Profit Margin**: INR {p_val:,.0f} after accounting for COGS and warehouse overhead\n"
-        f"* **Lead Garment**: **{top_name}** represents your strongest commercial turnover\n"
-        f"* **Top Account**: **{top_cust}** leads VIP client spend\n\n"
-        f"**Suggested Next Questions**:\n"
-        f"* *\"How many orders did Ramji make?\"*\n"
-        f"* *\"What should I buy vs what not to buy?\"*\n"
-        f"* *\"What is expected to perform next month?\"*\n"
-        f"* *\"Break down our profit margins\"*\n"
+        f"I'm currently running in **offline database-grounded mode** (no live Groq/Gemini/Azure OpenAI API key is active on this server yet), so for open-ended questions like *\"{query}\"*, I can give you grounded store insights — or you can add a free **Groq** or **Gemini** API key in [Settings](/settings) for full conversational LLM reasoning.\n\n"
+        f"**Current Store Snapshot:**\n"
+        f"* **Orders Today**: {sales.get('daily_orders', 0)} ({_format_inr(sales.get('daily_sales', 0))})\n"
+        f"* **Live Visitors**: {funnel.get('active_visitors', 0)} active · {funnel.get('abandoned_checkouts', 0)} abandoned checkouts\n"
+        f"* **Lifetime Sales / Net Profit**: {_format_inr(total_s)} across {total_o} orders · Net Profit {_format_inr(p_val)}\n"
+        f"* **Top Seller**: **{top_name}**\n\n"
+        f"Try asking about specific customers, restocking, profit margins, cart abandonment, marketing tips, draft orders, or Delhivery tracking!"
     )
 
 
@@ -911,30 +967,44 @@ def _ask_gemini(
     conversation_history: Optional[List[Dict[str, Any]]] = None,
     api_key: Optional[str] = None,
 ) -> Optional[str]:
-    """Call Google Gemini API for conversational AI responses."""
-    key = api_key or settings.GEMINI_API_KEY
+    """Call Google Gemini REST API for conversational AI responses."""
+    key = (api_key or settings.GEMINI_API_KEY or "").strip()
     if not key:
         return None
     try:
-        import google.generativeai as genai
+        import httpx
 
-        genai.configure(api_key=key)
-        model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
-            system_instruction=_build_system_prompt(snapshot),
-        )
-
-        history = []
+        contents = []
         if conversation_history:
             for msg in conversation_history[-8:]:
                 role = "user" if msg.get("role") == "user" else "model"
                 text = msg.get("text") or msg.get("content") or ""
                 if text:
-                    history.append({"role": role, "parts": [text]})
+                    contents.append({"role": role, "parts": [{"text": text}]})
+        contents.append({"role": "user", "parts": [{"text": query}]})
 
-        chat = model.start_chat(history=history)
-        response = chat.send_message(query)
-        return response.text
+        payload = {
+            "system_instruction": {"parts": [{"text": _build_system_prompt(snapshot)}]},
+            "contents": contents,
+            "generationConfig": {"temperature": 0.5, "maxOutputTokens": 1200},
+        }
+        for model_name in ("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"):
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+                resp = httpx.post(url, json=payload, timeout=25.0)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    candidates = data.get("candidates") or []
+                    if candidates:
+                        parts = (candidates[0].get("content") or {}).get("parts") or []
+                        text = "".join(p.get("text", "") for p in parts).strip()
+                        if text:
+                            return text
+                else:
+                    logger.warning("Gemini model %s returned %s: %s", model_name, resp.status_code, resp.text[:200])
+            except Exception as inner_exc:
+                logger.warning("Gemini model %s failed: %s", model_name, inner_exc)
+        return None
     except Exception as exc:
         logger.warning("Gemini AI query failed: %s", exc)
         return None
@@ -999,14 +1069,13 @@ def _ask_groq(
     conversation_history: Optional[List[Dict[str, Any]]] = None,
     api_key: Optional[str] = None,
 ) -> Optional[str]:
-    """Call Groq API with flagship 70B model first for deep analytical reasoning, with automatic fallbacks."""
-    key = api_key or settings.GROQ_API_KEY
+    """Call Groq OpenAI-compatible HTTP API with flagship Llama 3.3 70B first and automatic fallbacks."""
+    key = (api_key or settings.GROQ_API_KEY or "").strip()
     if not key:
         return None
     try:
-        from groq import Groq
+        import httpx
 
-        client = Groq(api_key=key)
         messages = [
             {
                 "role": "system",
@@ -1022,17 +1091,34 @@ def _ask_groq(
 
         messages.append({"role": "user", "content": query})
 
-        # Try flagship 70B model first (10x smarter reasoning), then fallback
-        models_to_try = ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "llama-3.1-8b-instant"]
+        models_to_try = [
+            "llama-3.3-70b-versatile",
+            "meta-llama/llama-4-scout-17b-16e-instruct",
+            "llama-3.1-8b-instant",
+        ]
+        headers = {
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+        }
         for model_name in models_to_try:
             try:
-                completion = client.chat.completions.create(
-                    model=model_name,
-                    messages=messages,
-                    temperature=0.3,
-                    max_tokens=900,
+                resp = httpx.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers=headers,
+                    json={
+                        "model": model_name,
+                        "messages": messages,
+                        "temperature": 0.5,
+                        "max_tokens": 1200,
+                    },
+                    timeout=25.0,
                 )
-                return completion.choices[0].message.content
+                if resp.status_code == 200:
+                    content = (resp.json().get("choices") or [{}])[0].get("message", {}).get("content")
+                    if content:
+                        return content
+                else:
+                    logger.warning("Groq model %s returned %s: %s", model_name, resp.status_code, resp.text[:200])
             except Exception as e:
                 logger.info("Groq model %s attempt failed, trying next: %s", model_name, e)
                 continue
@@ -1048,7 +1134,7 @@ def _ask_model(
     conversation_history: Optional[List[Dict[str, Any]]] = None,
     db: Optional[Session] = None,
 ) -> Optional[str]:
-    """Check API keys from settings and DB, prioritizing Azure OpenAI (GPT-4o), then Gemini, then Groq (70B)."""
+    """Check API keys from settings and DB, auto-routing Groq vs Gemini vs Azure OpenAI keys cleanly."""
     azure_key = settings.AZURE_OPENAI_API_KEY
     azure_endpoint = settings.AZURE_OPENAI_ENDPOINT
     azure_deployment = settings.AZURE_OPENAI_DEPLOYMENT
@@ -1072,7 +1158,15 @@ def _ask_model(
             if row and row.value:
                 groq_key = row.value.strip()
 
-    # Prioritize Azure OpenAI (GPT-4o from Azure Education) if configured
+    # Auto-detect if a Groq key (gsk_...) was saved under gemini_api_key by mistake
+    if gemini_key and gemini_key.startswith("gsk_") and not groq_key:
+        groq_key = gemini_key
+        gemini_key = ""
+    if groq_key and groq_key.startswith("AIza") and not gemini_key:
+        gemini_key = groq_key
+        groq_key = ""
+
+    # Prioritize Azure OpenAI if configured, otherwise Gemini or Groq
     if azure_key and azure_endpoint:
         ans = _ask_azure_openai(
             query, snapshot, conversation_history,

@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from config import settings
 from models.customer import Customer
-from models.integration import IntegrationEvent, StorefrontAnalyticsEvent, StorefrontSimulation
+from models.integration import AbandonedCheckout, IntegrationEvent, StorefrontAnalyticsEvent, StorefrontSimulation
 from models.invoice import Invoice
 from models.order import Order, OrderStatus
 from models.product import Category, Product, ProductVariant
@@ -501,6 +501,10 @@ def create_storefront_simulation(
             method=payment_method or "demo_card",
             notes=f"Demo storefront payment ({payment_method or 'demo_card'}) - simulated instant approval",
         )
+    abandoned = db.query(AbandonedCheckout).filter(AbandonedCheckout.session_id == session_id).first()
+    if abandoned:
+        abandoned.recovery_status = "recovered"
+        abandoned.recovered_order_id = order.id
     db.commit()
     db.refresh(simulation)
     return {
@@ -531,8 +535,8 @@ def list_storefront_simulations(db: Session, limit: int = 100) -> list[dict]:
         payload = _serialize_delivery(row)
         payload["order_number"] = order.order_number if order else row.reference
         payload["order_status"] = order.status if order else None
-    if order and order.customer:
-        payload["customer_phone"] = order.customer.phone
+        if order and order.customer:
+            payload["customer_phone"] = order.customer.phone
         result.append(payload)
     return result
 
@@ -623,7 +627,8 @@ def update_demo_delivery(
             order.delivery_latitude = lat
             order.delivery_longitude = lng
             order.delivery_updated_at = now
-            order.tracking_company = row.delivery_agent_name or "REIHH Demo Rider"
+            if not order.tracking_company or order.tracking_company.lower() in {"driver", "reihh demo rider"}:
+                order.tracking_company = "Delhivery Express"
             order.shipping_address = row.delivery_address
             wanted = _order_status_for_delivery(row.delivery_status)
             if wanted and wanted != order.status:
@@ -678,7 +683,7 @@ def _catalog_variant(product_id: str, variant_id: str | None = None) -> tuple[di
 
 
 def record_storefront_event(db: Session, payload) -> dict:
-    allowed_events = {"product_view", "variant_selected", "add_to_cart", "checkout_started", "demo_checkout_started", "wishlist_add"}
+    allowed_events = {"store_visit", "product_view", "variant_selected", "add_to_cart", "checkout_started", "demo_checkout_started", "wishlist_add"}
     if payload.event_type not in allowed_events:
         raise ValueError("Unsupported storefront analytics event")
     if payload.source not in {"live", "demo"}:
@@ -686,7 +691,13 @@ def record_storefront_event(db: Session, payload) -> dict:
     existing = db.query(StorefrontAnalyticsEvent.id).filter_by(event_id=payload.event_id).first()
     if existing:
         return {"status": "duplicate"}
-    product, variant = _catalog_variant(payload.product_id, payload.variant_id)
+    # A storefront visit occurs before a product is selected.  Persist it as a
+    # store-level event so “live visitors” is not really “people who viewed a SKU”.
+    if payload.event_type == "store_visit":
+        product = {"id": "storefront", "title": "REIHH Storefront"}
+        variant = {"id": "", "title": ""}
+    else:
+        product, variant = _catalog_variant(payload.product_id, payload.variant_id)
     db.add(StorefrontAnalyticsEvent(
         event_id=payload.event_id,
         session_id=payload.session_id,
@@ -724,8 +735,14 @@ def get_storefront_analytics(db: Session, days: int = 30) -> dict:
     start_date = datetime.now(timezone.utc) - timedelta(days=max(1, min(days, 90)))
     rows = db.query(StorefrontAnalyticsEvent).filter(StorefrontAnalyticsEvent.created_at >= start_date).all()
     product_stats: dict[str, dict] = {}
-    totals = {event: 0 for event in ("product_view", "variant_selected", "add_to_cart", "checkout_started", "demo_checkout_started", "purchase", "demo_purchase")}
+    totals = {event: 0 for event in ("store_visit", "product_view", "variant_selected", "add_to_cart", "checkout_started", "demo_checkout_started", "purchase", "demo_purchase")}
+    checkout_sessions: set[str] = set()
+    purchase_sessions: set[str] = set()
     for row in rows:
+        # Visits must affect traffic totals, never product rankings.
+        if row.event_type == "store_visit":
+            totals[row.event_type] = totals.get(row.event_type, 0) + 1
+            continue
         stat = product_stats.setdefault(row.product_id, {
             "product_id": row.product_id,
             "product_title": row.product_title,
@@ -761,16 +778,20 @@ def get_storefront_analytics(db: Session, days: int = 30) -> dict:
             stat["checkout_started"] += 1
             stat["checkout_sessions"].add(row.session_id)
             stat[f"{row.source}_checkout_sessions"].add(row.session_id)
+            checkout_sessions.add(row.session_id)
         elif row.event_type == "demo_checkout_started":
             stat["checkout_started"] += 1
             stat["checkout_sessions"].add(row.session_id)
             stat["demo_checkout_sessions"].add(row.session_id)
+            checkout_sessions.add(row.session_id)
         elif row.event_type == "purchase":
             stat["purchases"] += row.quantity
             stat["purchase_sessions"].add(row.session_id)
+            purchase_sessions.add(row.session_id)
         elif row.event_type == "demo_purchase":
             stat["demo_purchases"] += row.quantity
             stat["demo_sessions"].add(row.session_id)
+            purchase_sessions.add(row.session_id)
 
     result = []
     for stat in product_stats.values():
@@ -794,6 +815,29 @@ def get_storefront_analytics(db: Session, days: int = 30) -> dict:
         result.append(stat)
     result.sort(key=lambda item: (item["unique_viewers"], item["add_to_cart"]), reverse=True)
     unique_sessions = len({row.session_id for row in rows})
+    now = datetime.now(timezone.utc)
+    active_cutoff = now - timedelta(minutes=5)
+    ist_offset = timedelta(hours=5, minutes=30)
+    ist_now = now + ist_offset
+    today_start = ist_now.replace(hour=0, minute=0, second=0, microsecond=0) - ist_offset
+    def occurred_since(timestamp, cutoff):
+        if not timestamp:
+            return False
+        # SQLite returns naive datetimes even when the SQLAlchemy column asks for
+        # timezone awareness; production PostgreSQL returns aware values.
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+        return timestamp >= cutoff
+
+    totals["active_visitors"] = len({row.session_id for row in rows if occurred_since(row.created_at, active_cutoff)})
+    totals["today_visitors"] = len({row.session_id for row in rows if occurred_since(row.created_at, today_start)})
+    abandoned_rows_count = int(
+        db.query(AbandonedCheckout)
+        .filter(AbandonedCheckout.recovery_status == "abandoned")
+        .count()
+        or 0
+    )
+    totals["abandoned_checkouts"] = max(abandoned_rows_count, len(checkout_sessions - purchase_sessions))
     demo_buys = totals.get("demo_purchase", 0)
     views = totals.get("product_view", 0)
     carts = totals.get("add_to_cart", 0)
@@ -801,3 +845,180 @@ def get_storefront_analytics(db: Session, days: int = 30) -> dict:
     totals["view_to_cart_rate"] = round((carts / views) * 100, 1) if views else 0
     totals["purchase_rate"] = round((demo_buys / unique_sessions) * 100, 1) if unique_sessions else 0
     return {"days": days, "totals": totals, "products": result}
+
+
+def _serialize_abandoned_checkout(row: AbandonedCheckout) -> dict:
+    try:
+        items = json.loads(row.items or "[]")
+    except json.JSONDecodeError:
+        items = []
+    return {
+        "id": row.id,
+        "session_id": row.session_id,
+        "checkout_token": row.checkout_token,
+        "customer_name": row.customer_name or "Guest Shopper",
+        "customer_email": row.customer_email or "",
+        "customer_phone": row.customer_phone or "",
+        "shipping_address": row.shipping_address or "",
+        "items": items,
+        "subtotal_amount": float(row.subtotal_amount or 0),
+        "discount_code": row.discount_code,
+        "total_amount": float(row.total_amount or 0),
+        "currency": row.currency or "INR",
+        "recovery_status": row.recovery_status or "abandoned",
+        "recovered_order_id": row.recovered_order_id,
+        "created_at": row.created_at,
+        "updated_at": row.updated_at,
+    }
+
+
+def upsert_abandoned_checkout(db: Session, payload) -> dict:
+    catalog = get_public_storefront_products()
+    variants = {
+        variant["id"]: (product, variant)
+        for product in catalog["products"]
+        for variant in product["variants"]
+    }
+    lines = []
+    subtotal = 0.0
+    for item in payload.items:
+        match = variants.get(item.variant_id)
+        if not match:
+            continue
+        product, variant = match
+        line_total = round(float(variant["price"]) * item.quantity, 2)
+        subtotal += line_total
+        lines.append({
+            "product_id": product["id"],
+            "title": product["title"],
+            "image_url": product["image_url"],
+            "variant_id": variant["id"],
+            "variant_title": variant["title"],
+            "quantity": item.quantity,
+            "unit_price": float(variant["price"]),
+            "line_total": line_total,
+        })
+    if not lines:
+        raise ValueError("No valid catalog items in checkout")
+
+    discount_amount = 0.0
+    code = (payload.discount_code or "").strip().upper() or None
+    if code:
+        from services.integration_service import apply_discount
+        try:
+            discount_amount, code = apply_discount(db, code, subtotal)
+        except ValueError:
+            discount_amount = 0.0
+    total_amount = round(max(0.0, subtotal - discount_amount), 2)
+
+    row = db.query(AbandonedCheckout).filter(AbandonedCheckout.session_id == payload.session_id).first()
+    if row and row.recovery_status == "recovered":
+        return _serialize_abandoned_checkout(row)
+    if not row:
+        row = AbandonedCheckout(
+            session_id=payload.session_id,
+            checkout_token=f"CHK-{uuid.uuid4().hex[:8].upper()}",
+            items=json.dumps(lines, ensure_ascii=True),
+            subtotal_amount=round(subtotal, 2),
+            total_amount=total_amount,
+            recovery_status="abandoned",
+        )
+        db.add(row)
+    if payload.customer_name is not None and payload.customer_name.strip():
+        row.customer_name = payload.customer_name.strip()
+    if payload.customer_email is not None and payload.customer_email.strip():
+        row.customer_email = payload.customer_email.strip().lower()
+    if payload.customer_phone is not None and payload.customer_phone.strip():
+        row.customer_phone = payload.customer_phone.strip()
+    if payload.shipping_address is not None and payload.shipping_address.strip():
+        row.shipping_address = payload.shipping_address.strip()
+    row.discount_code = code
+    row.items = json.dumps(lines, ensure_ascii=True)
+    row.subtotal_amount = round(subtotal, 2)
+    row.total_amount = total_amount
+    row.recovery_status = "abandoned"
+    row.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(row)
+    return _serialize_abandoned_checkout(row)
+
+
+def list_abandoned_checkouts(db: Session, limit: int = 100) -> list[dict]:
+    rows = (
+        db.query(AbandonedCheckout)
+        .filter(AbandonedCheckout.recovery_status != "dismissed")
+        .order_by(AbandonedCheckout.updated_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [_serialize_abandoned_checkout(row) for row in rows]
+
+
+def convert_abandoned_checkout(db: Session, checkout_id: int, user_id: int, target_status: str = "draft") -> dict:
+    row = db.query(AbandonedCheckout).filter(AbandonedCheckout.id == checkout_id).first()
+    if not row:
+        raise ValueError("Abandoned checkout not found")
+    if row.recovery_status == "recovered" and row.recovered_order_id:
+        raise ValueError("This abandoned checkout has already been converted to an order")
+
+    try:
+        lines = json.loads(row.items or "[]")
+    except json.JSONDecodeError:
+        lines = []
+    if not lines:
+        raise ValueError("Abandoned checkout has no items to recover")
+
+    catalog = get_public_storefront_products()
+    variants = {
+        variant["id"]: (product, variant)
+        for product in catalog["products"]
+        for variant in product["variants"]
+    }
+    order_items = []
+    for line in lines:
+        match = variants.get(str(line.get("variant_id")))
+        if not match:
+            continue
+        product, variant = match
+        db_product, db_variant = _ensure_catalog_variant(db, product, variant)
+        qty = max(1, int(line.get("quantity") or 1))
+        order_items.append(OrderItemCreate(product_id=db_product.id, variant_id=db_variant.id, quantity=qty))
+    if not order_items:
+        raise ValueError("None of the items in this checkout are currently available in catalog")
+
+    email = (row.customer_email or "").strip().lower() or f"guest-{row.checkout_token.lower()}@reihh-checkout.local"
+    name = (row.customer_name or "").strip() or "Storefront Guest"
+    addr = (row.shipping_address or "").strip() or "Connaught Place, New Delhi 110001"
+    customer = _upsert_demo_customer(db, name, email, addr, phone=row.customer_phone)
+    status_enum = OrderStatus.PENDING if target_status == "pending" else OrderStatus.DRAFT
+    order = create_order(
+        db,
+        OrderCreate(
+            customer_id=customer.id,
+            shipping_address=addr,
+            discount_code=row.discount_code,
+            notes=f"Recovered from abandoned checkout {row.checkout_token}",
+            items=order_items,
+            status=status_enum,
+        ),
+        user_id,
+    )
+    row.recovery_status = "recovered"
+    row.recovered_order_id = order.id
+    db.add(IntegrationEvent(
+        event_type="storefront.abandoned_recovered",
+        entity_type="order",
+        entity_id=order.id,
+        payload=json.dumps({"checkout_token": row.checkout_token, "order_number": order.order_number}),
+    ))
+    db.commit()
+    return {"checkout": _serialize_abandoned_checkout(row), "order_id": order.id, "order_number": order.order_number, "status": order.status}
+
+
+def dismiss_abandoned_checkout(db: Session, checkout_id: int) -> dict:
+    row = db.query(AbandonedCheckout).filter(AbandonedCheckout.id == checkout_id).first()
+    if not row:
+        raise ValueError("Abandoned checkout not found")
+    row.recovery_status = "dismissed"
+    db.commit()
+    return {"status": "dismissed", "id": checkout_id}

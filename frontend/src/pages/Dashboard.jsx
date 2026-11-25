@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [error, setError] = useState('');
   const [lowStock, setLowStock] = useState([]);
   const [funnel, setFunnel] = useState(null);
+  const canSeeStorefrontAnalytics = ['admin', 'manager'].includes(role);
 
   useEffect(() => {
     if (role === 'employee') {
@@ -48,7 +49,7 @@ export default function Dashboard() {
   }, [role]);
 
   const loadFunnel = () => {
-    if (role === 'employee') return;
+    if (!canSeeStorefrontAnalytics) return;
     client.get('/storefront/analytics/funnel?days=30')
       .then((res) => setFunnel(res.data))
       .catch(() => {});
@@ -56,9 +57,19 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadFunnel();
-    const timer = setInterval(loadFunnel, 15000);
+    const timer = setInterval(loadFunnel, 10000);
     return () => clearInterval(timer);
-  }, [role]);
+  }, [canSeeStorefrontAnalytics]);
+
+  const formatOrderStatus = (status) => ({
+    draft: 'Draft',
+    pending: 'Pending',
+    confirmed: 'Confirmed',
+    shipped: 'In transit',
+    delivered: 'Delivered',
+    returned: 'Returned',
+    cancelled: 'Cancelled',
+  }[status] || String(status || '').replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()));
 
   const sales = metrics?.sales_summary || {};
   const profit = metrics?.revenue_profit || {};
@@ -92,22 +103,38 @@ export default function Dashboard() {
       {error && <div className="notice error">{error}</div>}
 
       {role !== 'employee' && <section className="metric-grid">
-        <article className="metric teal"><span>Total sales</span><strong>{money(sales.total_sales)}</strong><small>{sales.total_orders || 0} orders</small></article>
-        <article className="metric blue"><span>Revenue</span><strong>{money(profit.revenue)}</strong><small>{sales.total_customers || 0} customers</small></article>
-        <article className="metric yellow"><span>Net profit</span><strong>{money(profit.profit)}</strong><small>After expenses {money(profit.expenses)}</small></article>
-        <article className="metric coral"><span>Low-stock items</span><strong>{inventory.low_stock_products || 0}</strong><small>{inventory.total_products || 0} products tracked</small></article>
+        <article className="metric teal" style={{ cursor: 'pointer' }} onClick={() => navigate('/orders')}>
+          <span>Orders today</span>
+          <strong>{sales.daily_orders || 0}</strong>
+          <small>{money(sales.daily_sales)} sales today · {sales.total_orders || 0} total</small>
+        </article>
+        <article className="metric blue">
+          <span>Total revenue</span>
+          <strong>{money(profit.revenue)}</strong>
+          <small>{sales.total_customers || 0} customers</small>
+        </article>
+        <article className="metric yellow">
+          <span>Net profit</span>
+          <strong>{money(profit.profit)}</strong>
+          <small>After expenses {money(profit.expenses)}</small>
+        </article>
+        <article className="metric coral" style={{ cursor: 'pointer' }} onClick={() => navigate('/inventory')}>
+          <span>Low-stock items</span>
+          <strong>{inventory.low_stock_products || 0}</strong>
+          <small>{inventory.total_products || 0} products tracked</small>
+        </article>
       </section>}
 
-      {role !== 'accountant' && (
+      {canSeeStorefrontAnalytics && (
         <section className="panel live-storefront-pulse" style={{ marginBottom: 14 }}>
           <div className="panel-heading" style={{ alignItems: 'center', marginBottom: 14 }}>
             <div>
               <p className="eyebrow" style={{ color: 'var(--teal)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
                 <span className="live-indicator-dot" /> Live Storefront Pulse · REIHH Customer Store
               </p>
-              <h2 style={{ fontSize: 18, marginTop: 4 }}>Real-Time Traffic &amp; Conversion</h2>
+              <h2 style={{ fontSize: 18, marginTop: 4 }}>Real-Time Visitors, Drafts &amp; Checkouts</h2>
             </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <button
                 className="outline-btn"
                 style={{ fontSize: 11, padding: '7px 11px' }}
@@ -128,24 +155,29 @@ export default function Dashboard() {
 
           <div className="storefront-pulse-metrics">
             <div className="pulse-card">
-              <span className="pulse-label">Visitors</span>
-              <strong className="pulse-value">{funnel?.totals?.unique_sessions || 0}</strong>
-              <small className="pulse-sub">Active buyer sessions</small>
+              <span className="pulse-label">Live visitors</span>
+              <strong className="pulse-value">{funnel?.totals?.active_visitors || 0}</strong>
+              <small className="pulse-sub">Active right now (last 5 mins)</small>
             </div>
             <div className="pulse-card">
-              <span className="pulse-label">Product Views</span>
-              <strong className="pulse-value">{funnel?.totals?.product_view || 0}</strong>
-              <small className="pulse-sub">Catalog views</small>
+              <span className="pulse-label">Visitors today</span>
+              <strong className="pulse-value">{funnel?.totals?.today_visitors || 0}</strong>
+              <small className="pulse-sub">Unique storefront sessions</small>
             </div>
-            <div className="pulse-card">
-              <span className="pulse-label">Added to Bag</span>
-              <strong className="pulse-value">{funnel?.totals?.add_to_cart || 0}</strong>
-              <small className="pulse-sub">{funnel?.totals?.view_to_cart_rate || 0}% view-to-cart rate</small>
+            <div className="pulse-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/orders?tab=draft')}>
+              <span className="pulse-label">Draft orders</span>
+              <strong className="pulse-value">{sales.draft_orders || 0}</strong>
+              <small className="pulse-sub">View &amp; convert drafts →</small>
+            </div>
+            <div className="pulse-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/orders?tab=abandoned')}>
+              <span className="pulse-label">Abandoned orders</span>
+              <strong className="pulse-value">{Math.max(sales.abandoned_orders || 0, funnel?.totals?.abandoned_checkouts || 0)}</strong>
+              <small className="pulse-sub">Recover dropped checkouts →</small>
             </div>
             <div className="pulse-card highlight">
-              <span className="pulse-label">Demo Purchases</span>
-              <strong className="pulse-value">{funnel?.totals?.demo_purchase || 0}</strong>
-              <small className="pulse-sub">{funnel?.totals?.purchase_rate || 0}% overall conversion</small>
+              <span className="pulse-label">Purchases</span>
+              <strong className="pulse-value">{(funnel?.totals?.demo_purchase || 0) + (funnel?.totals?.purchase || 0)}</strong>
+              <small className="pulse-sub">{funnel?.totals?.purchase_rate || 0}% conversion rate</small>
             </div>
           </div>
         </section>
@@ -198,7 +230,7 @@ export default function Dashboard() {
                     <strong>#{order.order_number || order.id}</strong>
                     <small>{formatDate(order.created_at)}</small>
                   </div>
-                  <span className={`status-pill ${order.status}`}>{order.status}</span>
+                  <span className={`status-pill ${order.status}`}>{formatOrderStatus(order.status)}</span>
                   <b>{money(order.total_amount)}</b>
                 </div>
               ))}

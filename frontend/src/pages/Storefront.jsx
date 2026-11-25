@@ -56,6 +56,18 @@ function trackStoreEvent({ sessionId, eventType, product, variant, quantity = 1 
   }).catch(() => {});
 }
 
+function trackStoreVisit(sessionId) {
+  const minuteBucket = Math.floor(Date.now() / 60000);
+  client.post('/storefront/events', {
+    event_id: `visit-${sessionId}-${minuteBucket}`,
+    session_id: sessionId,
+    event_type: 'store_visit',
+    product_id: 'storefront',
+    quantity: 1,
+    source: 'live',
+  }).catch(() => {});
+}
+
 export default function Storefront() {
   const [sessionId] = useState(() => {
     const key = 'reihh-store-session';
@@ -109,7 +121,6 @@ export default function Storefront() {
   const [paymentMethod, setPaymentMethod] = useState('demo_card');
   /* ── Payment Modes: 'demo' (instant) | 'real_demo' (interactive sandbox) ── */
   const [paymentMode, setPaymentMode] = useState('real_razorpay');
-  const [sortBy, setSortBy] = useState('featured');
   const [priceFilter, setPriceFilter] = useState('all');
   const [sandboxModal, setSandboxModal] = useState(null); // 'card_otp' | 'upi_qr' | 'cod_otp'
   const [sandboxOtp, setSandboxOtp] = useState('');
@@ -135,13 +146,20 @@ export default function Storefront() {
   const [appliedDiscount, setAppliedDiscount] = useState(null);
   const [discountError, setDiscountError] = useState('');
 
-  /* ── fetch catalog ── */
+  /* ── fetch catalog + live visitor 60s heartbeat ── */
   useEffect(() => {
+    trackStoreVisit(sessionId);
+    const heartbeat = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        trackStoreVisit(sessionId);
+      }
+    }, 60000);
     client.get('/storefront/products')
       .then(({ data }) => setProducts(data.products || []))
       .catch(() => setError('The REIHH collection is temporarily unavailable. Please reload.'))
       .finally(() => setLoading(false));
-  }, []);
+    return () => clearInterval(heartbeat);
+  }, [sessionId]);
 
   /* ── persist wishlist ── */
   useEffect(() => {
@@ -187,12 +205,8 @@ export default function Storefront() {
       return true;
     });
 
-    if (sortBy === 'price_low') list.sort((a, b) => (a.price || 0) - (b.price || 0));
-    else if (sortBy === 'price_high') list.sort((a, b) => (b.price || 0) - (a.price || 0));
-    else if (sortBy === 'title_asc') list.sort((a, b) => a.title.localeCompare(b.title));
-
     return list;
-  }, [products, category, query, wishlist, priceFilter, sortBy]);
+  }, [products, category, query, wishlist, priceFilter]);
 
   /* ── view analytics tracking ── */
   useEffect(() => {
@@ -279,6 +293,26 @@ export default function Storefront() {
     setDiscountError('');
   };
 
+  const syncAbandonedCheckout = (overrideCustomer) => {
+    if (!cart.length) return;
+    const c = overrideCustomer || customer;
+    client.post('/storefront/abandoned-checkouts', {
+      session_id: sessionId,
+      customer_name: c.name || null,
+      customer_email: c.email || null,
+      customer_phone: c.phone || null,
+      shipping_address: c.address || null,
+      discount_code: appliedDiscount?.code || null,
+      items: cart.map((line) => ({ variant_id: line.variant.id, quantity: line.quantity })),
+    }).catch(() => {});
+  };
+
+  useEffect(() => {
+    if (checkoutStep < 1 || checkoutStep >= 3 || !cart.length) return undefined;
+    const timer = setTimeout(() => syncAbandonedCheckout(), 900);
+    return () => clearTimeout(timer);
+  }, [checkoutStep, customer.name, customer.email, customer.phone, customer.address, appliedDiscount?.code]);
+
   const startCheckout = () => {
     if (!cart.length) return;
     cart.forEach((line) => trackStoreEvent({
@@ -288,6 +322,7 @@ export default function Storefront() {
       variant: line.variant,
       quantity: line.quantity,
     }));
+    syncAbandonedCheckout();
     setCheckoutStep(1);
   };
 
@@ -1087,6 +1122,7 @@ export default function Storefront() {
       <header className="store-header">
         <div className="store-links">
           <a href="https://reihh.com" target="_blank" rel="noreferrer">reihh.com ↗</a>
+          <a href="/track" target="_blank" rel="noreferrer">Track Order</a>
           <a href="/integrations" target="_blank" rel="noreferrer">Merchant Analytics</a>
           <a href="/orders" target="_blank" rel="noreferrer">Orders</a>
         </div>
@@ -1159,7 +1195,7 @@ export default function Storefront() {
             ))}
           </nav>
 
-          {/* Shopify Polaris-style Secondary Toolbar: Price Filters & Sort */}
+          {/* Collection price filters */}
           <div className="store-secondary-toolbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, margin: '14px 0 16px', padding: '10px 14px', background: 'var(--panel-bg, #fdfbf7)', borderRadius: 8, border: '1px solid var(--border, #eee)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--store-muted)', letterSpacing: '0.04em' }}>Price:</span>
@@ -1188,20 +1224,6 @@ export default function Storefront() {
               ))}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <label htmlFor="store-sort" style={{ fontSize: 12, color: 'var(--store-muted)' }}>Sort by:</label>
-              <select
-                id="store-sort"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border, #ddd)', fontSize: 12, background: 'transparent' }}
-              >
-                <option value="featured">Featured / Best matches</option>
-                <option value="price_low">Price: Low to High</option>
-                <option value="price_high">Price: High to Low</option>
-                <option value="title_asc">Name: A–Z</option>
-              </select>
-            </div>
           </div>
 
           {loading && (

@@ -10,6 +10,7 @@ import enum
 
 
 class OrderStatus(str, enum.Enum):
+    DRAFT = "draft"
     PENDING = "pending"
     CONFIRMED = "confirmed"
     SHIPPED = "shipped"
@@ -19,6 +20,8 @@ class OrderStatus(str, enum.Enum):
 
 
 ALLOWED_TRANSITIONS = {
+    # A draft is editable and does not reserve inventory or create an invoice.
+    OrderStatus.DRAFT.value: {OrderStatus.PENDING.value, OrderStatus.CANCELLED.value},
     OrderStatus.PENDING.value: {OrderStatus.CONFIRMED.value, OrderStatus.CANCELLED.value},
     OrderStatus.CONFIRMED.value: {OrderStatus.SHIPPED.value, OrderStatus.CANCELLED.value},
     OrderStatus.SHIPPED.value: {OrderStatus.DELIVERED.value, OrderStatus.RETURNED.value},

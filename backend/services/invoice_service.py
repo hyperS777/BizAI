@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
 from models.invoice import Invoice, InvoiceStatus, Payment
-from models.order import Order, OrderItem
+from models.order import Order, OrderItem, OrderStatus
 from schemas.invoice import InvoiceUpdate
 from services.integration_service import emit_event, setting_enabled
 
@@ -71,6 +71,8 @@ def generate_invoice_from_order(
     )
     if not order:
         return None
+    if order.status == OrderStatus.DRAFT.value:
+        raise HTTPException(status_code=400, detail="A draft order must be opened before an invoice can be created")
 
     existing_invoice = db.query(Invoice).filter(Invoice.order_id == order_id).first()
     if existing_invoice:

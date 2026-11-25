@@ -109,7 +109,9 @@ def create_order(db: Session, order: OrderCreate, user_id: int) -> Order:
     shipping_addr = order.shipping_address or (customer.address if customer else None)
     shipping_amt = float(order.shipping_amount or 0.0)
     lat, lon, loc_label = geocode_address(shipping_addr)
-    waybill = f"148{uuid.uuid4().int % 900000000 + 100000000}"
+    initial_status = _status_value(order.status)
+    is_draft = initial_status == OrderStatus.DRAFT.value
+    waybill = None if is_draft else f"148{uuid.uuid4().int % 900000000 + 100000000}"
 
     db_order = Order(
         order_number=order_number,
@@ -118,13 +120,13 @@ def create_order(db: Session, order: OrderCreate, user_id: int) -> Order:
         shipping_amount=shipping_amt,
         notes=order.notes,
         created_by=user_id,
-        status=OrderStatus.PENDING.value,
+        status=initial_status,
         delivery_latitude=lat,
         delivery_longitude=lon,
         delivery_location=loc_label,
-        tracking_company="Delhivery Express",
+        tracking_company=None if is_draft else "Delhivery Express",
         tracking_number=waybill,
-        tracking_url=f"https://www.delhivery.com/track/package/{waybill}",
+        tracking_url=f"https://www.delhivery.com/track/package/{waybill}" if waybill else None,
         delivery_updated_at=datetime.now(timezone.utc),
     )
     db.add(db_order)
@@ -179,10 +181,10 @@ def create_order(db: Session, order: OrderCreate, user_id: int) -> Order:
 
     emit_event(
         db,
-        "order.created",
+        "order.draft_created" if db_order.status == OrderStatus.DRAFT.value else "order.created",
         "order",
         db_order.id,
-        {"order_number": order_number, "customer": customer.name, "total": db_order.total_amount},
+        {"order_number": order_number, "customer": customer.name, "total": db_order.total_amount, "status": db_order.status},
     )
     db.commit()
     return get_order(db, db_order.id)
@@ -280,10 +282,20 @@ def update_order_status(db: Session, order_id: int, status: OrderStatus) -> Opti
 
     else:
         db_order.status = new_status
-        event = "order.shipped" if new_status == OrderStatus.SHIPPED.value else "order.delivered"
+        if old_status == OrderStatus.DRAFT.value and new_status == OrderStatus.PENDING.value and not db_order.tracking_number:
+            waybill = f"148{uuid.uuid4().int % 900000000 + 100000000}"
+            db_order.tracking_company = "Delhivery Express"
+            db_order.tracking_number = waybill
+            db_order.tracking_url = f"https://www.delhivery.com/track/package/{waybill}"
+            db_order.delivery_updated_at = datetime.now(timezone.utc)
+        event_map = {
+            OrderStatus.PENDING.value: "order.created",
+            OrderStatus.SHIPPED.value: "order.shipped",
+            OrderStatus.DELIVERED.value: "order.delivered",
+        }
         emit_event(
             db,
-            event,
+            event_map.get(new_status, f"order.{new_status}"),
             "order",
             db_order.id,
             {"order_number": db_order.order_number},

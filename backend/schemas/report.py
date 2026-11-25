@@ -12,6 +12,8 @@ class SalesSummary(BaseModel):
     total_customers: int = 0
     daily_sales: float = 0
     daily_orders: int = 0
+    draft_orders: int = 0
+    abandoned_orders: int = 0
     monthly_sales: float = 0
     monthly_orders: int = 0
     previous_month_sales: float = 0

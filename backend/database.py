@@ -19,13 +19,17 @@ if "neon.tech" in database_url and "sslmode" not in database_url:
     database_url += ("&" if "?" in database_url else "?") + "sslmode=require"
 
 connect_args = {}
+engine_kwargs = {"echo": settings.DEBUG}
 if database_url.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
+else:
+    engine_kwargs["pool_pre_ping"] = True
+    engine_kwargs["pool_recycle"] = 300
 
 engine = create_engine(
     database_url,
     connect_args=connect_args,
-    echo=settings.DEBUG,
+    **engine_kwargs,
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

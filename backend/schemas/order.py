@@ -90,6 +90,7 @@ class OrderCreate(OrderBase):
     discount_code: Optional[str] = None
     shipping_address: Optional[str] = None
     shipping_amount: Optional[float] = 0.0
+    status: OrderStatus = OrderStatus.PENDING
 
 
 class OrderUpdate(BaseModel):

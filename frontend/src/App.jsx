@@ -20,6 +20,7 @@ import { Profile, Settings } from './pages/Settings';
 import Integrations from './pages/Integrations';
 import Storefront from './pages/Storefront';
 import DeliveryDemo from './pages/DeliveryDemo';
+import TrackOrder from './pages/TrackOrder';
 
 function RequireRoles({ roles, children }) {
   const { role } = useAuth();
@@ -44,6 +45,8 @@ export default function App() {
           <Routes>
             <Route path="/store" element={<Storefront />} />
             <Route path="/store/demo" element={<Storefront />} />
+            <Route path="/track" element={<TrackOrder />} />
+            <Route path="/track/:trackingNumber" element={<TrackOrder />} />
             <Route path="/delivery/demo/:token" element={<DeliveryDemo />} />
             <Route path="/login" element={<Login />} />
             <Route element={<ProtectedLayout />}>

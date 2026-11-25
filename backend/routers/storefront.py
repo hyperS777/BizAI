@@ -5,17 +5,27 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.user import User
-from schemas.integration import StorefrontAnalyticsEventCreate, StorefrontDeliveryUpdate, StorefrontSimulationCreate
+from schemas.integration import (
+    AbandonedCheckoutConvertRequest,
+    AbandonedCheckoutPayload,
+    StorefrontAnalyticsEventCreate,
+    StorefrontDeliveryUpdate,
+    StorefrontSimulationCreate,
+)
 from services.storefront_service import (
+    convert_abandoned_checkout,
     create_storefront_simulation,
+    dismiss_abandoned_checkout,
     get_demo_delivery_by_token,
     get_storefront_analytics,
+    list_abandoned_checkouts,
     list_storefront_simulations,
     record_storefront_event,
     update_demo_delivery,
+    upsert_abandoned_checkout,
 )
 from services.storefront_service import get_public_storefront_products
-from utils.permissions import require_manager
+from utils.permissions import require_employee, require_manager, require_staff
 
 router = APIRouter(prefix="/api/storefront", tags=["storefront"])
 
@@ -61,6 +71,99 @@ def sync_catalog_endpoint(db: Session = Depends(get_db)):
 def read_demo_delivery(token: str, db: Session = Depends(get_db)):
     try:
         return get_demo_delivery_by_token(db, token)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/tracking/{tracking_number}")
+def read_public_tracking(tracking_number: str, db: Session = Depends(get_db)):
+    """Public tracking payload lookup by Delhivery AWB or REIHH order number."""
+    import json
+    from sqlalchemy import or_
+    from sqlalchemy.orm import joinedload
+    from models.integration import StorefrontSimulation
+    from models.order import Order, OrderItem
+
+    ref = tracking_number.strip().lstrip("#")
+    order = (
+        db.query(Order)
+        .options(joinedload(Order.items).joinedload(OrderItem.product), joinedload(Order.customer))
+        .filter(or_(Order.tracking_number == ref, Order.order_number == ref.upper()))
+        .first()
+    )
+    if not order:
+        raise HTTPException(status_code=404, detail="No order or AWB found for that reference")
+    sim = db.query(StorefrontSimulation).filter(StorefrontSimulation.order_id == order.id).first()
+    checkpoints = []
+    if sim and sim.checkpoint_log:
+        try:
+            checkpoints = json.loads(sim.checkpoint_log)
+        except json.JSONDecodeError:
+            checkpoints = []
+    return {
+        "order_number": order.order_number,
+        "status": order.status,
+        "tracking_company": order.tracking_company or "Delhivery Express",
+        "tracking_number": order.tracking_number,
+        "tracking_url": order.tracking_url,
+        "location": order.delivery_location,
+        "shipping_address": order.shipping_address,
+        "customer_name": order.customer.name if order.customer else None,
+        "total_amount": float(order.total_amount or 0),
+        "created_at": order.created_at,
+        "updated_at": order.delivery_updated_at or order.updated_at,
+        "items": [
+            {
+                "name": it.product.name if it.product else f"Item #{it.product_id}",
+                "quantity": it.quantity,
+                "option1": it.option1,
+                "option2": it.option2,
+                "total_price": float(it.total_price or 0),
+            }
+            for it in (order.items or [])
+        ],
+        "checkpoints": checkpoints,
+    }
+
+
+@router.post("/abandoned-checkouts")
+def save_abandoned_checkout(payload: AbandonedCheckoutPayload, db: Session = Depends(get_db)):
+    try:
+        return upsert_abandoned_checkout(db, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/abandoned-checkouts")
+def read_abandoned_checkouts(
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff),
+):
+    return list_abandoned_checkouts(db, limit=max(1, min(limit, 250)))
+
+
+@router.post("/abandoned-checkouts/{checkout_id}/convert")
+def recover_abandoned_checkout(
+    checkout_id: int,
+    payload: AbandonedCheckoutConvertRequest = AbandonedCheckoutConvertRequest(),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_employee),
+):
+    try:
+        return convert_abandoned_checkout(db, checkout_id, current_user.id, target_status=payload.status)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/abandoned-checkouts/{checkout_id}")
+def delete_abandoned_checkout(
+    checkout_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_manager),
+):
+    try:
+        return dismiss_abandoned_checkout(db, checkout_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
