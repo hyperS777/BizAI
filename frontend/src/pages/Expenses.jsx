@@ -5,6 +5,7 @@ import { EmptyState, Modal, PageHeader } from '../components/ui';
 import { apiError, formatDate, money } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { emitWorkspaceSync, subscribeWorkspaceSync } from '../utils/sync';
 
 const CATEGORIES = [
   'Rent', 'Salaries', 'Utilities', 'Supplies', 'Marketing',
@@ -63,7 +64,10 @@ export default function Expenses() {
       .catch((err) => setError(apiError(err)));
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    return subscribeWorkspaceSync(() => load());
+  }, []);
 
   const save = async (event) => {
     event.preventDefault();
@@ -82,6 +86,7 @@ export default function Expenses() {
       }
       setModal(false);
       setForm(blank);
+      emitWorkspaceSync('expenses');
       load();
     } catch (err) {
       setError(apiError(err, 'Could not save expense'));
@@ -103,6 +108,7 @@ export default function Expenses() {
       setRecurringSuccess(msg);
       toast?.success(msg);
       setRecurringForm(blankRecurring);
+      emitWorkspaceSync('expenses');
       load();
       setTimeout(() => { setRecurringModal(false); setRecurringSuccess(''); }, 2000);
     } catch (err) {
@@ -118,6 +124,7 @@ export default function Expenses() {
       await client.delete(`/expenses/${id}`);
       setDeleting(null);
       toast?.info('Expense removed');
+      emitWorkspaceSync('expenses');
       load();
     } catch (err) {
       setError(apiError(err, 'Could not delete expense'));
@@ -129,6 +136,7 @@ export default function Expenses() {
     if (!window.confirm(`Cancel all future scheduled entries for "${descriptionPrefix}"?`)) return;
     try {
       await client.delete(`/expenses/recurring/cancel?description=${encodeURIComponent(descriptionPrefix.split('(')[0].trim())}`);
+      emitWorkspaceSync('expenses');
       load();
     } catch (err) {
       setError(apiError(err, 'Could not cancel future recurring series'));

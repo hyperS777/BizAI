@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import {
   Activity, BarChart3, Check, ChevronDown, ChevronRight, CircleAlert,
-  Download, Eye, Package, PlugZap, Plus, Save, ShoppingCart, Store,
+  Download, Eye, Loader2, Package, PlugZap, Plus, Save, ShoppingCart, Store,
   TrendingUp, Users, Webhook,
 } from 'lucide-react';
 import client from '../api/client';
 import { PageHeader } from '../components/ui';
 import { apiError, formatDate, money } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
+import { emitWorkspaceSync, subscribeWorkspaceSync } from '../utils/sync';
 
 const initialWebhook = {
   name: '', url: '', secret: '',
@@ -94,6 +95,7 @@ export default function Integrations() {
   const [simOrders, setSimOrders] = useState([]);
   const [delhiveryPush, setDelhiveryPush] = useState({ awb: '', status: 'In Transit', location: 'Delhi Okhla Hub', note: '' });
   const [delhiveryBusy, setDelhiveryBusy] = useState(false);
+  const [discountBusyId, setDiscountBusyId] = useState(null);
 
   const load = () => {
     return client.get('/integrations/dashboard').then((res) => {
@@ -112,6 +114,11 @@ export default function Integrations() {
         setDelhiveryPush((prev) => ({ ...prev, awb: firstOpen.tracking_number || firstOpen.order_number }));
       }
     }).catch(() => {});
+    return subscribeWorkspaceSync(() => {
+      load();
+      client.get(`/storefront/analytics?days=${analyticsDays}`).then(({ data: result }) => setAnalytics(result)).catch(() => {});
+      client.get(`/storefront/analytics/funnel?days=${analyticsDays}`).then(({ data: result }) => setFunnel(result)).catch(() => {});
+    });
   }, []);
 
   useEffect(() => {
@@ -171,6 +178,7 @@ export default function Integrations() {
     try {
       await client.post('/integrations/discounts', { ...discount, value: Number(discount.value) });
       setDiscount(initialDiscount);
+      emitWorkspaceSync('discounts');
       await load();
       setNotice('Discount code added.');
     } catch (err) {
@@ -179,19 +187,36 @@ export default function Integrations() {
   };
 
   const toggleDiscount = async (item) => {
+    if (discountBusyId === item.id) return;
+    const nextActive = !item.active;
+    setDiscountBusyId(item.id);
+    setData((prev) => prev ? {
+      ...prev,
+      discounts: (prev.discounts || []).map((d) => (d.id === item.id ? { ...d, active: nextActive } : d)),
+    } : prev);
     try {
-      await client.patch(`/integrations/discounts/${item.id}`, {
+      const { data: updated } = await client.patch(`/integrations/discounts/${item.id}`, {
         code: item.code,
         discount_type: item.discount_type,
         value: item.value,
-        active: !item.active,
+        active: nextActive,
         usage_limit: item.usage_limit ?? null,
         description: item.description ?? '',
       });
-      await load();
-      setNotice(`Discount ${item.code} ${item.active ? 'paused' : 'activated'}.`);
+      setData((prev) => prev ? {
+        ...prev,
+        discounts: (prev.discounts || []).map((d) => (d.id === item.id ? updated : d)),
+      } : prev);
+      emitWorkspaceSync('discounts');
+      setNotice(`Discount ${item.code} ${updated.active ? 'activated' : 'paused'}.`);
     } catch (err) {
+      setData((prev) => prev ? {
+        ...prev,
+        discounts: (prev.discounts || []).map((d) => (d.id === item.id ? { ...d, active: item.active } : d)),
+      } : prev);
       setError(apiError(err, 'Could not update discount status'));
+    } finally {
+      setDiscountBusyId(null);
     }
   };
 
@@ -202,6 +227,7 @@ export default function Integrations() {
     setNotice('');
     try {
       const { data: res } = await client.post('/integrations/delhivery/simulate', delhiveryPush);
+      emitWorkspaceSync('orders');
       await load();
       setNotice(`Delhivery update sent to site: Order #${res.order_number} is now "${res.order_status}" at ${res.location}.`);
     } catch (err) {
@@ -628,8 +654,15 @@ export default function Integrations() {
                         <td><span className={`sim-status-badge ${item.active ? 'sim-status-delivered' : 'sim-status-returned_to_store'}`}>{item.active ? 'Active' : 'Inactive'}</span></td>
                         {isAdmin && (
                           <td style={{ textAlign: 'right' }}>
-                            <button type="button" className="text-btn" onClick={() => toggleDiscount(item)}>
-                              {item.active ? 'Pause' : 'Activate'}
+                            <button
+                              type="button"
+                              className="text-btn"
+                              disabled={discountBusyId === item.id}
+                              onClick={() => toggleDiscount(item)}
+                            >
+                              {discountBusyId === item.id
+                                ? <><Loader2 size={13} className="spin-animation" /> Updating…</>
+                                : (item.active ? 'Pause' : 'Activate')}
                             </button>
                           </td>
                         )}

@@ -35,6 +35,7 @@ export default function Products() {
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [totalCount, setTotalCount] = useState(null);
   const [modal, setModal] = useState(false);
   const [importModal, setImportModal] = useState(false);
   const [form, setForm] = useState(blank);
@@ -47,7 +48,13 @@ export default function Products() {
 
   const load = () => {
     client.get('/products', { params: { search: search || undefined, category_id: categoryId || undefined } })
-      .then((res) => setProducts(res.data || []))
+      .then((res) => {
+        const list = res.data || [];
+        setProducts(list);
+        if (!search && !categoryId) {
+          setTotalCount(list.length);
+        }
+      })
       .catch((err) => setError(apiError(err)));
   };
 
@@ -237,14 +244,13 @@ export default function Products() {
       {error && <div className="notice error">{error}</div>}
 
       {/* Collection / Category Filter Pills */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         <button
           type="button"
-          className={categoryId === '' ? 'primary-btn' : 'outline-btn'}
-          style={{ fontSize: 11.5, padding: '4px 12px', borderRadius: 20 }}
+          className={`segment-pill ${categoryId === '' ? 'active' : ''}`}
           onClick={() => setCategoryId('')}
         >
-          All Collections ({products.length})
+          All Collections ({totalCount ?? products.length})
         </button>
         {categories
           .filter((cat) => !['Electronics', 'Furniture', 'Office Supplies'].includes(cat.name))
@@ -252,8 +258,7 @@ export default function Products() {
           <button
             key={cat.id}
             type="button"
-            className={categoryId === String(cat.id) ? 'primary-btn' : 'outline-btn'}
-            style={{ fontSize: 11.5, padding: '4px 12px', borderRadius: 20 }}
+            className={`segment-pill ${categoryId === String(cat.id) ? 'active' : ''}`}
             onClick={() => setCategoryId(categoryId === String(cat.id) ? '' : String(cat.id))}
           >
             {cat.name}

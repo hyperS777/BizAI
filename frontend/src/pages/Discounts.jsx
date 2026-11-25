@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Copy, PauseCircle, PlayCircle, Plus, Tag, Ticket, Trash2 } from 'lucide-react';
+import { Check, Copy, Edit3, Loader2, PauseCircle, PlayCircle, Plus, Tag, Ticket, Trash2 } from 'lucide-react';
 import client from '../api/client';
 import { EmptyState, Modal, PageHeader } from '../components/ui';
 import { apiError, money } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { emitWorkspaceSync } from '../utils/sync';
+import { emitWorkspaceSync, subscribeWorkspaceSync } from '../utils/sync';
 
 const BLANK_COUPON = {
   code: '',
@@ -23,8 +23,10 @@ export default function Discounts() {
   const [discounts, setDiscounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(BLANK_COUPON);
   const [busy, setBusy] = useState(false);
+  const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [copiedCode, setCopiedCode] = useState('');
@@ -36,13 +38,35 @@ export default function Discounts() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    return subscribeWorkspaceSync(() => load());
+  }, []);
 
   const stats = useMemo(() => {
     const active = discounts.filter((d) => d.active).length;
     const redemptions = discounts.reduce((sum, d) => sum + (d.times_used || 0), 0);
     return { total: discounts.length, active, paused: discounts.length - active, redemptions };
   }, [discounts]);
+
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(BLANK_COUPON);
+    setModalOpen(true);
+  };
+
+  const openEdit = (item) => {
+    setEditingId(item.id);
+    setForm({
+      code: item.code || '',
+      discount_type: item.discount_type || 'percent',
+      value: String(item.value ?? ''),
+      usage_limit: item.usage_limit ? String(item.usage_limit) : '',
+      description: item.description || '',
+      active: Boolean(item.active),
+    });
+    setModalOpen(true);
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -55,22 +79,27 @@ export default function Discounts() {
         value: Number(form.value),
         usage_limit: form.usage_limit ? Number(form.usage_limit) : null,
         description: form.description.trim() || null,
-        active: true,
+        active: editingId ? Boolean(form.active) : true,
       };
-      const { data: created } = await client.post('/integrations/discounts', payload);
+      const { data: saved } = editingId
+        ? await client.patch(`/integrations/discounts/${editingId}`, payload)
+        : await client.post('/integrations/discounts', payload);
+
       setDiscounts((prev) => {
-        const idx = prev.findIndex((d) => d.id === created.id || d.code === created.code);
+        const idx = prev.findIndex((d) => d.id === saved.id || d.code === saved.code);
         if (idx >= 0) {
           const copy = [...prev];
-          copy[idx] = created;
+          copy[idx] = saved;
           return copy;
         }
-        return [created, ...prev];
+        return [saved, ...prev];
       });
+      setEditingId(null);
       setForm(BLANK_COUPON);
       setModalOpen(false);
-      setNotice(`Coupon ${created.code} is now live on your storefront and orders.`);
-      toast?.success(`Coupon ${created.code} created`);
+      const verb = editingId ? 'updated' : 'created';
+      setNotice(`Coupon ${saved.code} ${verb} and synced live with storefront and orders.`);
+      toast?.success(`Coupon ${saved.code} ${verb}`);
       emitWorkspaceSync('discounts');
       load();
     } catch (err) {
@@ -82,12 +111,17 @@ export default function Discounts() {
   };
 
   const toggleDiscount = async (item) => {
+    if (busyId === item.id) return;
+    const nextActive = !item.active;
+    // Optimistic UI update so status & button respond instantaneously
+    setBusyId(item.id);
+    setDiscounts((prev) => prev.map((d) => (d.id === item.id ? { ...d, active: nextActive } : d)));
     try {
       const { data: updated } = await client.patch(`/integrations/discounts/${item.id}`, {
         code: item.code,
         discount_type: item.discount_type,
         value: item.value,
-        active: !item.active,
+        active: nextActive,
         usage_limit: item.usage_limit ?? null,
         description: item.description ?? '',
       });
@@ -95,11 +129,17 @@ export default function Discounts() {
       toast?.success(`Coupon ${item.code} ${updated.active ? 'activated' : 'paused'}`);
       emitWorkspaceSync('discounts');
     } catch (err) {
+      // Revert optimistic update on failure
+      setDiscounts((prev) => prev.map((d) => (d.id === item.id ? { ...d, active: item.active } : d)));
       toast?.error(apiError(err, 'Could not update coupon'));
+    } finally {
+      setBusyId(null);
     }
   };
 
   const removeDiscount = async (item) => {
+    if (busyId === item.id) return;
+    setBusyId(item.id);
     try {
       await client.delete(`/integrations/discounts/${item.id}`);
       setDiscounts((prev) => prev.filter((d) => d.id !== item.id));
@@ -107,6 +147,8 @@ export default function Discounts() {
       emitWorkspaceSync('discounts');
     } catch (err) {
       toast?.error(apiError(err, 'Could not delete coupon'));
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -125,7 +167,7 @@ export default function Discounts() {
         subtitle="Create and manage Shopify-style promo codes synced live with checkout, orders, and storefront."
       >
         {isAdmin && (
-          <button className="primary-btn heading-btn" onClick={() => { setForm(BLANK_COUPON); setModalOpen(true); }}>
+          <button className="primary-btn heading-btn" onClick={openCreate}>
             <Plus size={14} /> Create coupon
           </button>
         )}
@@ -201,11 +243,35 @@ export default function Discounts() {
                   </td>
                   <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                     {isAdmin && (
-                      <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
-                        <button type="button" className="text-btn" onClick={() => toggleDiscount(item)}>
-                          {item.active ? <><PauseCircle size={13} /> Pause</> : <><PlayCircle size={13} /> Activate</>}
+                      <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                        <button
+                          type="button"
+                          className="text-btn"
+                          disabled={busyId === item.id}
+                          onClick={() => toggleDiscount(item)}
+                        >
+                          {busyId === item.id
+                            ? <><Loader2 size={13} className="spin-animation" /> Updating…</>
+                            : item.active
+                              ? <><PauseCircle size={13} /> Pause</>
+                              : <><PlayCircle size={13} /> Activate</>}
                         </button>
-                        <button type="button" className="text-btn danger" onClick={() => removeDiscount(item)} title="Delete coupon">
+                        <button
+                          type="button"
+                          className="text-btn"
+                          disabled={busyId === item.id}
+                          onClick={() => openEdit(item)}
+                          title="Edit coupon"
+                        >
+                          <Edit3 size={13} /> Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="text-btn danger"
+                          disabled={busyId === item.id}
+                          onClick={() => removeDiscount(item)}
+                          title="Delete coupon"
+                        >
                           <Trash2 size={13} />
                         </button>
                       </div>
@@ -221,7 +287,10 @@ export default function Discounts() {
       )}
 
       {modalOpen && (
-        <Modal title="Create Discount Coupon Code" onClose={() => setModalOpen(false)}>
+        <Modal
+          title={editingId ? `Edit Coupon ${form.code || ''}`.trim() : 'Create Discount Coupon Code'}
+          onClose={() => { setModalOpen(false); setEditingId(null); }}
+        >
           <form className="stack-form" onSubmit={handleSave}>
             <label>Coupon Code*
               <input
@@ -266,8 +335,20 @@ export default function Discounts() {
                 placeholder="e.g. 15% off winter launch collection"
               />
             </label>
+            {editingId && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, flexDirection: 'row', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(form.active)}
+                  onChange={(e) => setForm({ ...form, active: e.target.checked })}
+                  style={{ width: 'auto' }}
+                />
+                <span>Coupon is active and redeemable at checkout</span>
+              </label>
+            )}
             <button className="primary-btn" type="submit" disabled={busy}>
-              <Tag size={14} /> {busy ? 'Creating…' : 'Create & Publish Coupon'}
+              {busy ? <Loader2 size={14} className="spin-animation" /> : <Tag size={14} />}
+              {busy ? (editingId ? 'Saving changes…' : 'Creating…') : (editingId ? 'Save Coupon Changes' : 'Create & Publish Coupon')}
             </button>
           </form>
         </Modal>

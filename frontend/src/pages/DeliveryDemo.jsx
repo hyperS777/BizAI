@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import client from '../api/client';
 import { apiError, money } from '../utils/format';
+import { emitWorkspaceSync, subscribeWorkspaceSync } from '../utils/sync';
 import './DeliveryDemo.css';
 import { CircleMarker, MapContainer, Popup, TileLayer, ZoomControl, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -217,12 +218,15 @@ export default function DeliveryDemo() {
     .catch((err) => setError(apiError(err, 'This delivery link is invalid or expired.')))
     .finally(() => setLoading(false));
 
-  useEffect(() => { load(); }, [token]);
+  useEffect(() => {
+    load();
+    return subscribeWorkspaceSync(() => load());
+  }, [token]);
 
-  /* Auto-refresh every 15s while not delivered */
+  /* Auto-refresh every 5s while not delivered */
   useEffect(() => {
     if (!delivery || delivery.delivery_status === 'delivered' || delivery.delivery_status === 'returned_to_store') return undefined;
-    const timer = setInterval(load, 15000);
+    const timer = setInterval(load, 5000);
     return () => clearInterval(timer);
   }, [delivery?.delivery_status]);
 
@@ -250,6 +254,7 @@ export default function DeliveryDemo() {
       setDelivery(data);
       setNote('');
       setMessage(`Status updated to: ${STATUS_LABELS[status] || status}.`);
+      emitWorkspaceSync('orders');
       if (status === 'delivered') {
         showToast('🎉 Delivery complete! Invoice generated and sent to customer.');
       } else {
@@ -288,6 +293,7 @@ export default function DeliveryDemo() {
           agent_name: 'Delhivery Courier Executive',
           note: `Automated courier checkpoint: Package is ${st.replaceAll('_', ' ')}.`,
         });
+        emitWorkspaceSync('orders');
         await load();
       } catch (err) {
         console.error(err);

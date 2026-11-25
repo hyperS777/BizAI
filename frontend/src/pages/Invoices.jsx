@@ -5,6 +5,7 @@ import { EmptyState, Modal, PageHeader } from '../components/ui';
 import { apiError, formatDate, money } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { emitWorkspaceSync, subscribeWorkspaceSync } from '../utils/sync';
 
 const PAYMENT_METHODS = [
   { id: 'bank_transfer', label: 'NEFT / RTGS / Bank Transfer' },
@@ -52,6 +53,10 @@ export default function Invoices() {
   useEffect(() => {
     load();
     client.get('/customers').then((res) => setCustomers(res.data || [])).catch(() => {});
+    return subscribeWorkspaceSync(() => {
+      load();
+      client.get('/customers').then((res) => setCustomers(res.data || [])).catch(() => {});
+    });
   }, []);
 
   const handleCreateInvoice = async (e) => {
@@ -87,6 +92,7 @@ export default function Invoices() {
       setCreateModal(false);
       setNotice('Direct Tax Invoice created successfully.');
       toast?.success('Direct Tax Invoice created successfully');
+      emitWorkspaceSync('invoices');
       load();
     } catch (err) {
       setError(apiError(err, 'Could not create invoice'));
@@ -114,6 +120,7 @@ export default function Invoices() {
       setPaymentModal(null);
       setNotice(`Recorded payment of ${money(payForm.amount)} for #${paymentModal.invoice_number}`);
       toast?.success(`Recorded payment of ${money(payForm.amount)}`);
+      emitWorkspaceSync('invoices');
       load();
     } catch (err) {
       setError(apiError(err, 'Could not record payment'));

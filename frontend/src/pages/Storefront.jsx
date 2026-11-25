@@ -66,7 +66,7 @@ function trackStoreVisit(sessionId) {
     product_id: 'storefront',
     quantity: 1,
     source: 'live',
-  }).catch(() => {});
+  }).then(() => emitWorkspaceSync('visit')).catch(() => {});
 }
 
 export default function Storefront() {

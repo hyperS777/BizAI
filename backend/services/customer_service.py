@@ -2,7 +2,7 @@
 
 from typing import List, Optional
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from models.customer import Customer
@@ -76,6 +76,21 @@ def delete_customer(db: Session, customer_id: int) -> Optional[str]:
 
 
 def get_customer_orders(db: Session, customer_id: int) -> List[Order]:
+    target = get_customer(db, customer_id)
+    matching_ids = [customer_id]
+    if target:
+        filters = []
+        norm_name = (target.name or "").strip().lower()
+        if norm_name and len(norm_name) >= 3:
+            filters.append(func.lower(func.trim(Customer.name)) == norm_name)
+        if target.phone and target.phone.strip():
+            filters.append(Customer.phone == target.phone.strip())
+        if filters:
+            matching_ids = [
+                row[0]
+                for row in db.query(Customer.id).filter(or_(*filters)).all()
+            ] or [customer_id]
+
     return (
         db.query(Order)
         .options(
@@ -84,7 +99,7 @@ def get_customer_orders(db: Session, customer_id: int) -> List[Order]:
             joinedload(Order.customer),
             joinedload(Order.invoice),
         )
-        .filter(Order.customer_id == customer_id)
+        .filter(Order.customer_id.in_(matching_ids))
         .order_by(Order.created_at.desc())
         .all()
     )

@@ -265,56 +265,64 @@ def _deep_reasoning_answer(
     }
     if db:
         all_custs = db.query(CustomerModel).all()
-        matched_customer = None
+        matched_customers = []
 
-        # Check explicit token matching while ignoring common English / test words like "hello"
+        # Collect ALL customer accounts matching the queried name/alias so lifetime totals are accurate
+        name_aliases = {
+            "ibad": {"ibad", "iabd", "inad"},
+            "ramji": {"ramji"},
+        }
+        matched_token = None
+        for canonical, aliases in name_aliases.items():
+            if any(re.search(rf'\b{alias}\b', q_norm) for alias in aliases):
+                matched_token = canonical
+                break
+
         for c in all_custs:
             if not c.name:
                 continue
             c_name_lower = c.name.strip().lower()
             if c_name_lower in _common_non_names:
                 continue
+            if matched_token:
+                aliases = name_aliases[matched_token]
+                if any(a in c_name_lower for a in aliases):
+                    matched_customers.append(c)
+                    continue
             if len(c_name_lower) >= 4 and re.search(rf'\b{re.escape(c_name_lower)}\b', q_norm):
-                matched_customer = c
-                break
+                matched_customers.append(c)
+                continue
             parts = [p.lower() for p in c_name_lower.split() if len(p) >= 4 and p.lower() not in _common_non_names]
             if any(part in words for part in parts):
-                matched_customer = c
-                break
+                matched_customers.append(c)
+                continue
 
-        # Also handle common typos like "iabd", "inad"
-        if not matched_customer and ("iabd" in q_norm or "ibad" in q_norm or "inad" in q_norm):
-            matched_customer = next((c for c in all_custs if "ibad" in (c.name or "").lower()), None)
-        if not matched_customer and "ramji" in q_norm:
-            matched_customer = next((c for c in all_custs if "ramji" in (c.name or "").lower()), None)
-
-        # Fuzzy word matching against all non-generic customer first/last names (requires 4+ chars)
-        if not matched_customer:
+        # Fuzzy fallback if no direct matches (requires 4+ chars, non-generic)
+        if not matched_customers:
             for w in words:
                 if len(w) >= 4 and w not in _common_non_names:
                     for c in all_custs:
                         c_parts = [p.lower() for p in (c.name or "").split() if len(p) >= 4 and p.lower() not in _common_non_names]
-                        for cp in c_parts:
-                            if len(w) == len(cp) and sum(1 for a, b in zip(w, cp) if a != b) <= 1:
-                                matched_customer = c
-                                break
-                        if matched_customer:
-                            break
-                if matched_customer:
-                    break
+                        if any(len(w) == len(cp) and sum(1 for a, b in zip(w, cp) if a != b) <= 1 for cp in c_parts):
+                            matched_customers.append(c)
 
-        if matched_customer:
+        if matched_customers:
+            # Prefer the richest profile (most complete name / highest ID) as primary display
+            matched_customers.sort(key=lambda c: (len(c.name or ""), -c.id), reverse=True)
+            matched_customer = matched_customers[0]
+            matched_ids = [c.id for c in matched_customers]
             c_orders = (
                 db.query(OrderModel)
-                .filter(OrderModel.customer_id == matched_customer.id)
+                .filter(OrderModel.customer_id.in_(matched_ids))
                 .order_by(OrderModel.created_at.desc())
                 .all()
             )
             total_spent = sum(o.total_amount or 0 for o in c_orders)
             aov = (total_spent / len(c_orders)) if c_orders else 0
+            total_outstanding = sum(c.outstanding_balance or 0 for c in matched_customers)
 
             orders_lines = []
-            for o in c_orders[:8]:
+            for o in c_orders[:15]:
                 items = db.query(OrderItemModel).filter(OrderItemModel.order_id == o.id).all()
                 items_str = ", ".join(f"{it.quantity}x {it.product.name if it.product else 'Garment'}" for it in items)
                 date_str = o.created_at.strftime('%d %b %Y') if o.created_at else 'Recent'
@@ -322,41 +330,33 @@ def _deep_reasoning_answer(
                     f"* `{o.order_number}`: **{o.status.upper()}** · INR {o.total_amount:,.0f} "
                     f"({items_str or 'Apparel'}) · *{date_str}*"
                 )
+            if len(c_orders) > 15:
+                orders_lines.append(f"* *...and {len(c_orders) - 15} earlier order(s)*")
             orders_block = "\n".join(orders_lines) or "* No commercial orders placed yet."
-
-            team_note = ""
-            name_lower = matched_customer.name.lower()
-            if "ramji" in name_lower:
-                team_note = "\n\n> 💡 **Team Stakeholder Context**: Ramji is also a core Frontend & UI/UX Engineer of BizAI from Team YATRI, actively validating live checkout flows and customer dashboards."
-            elif "ibad" in name_lower:
-                team_note = "\n\n> 💡 **Team Stakeholder Context**: Mohammad Ibad Hussain is the Team Leader & System Architect of BizAI from Team YATRI, running live high-volume load simulations across the storefront."
-            elif "amber" in name_lower:
-                team_note = "\n\n> 💡 **Executive Context**: Amber Abbas is the Business Head & Co-founder of REIHH Studio."
 
             delivered_cnt = sum(1 for o in c_orders if o.status == 'delivered')
             in_transit_cnt = sum(1 for o in c_orders if o.status in ('shipped', 'confirmed'))
-            fulfillment_summary = f"{delivered_cnt} delivered safely, {in_transit_cnt} in fulfillment"
+            fulfillment_summary = f"{delivered_cnt} delivered, {in_transit_cnt} in fulfillment"
 
             return (
                 f"> 🧠 **BizAI Live Data Grounding & Reasoning**\n"
-                f"> * Queried: Customer ledger for account **'{matched_customer.name}'** (ID #{matched_customer.id})\n"
-                f"> * Cross-referenced: {len(c_orders)} orders in live database\n"
-                f"> * Computed: Lifetime Gross Merchandise Value (GMV) of **INR {total_spent:,.0f}**, AOV: **INR {aov:,.0f}**\n\n"
+                f"> * Queried: Customer ledger for **'{matched_customer.name}'** ({len(matched_ids)} linked profile(s))\n"
+                f"> * Cross-referenced: **{len(c_orders)} lifetime orders** in live database\n"
+                f"> * Computed: Lifetime Spend **INR {total_spent:,.0f}**, AOV **INR {aov:,.0f}**\n\n"
                 f"### Customer Dossier: {matched_customer.name}\n\n"
-                f"**{matched_customer.name}** is a **{matched_customer.tier or 'VIP'}** client who has placed **{len(c_orders)} orders** with REIHH Studio totaling **INR {total_spent:,.0f}**.\n\n"
+                f"**{matched_customer.name}** is a **{matched_customer.tier or 'Regular'}** client who has placed **{len(c_orders)} lifetime orders** with REIHH Studio totaling **INR {total_spent:,.0f}**.\n\n"
                 f"| Metric | Details |\n"
                 f"|--------|---------|\n"
                 f"| **Lifetime Orders** | **{len(c_orders)} orders** ({fulfillment_summary}) |\n"
                 f"| **Total Spend** | **INR {total_spent:,.0f}** |\n"
                 f"| **Average Order Value (AOV)** | INR {aov:,.0f} |\n"
-                f"| **Client Tier** | **{matched_customer.tier or 'VIP'}** |\n"
+                f"| **Client Tier** | **{matched_customer.tier or 'Regular'}** |\n"
                 f"| **Contact Info** | {matched_customer.email or 'N/A'} · {matched_customer.phone or 'N/A'} |\n"
                 f"| **Primary Shipping Hub** | {matched_customer.address or 'Delhi NCR, India'} |\n"
-                f"| **Outstanding Balance** | INR {matched_customer.outstanding_balance or 0:,.0f} |\n\n"
+                f"| **Outstanding Balance** | INR {total_outstanding:,.0f} |\n\n"
                 f"#### Order History:\n"
-                f"{orders_block}"
-                f"{team_note}\n\n"
-                f"**Recommended Action**: You can view full fulfillment tracking or print warehouse packing slips in the [Orders section](/orders)."
+                f"{orders_block}\n\n"
+                f"**Recommended Action**: View full fulfillment tracking or print packing slips in [Orders](/orders)."
             )
 
     # -------------------------------------------------------------
@@ -706,7 +706,7 @@ def _deep_reasoning_answer(
                 codes_list.append(f"* `{dc.code}`: **{type_str}** ({status_str}) — {dc.description or 'Storefront discount'}")
         codes_block = "\n".join(codes_list) or (
             "* `REIHH10`: **10% off** (Active) — Official reihh.com storefront launch discount\n"
-            "* `DEMO20`: **20% off** (Active) — VIP and Team YATRI testing code\n"
+            "* `DEMO20`: **20% off** (Active) — VIP promotional testing code\n"
             "* `WELCOME`: **INR 500 flat** (Active) — First-time customer incentive\n"
             "* `FLAT500`: **INR 500 flat** (Active) — Seasonal promotion"
         )

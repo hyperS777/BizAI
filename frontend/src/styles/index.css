@@ -193,28 +193,52 @@ button {
 .primary-btn,
 .outline-btn,
 .text-btn {
-  border: 0;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  white-space: nowrap;
+  cursor: pointer;
+  line-height: 1.25;
+  border: 1px solid transparent;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px
+  gap: 8px;
+  transition: background .15s ease, border-color .15s ease, color .15s ease, opacity .15s ease;
 }
 
 .primary-btn {
   background: var(--teal);
   color: #fff;
-  padding: 13px;
+  padding: 10px 16px;
+  min-height: 36px;
   border-radius: 6px;
-  margin-top: 9px;
-  font-weight: 700
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .primary-btn:hover {
   background: var(--teal-dark)
 }
 
-.primary-btn:disabled {
-  opacity: .7
+.primary-btn:disabled,
+.outline-btn:disabled,
+.text-btn:disabled {
+  opacity: .65;
+  cursor: not-allowed;
+}
+
+.primary-btn:active,
+.outline-btn:active,
+.text-btn:active,
+.segment-pill:active,
+.segmented-btn:active {
+  transform: none;
+}
+
+.login-form .primary-btn,
+.stack-form .primary-btn {
+  margin-top: 9px;
+  padding: 13px 16px;
 }
 
 .login-hint {
@@ -436,9 +460,10 @@ button {
   background: #fff;
   color: var(--ink);
   padding: 10px 14px;
-  border-radius: 5px;
+  min-height: 36px;
+  border-radius: 6px;
   font-size: 12px;
-  font-weight: 700
+  font-weight: 700;
 }
 
 .metric-grid {
@@ -599,12 +624,19 @@ button {
   color: var(--teal);
   font-size: 12px;
   font-weight: 700;
-  padding: 0;
-  margin-top: 22px
+  padding: 4px 8px;
+  border-radius: 5px;
+  margin-top: 0;
+}
+
+.text-btn:hover {
+  background: rgba(14, 118, 110, 0.08);
 }
 
 .assistant-card .text-btn {
-  color: #f2cb71
+  color: #f2cb71;
+  padding: 0;
+  margin-top: 22px;
 }
 
 .lower-grid {
@@ -1974,8 +2006,7 @@ body {
 
 .outline-btn:hover {
   border-color: #b8ccc7;
-  box-shadow: 0 6px 16px rgba(23, 37, 43, .07);
-  transform: translateY(-1px)
+  box-shadow: 0 4px 12px rgba(23, 37, 43, .06);
 }
 
 .nav-item {
@@ -2074,7 +2105,7 @@ body {
 }
 
 .primary-btn:hover {
-  transform: translateY(-1px)
+  background: var(--teal-dark)
 }
 
 @media(max-width:900px) {
@@ -3527,8 +3558,10 @@ body {
   to { transform: rotate(360deg); }
 }
 
+.spinner-icon,
 .spin-animation {
-  animation: spin 1s linear infinite;
+  animation: spin 0.9s linear infinite;
+  flex-shrink: 0;
 }
 
 
@@ -4184,18 +4217,23 @@ body {
 
 /* Polished Segment Filter Pills (Dark/Light Mode Compatible) */
 .segment-pill {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
   gap: 6px;
-  font-size: 11.5px;
+  min-height: 32px;
+  font-size: 12px;
+  line-height: 1.2;
   font-weight: 500;
-  padding: 5px 14px;
+  padding: 6px 14px;
   border-radius: 99px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--muted);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   white-space: nowrap;
 }
 

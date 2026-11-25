@@ -12,6 +12,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from config import settings
@@ -272,31 +273,58 @@ def sync_all_reihh_catalog(db: Session, force: bool = False) -> dict:
     return {"products_synced": count_prods, "variants_synced": count_vars}
 
 
+def _find_existing_demo_customer_by_name(db: Session, clean_name: str, phone: str | None = None) -> Customer | None:
+    normalized = clean_name.strip().lower()
+    if normalized in ("", "demo customer", "guest", "walk-in", "anonymous"):
+        return None
+    clean_phone = (phone or "").strip()
+    demo_filter = (Customer.email.ilike("%@demo.reihh.com")) | (Customer.tags.ilike("%demo-store%"))
+    existing = (
+        db.query(Customer)
+        .filter(demo_filter, func.lower(func.trim(Customer.name)) == normalized)
+        .order_by(Customer.id.asc())
+        .first()
+    )
+    if existing:
+        return existing
+    if clean_phone:
+        return (
+            db.query(Customer)
+            .filter(demo_filter, func.trim(Customer.phone) == clean_phone)
+            .order_by(Customer.id.asc())
+            .first()
+        )
+    return None
+
+
 def _upsert_demo_customer(db: Session, name: str, email: str, address: str, phone: str | None = None) -> Customer:
     clean_email = email.strip().lower()
     clean_name = name.strip() or "Demo Customer"
     customer = db.query(Customer).filter(Customer.email == clean_email).first()
     if customer:
         # If the existing customer has a different name, do NOT mutate it!
-        # Mutating customer.name would retroactively rename all past orders for this customer.
-        # Instead, generate a distinct demo customer so every device/identity stays isolated.
+        # Reuse a matching named demo profile if one exists, otherwise isolate with a new record.
         if customer.name and customer.name.strip().lower() != clean_name.lower():
-            prefix = clean_email.split("@")[0] if "@" in clean_email else "demo"
-            domain = clean_email.split("@")[-1] if "@" in clean_email else "demo.reihh.com"
-            unique_email = f"{prefix}_{secrets.token_hex(3)}@{domain}"
-            new_customer = Customer(
-                name=clean_name,
-                email=unique_email,
-                phone=phone,
-                address=address,
-                company="REIHH demo customer",
-                tags="demo-store",
-                notes="Created from demo storefront checkout (separate device/identity).",
-            )
-            db.add(new_customer)
-            db.flush()
-            return new_customer
-        # Same customer name: update address if provided
+            matched_same_person = _find_existing_demo_customer_by_name(db, clean_name, phone)
+            if matched_same_person:
+                customer = matched_same_person
+            else:
+                prefix = clean_email.split("@")[0] if "@" in clean_email else "demo"
+                domain = clean_email.split("@")[-1] if "@" in clean_email else "demo.reihh.com"
+                unique_email = f"{prefix}_{secrets.token_hex(3)}@{domain}"
+                new_customer = Customer(
+                    name=clean_name,
+                    email=unique_email,
+                    phone=phone,
+                    address=address,
+                    company="REIHH demo customer",
+                    tags="demo-store",
+                    notes="Created from demo storefront checkout (separate device/identity).",
+                )
+                db.add(new_customer)
+                db.flush()
+                return new_customer
+        # Same customer name: update address/phone if provided
         if address:
             customer.address = address
         if phone:
@@ -306,6 +334,16 @@ def _upsert_demo_customer(db: Session, name: str, email: str, address: str, phon
         elif not customer.tags:
             customer.tags = "demo-store"
         return customer
+
+    if clean_email.endswith("@demo.reihh.com"):
+        matched_same_person = _find_existing_demo_customer_by_name(db, clean_name, phone)
+        if matched_same_person:
+            if address:
+                matched_same_person.address = address
+            if phone:
+                matched_same_person.phone = phone
+            return matched_same_person
+
     customer = Customer(
         name=clean_name,
         email=clean_email,

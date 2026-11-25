@@ -5,6 +5,7 @@ import { EmptyState, Modal, PageHeader } from '../components/ui';
 import { apiError, formatDate, money } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { emitWorkspaceSync, subscribeWorkspaceSync } from '../utils/sync';
 
 const REASONS = [
   { id: 'supplier_po', label: 'Supplier PO (Received stock)' },
@@ -44,7 +45,10 @@ export default function Inventory() {
       .catch((err) => setError(apiError(err)));
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    return subscribeWorkspaceSync(() => load());
+  }, []);
 
   const syncCatalog = async () => {
     setSyncing(true);
@@ -53,6 +57,7 @@ export default function Inventory() {
     try {
       const { data } = await client.post('/storefront/sync-catalog');
       setNotice(`Synced ${data.products_synced} live products and ${data.variants_synced} variants from REIHH!`);
+      emitWorkspaceSync('products');
       load();
     } catch (err) {
       setError(apiError(err, 'Could not sync live catalog'));
@@ -73,6 +78,7 @@ export default function Inventory() {
       setAdjust(null);
       setNotice('Inventory adjusted successfully.');
       toast?.success(`Updated stock by ${adjust.quantity_change > 0 ? '+' : ''}${adjust.quantity_change} units`);
+      emitWorkspaceSync('products');
       load();
     } catch (err) {
       setError(apiError(err, 'Could not update stock'));
@@ -152,6 +158,7 @@ export default function Inventory() {
       toast?.success(`Received & restocked ${lowStockItems.length} products to warehouse inventory!`);
       setNotice(`Restocked ${lowStockItems.length} low-stock products from ${supplierName}.`);
       setPoModal(false);
+      emitWorkspaceSync('products');
       load();
     } catch (err) {
       setError(apiError(err, 'Failed to receive purchase order'));

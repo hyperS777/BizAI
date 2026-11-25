@@ -72,7 +72,7 @@ export default function Dashboard() {
     const timer = setInterval(() => {
       loadFunnel();
       loadDashboardData();
-    }, 10000);
+    }, 4000);
     const unsubscribe = subscribeWorkspaceSync(() => {
       loadDashboardData();
       loadFunnel();
