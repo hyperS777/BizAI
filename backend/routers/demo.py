@@ -13,7 +13,7 @@ from models.invoice import Invoice, InvoiceStatus
 from models.order import Order, OrderItem, OrderStatus
 from models.product import Product
 from models.user import User
-from scripts.seed import reset_and_seed
+from scripts.seed import clear_all_demo_and_purchases, reset_and_seed
 from utils.permissions import require_manager
 
 router = APIRouter(prefix="/api/demo", tags=["demo"])
@@ -31,6 +31,16 @@ def reset_clean_data(
     """Wipes all demo data and re-seeds authentic REIHH apparel, orders, and expenses."""
     reset_and_seed(db)
     return {"ok": True, "message": "All demo data has been cleanly re-seeded according to current options."}
+
+
+@router.post("/clear-all")
+def clear_all_demo_data(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_manager),
+):
+    """Permanently removes all demo data, purchases, orders, invoices, customers, expenses, and analytics."""
+    clear_all_demo_and_purchases(db)
+    return {"ok": True, "message": "All demo data and purchases have been permanently removed."}
 
 
 @router.post("/simulate")

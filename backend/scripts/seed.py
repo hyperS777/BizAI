@@ -15,8 +15,16 @@ import models  # noqa: F401
 from models.ai_query import AIQuery
 from models.customer import Customer
 from models.expense import Expense
-from models.integration import IntegrationEvent, StorefrontAnalyticsEvent, StorefrontSimulation
-from models.invoice import Invoice, InvoiceStatus
+from models.integration import (
+    AbandonedCheckout,
+    AppSetting,
+    IntegrationEvent,
+    ShopifyWebhookReceipt,
+    StorefrontAnalyticsEvent,
+    StorefrontSimulation,
+)
+from models.inventory import InventoryMovement
+from models.invoice import Invoice, InvoiceStatus, Payment
 from models.order import Order, OrderItem, OrderStatus
 from models.product import Category, Product, ProductVariant
 from models.user import Role, User
@@ -24,6 +32,54 @@ from services.storefront_service import sync_all_reihh_catalog
 from utils.security import get_password_hash
 
 logger = logging.getLogger("bizai.seed")
+
+
+def _set_demo_cleared_flag(db, cleared: bool):
+    """Persist whether demo data has been explicitly cleared by an admin/manager."""
+    setting = db.query(AppSetting).filter(AppSetting.key == "demo_data_cleared").first()
+    val = "true" if cleared else "false"
+    if setting:
+        setting.value = val
+    else:
+        db.add(AppSetting(key="demo_data_cleared", value=val))
+
+
+def clear_all_demo_and_purchases(db: SessionLocal = None):
+    """Permanently remove all demo/transactional data and purchases without re-seeding."""
+    close_at_end = False
+    if db is None:
+        Base.metadata.create_all(bind=engine)
+        db = SessionLocal()
+        close_at_end = True
+
+    try:
+        db.query(StorefrontAnalyticsEvent).delete(synchronize_session=False)
+        db.query(StorefrontSimulation).delete(synchronize_session=False)
+        db.query(IntegrationEvent).delete(synchronize_session=False)
+        db.query(ShopifyWebhookReceipt).delete(synchronize_session=False)
+        db.query(AIQuery).delete(synchronize_session=False)
+        db.query(Payment).delete(synchronize_session=False)
+        db.query(Invoice).delete(synchronize_session=False)
+        db.query(OrderItem).delete(synchronize_session=False)
+        db.query(Order).delete(synchronize_session=False)
+        db.query(InventoryMovement).delete(synchronize_session=False)
+        db.query(AbandonedCheckout).delete(synchronize_session=False)
+        db.query(Expense).delete(synchronize_session=False)
+        db.query(Customer).delete(synchronize_session=False)
+        # Remove synthetic/non-Shopify demo products and their variants
+        db.query(ProductVariant).filter(
+            ProductVariant.product_id.in_(db.query(Product.id).filter(Product.shopify_product_id.is_(None)))
+        ).delete(synchronize_session=False)
+        db.query(Product).filter(Product.shopify_product_id.is_(None)).delete(synchronize_session=False)
+
+        _set_demo_cleared_flag(db, True)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        if close_at_end:
+            db.close()
 
 
 def reset_and_seed(db: SessionLocal = None):
@@ -35,6 +91,7 @@ def reset_and_seed(db: SessionLocal = None):
         close_at_end = True
 
     try:
+        _set_demo_cleared_flag(db, False)
         # 1. Clean existing transactional / demo data
         db.query(StorefrontAnalyticsEvent).delete()
         db.query(StorefrontSimulation).delete()
@@ -448,7 +505,12 @@ def seed_data():
     """Initial boot seeder that ensures basic data exists and auto-cleans old dummy data."""
     db = SessionLocal()
     try:
+        cleared_setting = db.query(AppSetting).filter(AppSetting.key == "demo_data_cleared").first()
         user_count = db.query(User).count()
+        if cleared_setting and cleared_setting.value == "true" and user_count > 0:
+            logger.info("Demo data was explicitly cleared — skipping boot seeding.")
+            return
+
         order_count = db.query(Order).count()
         # Automatically wipe obsolete dummy office equipment if present
         has_stale_dummy_data = (

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Check, ChevronRight, Moon, RotateCcw, Sparkles, Sun, Building2, Key, Eye, EyeOff, Save, CheckCircle2 } from 'lucide-react';
+import { Check, ChevronRight, Moon, RotateCcw, Sparkles, Sun, Building2, Key, Eye, EyeOff, Save, Trash2 } from 'lucide-react';
 import client from '../api/client';
 import { PageHeader, ConfirmDialog } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { apiError } from '../utils/format';
 import { useToast } from '../context/ToastContext';
+import { emitWorkspaceSync } from '../utils/sync';
 
 export function Profile() {
   const { user } = useAuth();
@@ -37,6 +38,7 @@ export function Settings() {
   const [delay, setDelay] = useState('0');
   const [dark, setDark] = useState(() => localStorage.getItem('bizai-theme') === 'dark');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
     // Business Profile & API Keys State
     const [companySettings, setCompanySettings] = useState({
@@ -128,11 +130,30 @@ export function Settings() {
       setError('');
       try {
         await client.post('/demo/reset-clean-data');
+        emitWorkspaceSync('demo');
         setMessage('Workspace reset complete: Clean authentic REIHH catalog, orders, and expenses generated successfully.');
         toast?.success('Workspace demo data reset');
       } catch (err) {
         setError(apiError(err, 'Could not reset workspace demo data'));
         toast?.error('Could not reset workspace');
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    const handleConfirmClearAll = async () => {
+      setShowClearConfirm(false);
+      setBusy(true);
+      setMessage('');
+      setError('');
+      try {
+        await client.post('/demo/clear-all');
+        emitWorkspaceSync('demo');
+        setMessage('All demo data and purchases have been permanently removed.');
+        toast?.success('All demo data & purchases removed');
+      } catch (err) {
+        setError(apiError(err, 'Could not remove demo data and purchases'));
+        toast?.error('Could not clear workspace data');
       } finally {
         setBusy(false);
       }
@@ -329,11 +350,27 @@ export function Settings() {
                       <button
                         type="button"
                         className="outline-btn"
-                        style={{ width: '100%', marginBottom: 14, justifyContent: 'center' }}
+                        style={{ width: '100%', marginBottom: 10, justifyContent: 'center' }}
                         onClick={() => setShowResetConfirm(true)}
                         disabled={busy}
                       >
                         <RotateCcw size={15} /> Reset &amp; Populate Clean REIHH Data
+                      </button>
+
+                      <button
+                        type="button"
+                        className="outline-btn"
+                        style={{
+                          width: '100%',
+                          marginBottom: 14,
+                          justifyContent: 'center',
+                          borderColor: '#d9534f',
+                          color: '#d9534f',
+                        }}
+                        onClick={() => setShowClearConfirm(true)}
+                        disabled={busy}
+                      >
+                        <Trash2 size={15} /> Remove All Demo Data &amp; Purchases
                       </button>
 
                       <div className="demo-controls">
@@ -366,12 +403,23 @@ export function Settings() {
       {/* Confirmation Dialog on Reset Clean Data */}
       <ConfirmDialog
         isOpen={showResetConfirm}
-        title="Reset &amp; Populate Clean REIHH Data"
+        title="Reset & Populate Clean REIHH Data"
         message="Are you sure you want to reset the workspace? This will clear test clutter and populate clean authentic REIHH apparel, customers, Delhivery orders, and expenses."
         confirmText="Reset Workspace"
         confirmVariant="danger"
         onConfirm={handleConfirmReset}
         onCancel={() => setShowResetConfirm(false)}
+      />
+
+      {/* Confirmation Dialog on Remove All Demo Data & Purchases */}
+      <ConfirmDialog
+        isOpen={showClearConfirm}
+        title="Remove All Demo Data & Purchases"
+        message="Are you sure you want to permanently remove all demo data and purchases? This will delete all orders, invoices, payments, customers, expenses, abandoned checkouts, and storefront analytics. Your user accounts, company settings, and REIHH product catalog will be kept, and demo data will not be re-seeded on restart."
+        confirmText="Remove All Data"
+        confirmVariant="danger"
+        onConfirm={handleConfirmClearAll}
+        onCancel={() => setShowClearConfirm(false)}
       />
     </>
   );
