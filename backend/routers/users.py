@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.user import Role, User
 from schemas.user import UserCreate, UserUpdate, UserResponse, RoleResponse
-from services.user_service import get_users, get_user, create_user, update_user
+from services.user_service import get_users, get_user, get_user_by_email, create_user, update_user
 from utils.permissions import require_admin, require_staff
 
 router = APIRouter(prefix="/api/users", tags=["users"])
@@ -38,6 +38,8 @@ def create_new_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
+    if get_user_by_email(db, user.email):
+        raise HTTPException(status_code=400, detail="Email already registered")
     return create_user(db, user)
 
 
