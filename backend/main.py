@@ -57,6 +57,8 @@ app.add_middleware(
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "https://biz-ai-sooty.vercel.app",
+        "https://bizai-reihh.site",
+        "https://www.bizai-reihh.site",
     ],
     allow_origin_regex=r"https://.*\.vercel\.app|https://.*\.azurestaticapps\.net",
     allow_credentials=True,

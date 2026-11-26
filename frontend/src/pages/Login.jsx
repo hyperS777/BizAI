@@ -8,7 +8,7 @@ import { apiError } from '../utils/format';
 export default function Login() {
   const { login, user, loading } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ email: 'admin@bizai.com', password: 'admin123' });
+  const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [isWakingUp, setIsWakingUp] = useState(false);
@@ -69,10 +69,10 @@ export default function Login() {
           <h2>Sign in to your workspace</h2>
           <p className="muted">Sign in to access your business workspace.</p>
           <label>Email
-            <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} onFocus={warmupApi} type="email" required />
+            <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} onFocus={warmupApi} type="email" autoComplete="email" placeholder="name@company.com" required />
           </label>
           <label>Password
-            <span className="password-field"><input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} onFocus={warmupApi} type={showPassword ? 'text' : 'password'} required /><button type="button" className="password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></span>
+            <span className="password-field"><input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} onFocus={warmupApi} type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter your password" required /><button type="button" className="password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></span>
           </label>
           {error && <p className="error">{error}</p>}
           {isWakingUp && (

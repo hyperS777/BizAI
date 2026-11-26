@@ -16,7 +16,7 @@ export function Profile() {
           <div className="avatar large">{user?.full_name?.slice(0, 1) || 'A'}</div>
           <div>
             <h2>{user?.full_name || 'System Admin'}</h2>
-            <p className="muted">{user?.email || 'admin@bizai.com'}</p>
+            <p className="muted">{user?.email || ''}</p>
             <span className="role-pill">{user?.role?.name || 'admin'}</span>
           </div>
         </div>
