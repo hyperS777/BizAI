@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Line } from 'react-chartjs-2';
 import {
@@ -33,27 +33,37 @@ export default function Dashboard() {
   const [lowStock, setLowStock] = useState([]);
   const [funnel, setFunnel] = useState(null);
   const canSeeStorefrontAnalytics = ['admin', 'manager'].includes(role);
+  const fetchingDashboardRef = useRef(false);
 
   const loadDashboardData = () => {
+    if (fetchingDashboardRef.current) return;
     if (role === 'employee') {
+      fetchingDashboardRef.current = true;
       client.get('/products/low-stock')
         .then((stock) => setLowStock(stock.data || []))
-        .catch((err) => setError(err.response?.data?.detail || 'Could not load inventory alerts.'));
+        .catch((err) => setError(err.response?.data?.detail || 'Could not load inventory alerts.'))
+        .finally(() => { fetchingDashboardRef.current = false; });
       return;
     }
-    Promise.all([
-      client.get('/reports/dashboard'),
-      client.get('/reports/sales?days=30'),
-      client.get('/ai/summary'),
-      client.get('/products/low-stock'),
-    ])
-      .then(([dashboard, salesRes, ai, stock]) => {
+    fetchingDashboardRef.current = true;
+    const p1 = client.get('/reports/dashboard')
+      .then((dashboard) => {
         setMetrics(dashboard.data);
-        setSeries(salesRes.data.points || []);
-        setSummary(ai.data.summary);
-        setLowStock(stock.data || []);
+        setError('');
       })
       .catch((err) => setError(err.response?.data?.detail || 'Could not load live business data.'));
+    const p2 = client.get('/reports/sales?days=30')
+      .then((salesRes) => setSeries(salesRes.data.points || []))
+      .catch(() => {});
+    const p3 = client.get('/ai/summary')
+      .then((ai) => setSummary(ai.data.summary))
+      .catch(() => {});
+    const p4 = client.get('/products/low-stock')
+      .then((stock) => setLowStock(stock.data || []))
+      .catch(() => {});
+    Promise.allSettled([p1, p2, p3, p4]).finally(() => {
+      fetchingDashboardRef.current = false;
+    });
   };
 
   useEffect(() => {
@@ -72,7 +82,7 @@ export default function Dashboard() {
     const timer = setInterval(() => {
       loadFunnel();
       loadDashboardData();
-    }, 4000);
+    }, 15000);
     const unsubscribe = subscribeWorkspaceSync(() => {
       loadDashboardData();
       loadFunnel();

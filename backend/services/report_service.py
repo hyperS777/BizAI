@@ -6,7 +6,7 @@ from calendar import monthrange
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from models.customer import Customer
@@ -57,36 +57,54 @@ def sales_between(db: Session, start: date, end: date):
 
 def get_dashboard_metrics(db: Session):
     today = _ist_today()
+    start, end = _month_bounds()
+    prev_start, prev_end = _previous_month_bounds()
 
-    total_sales = float(
-        db.query(func.coalesce(func.sum(Order.total_amount), 0))
-        .filter(Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value]))
-        .scalar()
-        or 0
-    )
-    total_orders = int(db.query(func.count(Order.id)).scalar() or 0)
+    month_start_utc, month_end_utc = _utc_bounds_for_ist_dates(start, end)
+    prev_start_utc, prev_end_utc = _utc_bounds_for_ist_dates(prev_start, prev_end)
+    today_start_utc, today_end_utc = _utc_bounds_for_ist_dates(today, today)
+
+    excluded_statuses = [OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value]
+    is_valid_order = Order.status.notin_(excluded_statuses)
+
+    order_stats = db.query(
+        func.coalesce(func.sum(case((is_valid_order, Order.total_amount), else_=0)), 0),
+        func.count(Order.id),
+        func.coalesce(func.sum(case((Order.status == OrderStatus.DRAFT.value, 1), else_=0)), 0),
+        func.coalesce(func.sum(case((is_valid_order & (Order.created_at >= month_start_utc) & (Order.created_at <= month_end_utc), Order.total_amount), else_=0)), 0),
+        func.coalesce(func.sum(case((is_valid_order & (Order.created_at >= month_start_utc) & (Order.created_at <= month_end_utc), 1), else_=0)), 0),
+        func.coalesce(func.sum(case((is_valid_order & (Order.created_at >= prev_start_utc) & (Order.created_at <= prev_end_utc), Order.total_amount), else_=0)), 0),
+        func.coalesce(func.sum(case((is_valid_order & (Order.created_at >= prev_start_utc) & (Order.created_at <= prev_end_utc), 1), else_=0)), 0),
+        func.coalesce(func.sum(case((is_valid_order & (Order.created_at >= today_start_utc) & (Order.created_at <= today_end_utc), Order.total_amount), else_=0)), 0),
+        func.coalesce(func.sum(case((is_valid_order & (Order.created_at >= today_start_utc) & (Order.created_at <= today_end_utc), 1), else_=0)), 0),
+    ).one()
+
+    total_sales = float(order_stats[0] or 0)
+    total_orders = int(order_stats[1] or 0)
+    draft_orders = int(order_stats[2] or 0)
+    month_sales = float(order_stats[3] or 0)
+    month_orders = int(order_stats[4] or 0)
+    prev_sales = float(order_stats[5] or 0)
+    prev_orders = int(order_stats[6] or 0)
+    daily_sales = float(order_stats[7] or 0)
+    daily_orders = int(order_stats[8] or 0)
+
     total_customers = int(db.query(func.count(Customer.id)).scalar() or 0)
 
     # Incurred/realized expenses to date (future recurring commitments excluded from current profit)
-    realized_expenses = float(
-        db.query(func.coalesce(func.sum(Expense.amount), 0))
-        .filter(Expense.date <= today)
-        .scalar()
-        or 0
-    )
-    scheduled_expenses = float(
-        db.query(func.coalesce(func.sum(Expense.amount), 0))
-        .filter(Expense.date > today)
-        .scalar()
-        or 0
-    )
+    expense_stats = db.query(
+        func.coalesce(func.sum(case((Expense.date <= today, Expense.amount), else_=0)), 0),
+        func.coalesce(func.sum(case((Expense.date > today, Expense.amount), else_=0)), 0),
+    ).one()
+    realized_expenses = float(expense_stats[0] or 0)
+    scheduled_expenses = float(expense_stats[1] or 0)
 
     cogs = float(
         db.query(func.coalesce(func.sum(OrderItem.quantity * Product.cost_price), 0))
         .select_from(OrderItem)
         .join(Product, Product.id == OrderItem.product_id)
         .join(Order, Order.id == OrderItem.order_id)
-        .filter(Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value]))
+        .filter(is_valid_order)
         .scalar()
         or 0
     )
@@ -94,20 +112,14 @@ def get_dashboard_metrics(db: Session):
     # Net profit strictly deducts realized spend and manufacturing costs
     profit = total_sales - realized_expenses - cogs
 
-    total_products = int(
-        db.query(func.count(Product.id))
-        .filter(Product.is_active == True)
-        .scalar()
-        or 0
-    )
-    low_stock_products = int(
-        db.query(func.count(Product.id))
-        .filter(Product.is_active == True, Product.stock_qty <= Product.min_stock_level)
-        .scalar()
-        or 0
-    )
+    product_stats = db.query(
+        func.coalesce(func.sum(case((Product.is_active == True, 1), else_=0)), 0),
+        func.coalesce(func.sum(case(((Product.is_active == True) & (Product.stock_qty <= Product.min_stock_level), 1), else_=0)), 0),
+    ).one()
+    total_products = int(product_stats[0] or 0)
+    low_stock_products = int(product_stats[1] or 0)
 
-    top_rows = (
+    product_perf_rows = (
         db.query(
             Product.id,
             Product.name,
@@ -117,17 +129,16 @@ def get_dashboard_metrics(db: Session):
         .join(OrderItem, OrderItem.product_id == Product.id)
         .join(Order, Order.id == OrderItem.order_id)
         .filter(
-            Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value]),
+            is_valid_order,
             Product.is_active == True,
             OrderItem.total_price > 0,
         )
         .group_by(Product.id, Product.name)
         .order_by(func.sum(OrderItem.total_price).desc())
-        .limit(5)
         .all()
     )
-    top_products = [
-        {
+    def _format_perf(row):
+        return {
             "product_id": row.id,
             "name": row.name,
             "total_quantity": int(row.qty or 0),
@@ -135,8 +146,9 @@ def get_dashboard_metrics(db: Session):
             "total_revenue": float(row.revenue or 0),
             "revenue": float(row.revenue or 0),
         }
-        for row in top_rows
-    ]
+
+    top_products = [_format_perf(row) for row in product_perf_rows[:5]]
+    bottom_products = [_format_perf(row) for row in sorted(product_perf_rows, key=lambda r: float(r.revenue or 0))[:5]]
 
     recent_orders = (
         db.query(Order).order_by(Order.created_at.desc()).limit(8).all()
@@ -153,52 +165,12 @@ def get_dashboard_metrics(db: Session):
         for o in recent_orders
     ]
 
-    start, end = _month_bounds()
-    prev_start, prev_end = _previous_month_bounds()
-    month_sales, month_orders = sales_between(db, start, end)
-    prev_sales, prev_orders = sales_between(db, prev_start, prev_end)
-
-    daily_sales, daily_orders = sales_between(db, today, today)
-    draft_orders = int(
-        db.query(func.count(Order.id)).filter(Order.status == OrderStatus.DRAFT.value).scalar() or 0
-    )
     abandoned_orders = int(
         db.query(func.count(AbandonedCheckout.id))
         .filter(AbandonedCheckout.recovery_status == "abandoned")
         .scalar()
         or 0
     )
-
-    bottom_rows = (
-        db.query(
-            Product.id,
-            Product.name,
-            func.sum(OrderItem.quantity).label("qty"),
-            func.sum(OrderItem.total_price).label("revenue"),
-        )
-        .join(OrderItem, OrderItem.product_id == Product.id)
-        .join(Order, Order.id == OrderItem.order_id)
-        .filter(
-            Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value]),
-            Product.is_active == True,
-            OrderItem.total_price > 0,
-        )
-        .group_by(Product.id, Product.name)
-        .order_by(func.sum(OrderItem.total_price).asc())
-        .limit(5)
-        .all()
-    )
-    bottom_products = [
-        {
-            "product_id": row.id,
-            "name": row.name,
-            "total_quantity": int(row.qty or 0),
-            "qty": int(row.qty or 0),
-            "total_revenue": float(row.revenue or 0),
-            "revenue": float(row.revenue or 0),
-        }
-        for row in bottom_rows
-    ]
 
     return {
         "sales_summary": {
