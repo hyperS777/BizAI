@@ -26,10 +26,10 @@ export default function Login() {
     setIsWakingUp(false);
     setError('');
 
-    // If request takes longer than 3.5 seconds, notify user that free-tier cloud is cold-starting
+    // If request takes longer than 5 seconds, show a loading indicator
     const wakeTimer = setTimeout(() => {
       setIsWakingUp(true);
-    }, 3500);
+    }, 5000);
 
     try {
       await login(form.email, form.password);
@@ -37,7 +37,7 @@ export default function Login() {
       navigate('/');
     } catch (err) {
       clearTimeout(wakeTimer);
-      setError(apiError(err, 'Server is still waking up from free-tier sleep. Please click Sign in again.'));
+      setError(apiError(err, 'Could not connect to server. Please try again.'));
     } finally {
       clearTimeout(wakeTimer);
       setBusy(false);
@@ -90,7 +90,7 @@ export default function Login() {
               marginBottom: 4,
             }}>
               <Loader2 size={16} className="spin-animation" style={{ flexShrink: 0 }} />
-              <span>Free-tier cloud server is spinning up from sleep (~30s). Please hold on a moment…</span>
+              <span>Connecting to server, please hold on a moment…</span>
             </div>
           )}
           <button className="primary-btn" disabled={busy} onMouseEnter={warmupApi}>
