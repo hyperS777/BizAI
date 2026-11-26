@@ -35,6 +35,8 @@ def get_invoices(
     scan_overdue_invoices(db)
     query = db.query(Invoice).options(
         joinedload(Invoice.order).joinedload(Order.customer),
+        joinedload(Invoice.order).joinedload(Order.items).joinedload(OrderItem.product),
+        joinedload(Invoice.order).joinedload(Order.items).joinedload(OrderItem.variant),
         joinedload(Invoice.customer),
         joinedload(Invoice.payments),
     )
