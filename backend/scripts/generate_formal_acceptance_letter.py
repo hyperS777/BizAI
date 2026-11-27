@@ -7,6 +7,7 @@ modeled directly on Acceptance Letter.pdf, written from Client Amber Abbas
 from __future__ import annotations
 
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
@@ -168,28 +169,27 @@ def build_pdf(paths: list[Path]):
             bottomMargin=0.75 * inch,
         )
         story = []
-        story.append(Paragraph(f"<b>Date:</b> {DATE_TEXT}", body))
+        story.append(Paragraph(f"<b>Date:</b> {escape(DATE_TEXT)}", body))
         story.append(Spacer(1, 10))
-        story.append(Paragraph("<b>To:</b><br/>" + "<br/>".join(TEAM_MEMBERS), body))
+        story.append(Paragraph("<b>To:</b><br/>" + "<br/>".join(escape(m) for m in TEAM_MEMBERS), body))
         story.append(Spacer(1, 10))
-        story.append(Paragraph(f"<b>Subject: {SUBJECT_TEXT}</b>", body))
+        story.append(Paragraph(f"<b>Subject: {escape(SUBJECT_TEXT)}</b>", body))
         story.append(Spacer(1, 10))
         story.append(Paragraph("Dear Development Team,", body))
         story.append(Spacer(1, 8))
-        story.append(Paragraph(INTRO_TEXT, body))
+        story.append(Paragraph(escape(INTRO_TEXT), body))
         story.append(Spacer(1, 8))
         story.append(Paragraph("Following comprehensive evaluation, we formally confirm the following:", body))
         story.append(Spacer(1, 6))
 
         for b in BULLETS:
-            # Use Rs. cleanly in standard Helvetica PDF font (or ₹ if needed, Helvetica doesn't have ₹ glyph by default!)
-            b_pdf = b.replace("₹", "Rs. ")
+            b_pdf = escape(b.replace("₹", "Rs. "))
             story.append(Paragraph(f"&bull;&nbsp;&nbsp;{b_pdf}", bullet_style))
 
         story.append(Spacer(1, 6))
-        story.append(Paragraph(CLOSING_1, body))
+        story.append(Paragraph(escape(CLOSING_1), body))
         story.append(Spacer(1, 8))
-        story.append(Paragraph(CLOSING_2, body))
+        story.append(Paragraph(escape(CLOSING_2), body))
         story.append(Spacer(1, 12))
         story.append(Paragraph("Sincerely,", body))
         story.append(Spacer(1, 34))
