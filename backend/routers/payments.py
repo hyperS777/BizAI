@@ -41,6 +41,7 @@ class RazorpayVerifyRequest(BaseModel):
     session_id: str
     items: List[StorefrontSimulationItem]
     discount_code: Optional[str] = None
+    gift_card_code: Optional[str] = None
 
 
 @router.get("/config")
@@ -146,6 +147,7 @@ def verify_razorpay_payment(payload: RazorpayVerifyRequest, db: Session = Depend
             session_id=payload.session_id,
             requested_items=payload.items,
             discount_code=payload.discount_code,
+            gift_card_code=payload.gift_card_code,
             payment_method=f"Razorpay ({payload.razorpay_payment_id})",
             customer_phone=payload.customer_phone,
         )

@@ -774,7 +774,26 @@ button {
   }
 
   .topbar {
-    padding: 0 20px
+    padding: 0 12px;
+    gap: 8px;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .shopify-spotlight-trigger {
+    width: auto;
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+    padding: 6px 10px;
+  }
+
+  .app-shell,
+  .main-area,
+  .content {
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
   }
 
   .search {
@@ -787,11 +806,11 @@ button {
   }
 
   .content {
-    padding: 30px 20px
+    padding: 18px 14px
   }
 
   .metric-grid {
-    grid-template-columns: repeat(2, 1fr)
+    grid-template-columns: repeat(2, minmax(0, 1fr))
   }
 
   .login-page {
@@ -833,11 +852,29 @@ button {
   }
 
   .topbar {
-    height: 66px
+    height: 60px;
+    padding: 0 10px;
   }
 
   .topbar-actions {
-    gap: 14px
+    gap: 8px
+  }
+
+  .spotlight-kbd,
+  .storefront-quick-link {
+    display: none;
+  }
+
+  .dashboard-grid,
+  .lower-grid,
+  .settings-grid,
+  .metric-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .panel {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .profile {
@@ -1950,8 +1987,10 @@ select {
   color: var(--coral)
 }
 
+html,
 body {
-  overflow-x: hidden
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .table-panel {

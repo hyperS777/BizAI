@@ -10,20 +10,22 @@ import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from config import settings
 from models.customer import Customer
 from models.integration import AbandonedCheckout, GiftCard, IntegrationEvent, StorefrontAnalyticsEvent, StorefrontSimulation
-from models.invoice import Invoice
-from models.order import Order, OrderStatus
+from models.inventory import InventoryMovement
+from models.invoice import Invoice, InvoiceStatus, Payment
+from models.order import Order, OrderItem, OrderStatus
 from models.product import Category, Product, ProductVariant
 from models.user import User
 from schemas.order import OrderCreate, OrderItemCreate
-from services.order_service import create_order, update_order_status
+from services.integration_service import apply_discount, bump_discount_usage, emit_event
+from services.order_service import create_order, geocode_address, update_order_status
 from services.product_service import _sync_product_stock
 
 COLLECTIONS = (
@@ -31,7 +33,7 @@ COLLECTIONS = (
     ("menswear", "Menswear"),
     ("womenswear", "Womenswear"),
 )
-_CACHE_SECONDS = 300
+_CACHE_SECONDS = 1800
 _cached_products: List[Dict[str, Any]] = []
 _cached_at = 0.0
 
@@ -359,10 +361,10 @@ def _upsert_demo_customer(db: Session, name: str, email: str, address: str, phon
 
 
 def _system_user_id(db: Session) -> int:
-    admin = db.query(User).filter(User.email == "admin@bizai.com").first()
-    if not admin:
+    admin_id = db.query(User.id).filter(User.email == "admin@bizai.com").scalar()
+    if not admin_id:
         raise ValueError("Demo workspace is missing the admin user")
-    return admin.id
+    return admin_id
 
 
 def _checkpoint_history(row: StorefrontSimulation) -> list:
@@ -424,20 +426,44 @@ def create_storefront_simulation(
         for product in catalog["products"]
         for variant in product["variants"]
     }
+
+    # Preload matching DB variants and their parent products in a single batch query
+    requested_var_ids = [str(item.variant_id) for item in requested_items]
+    existing_variants = {
+        v.shopify_variant_id: v
+        for v in (
+            db.query(ProductVariant)
+            .options(joinedload(ProductVariant.product))
+            .filter(ProductVariant.shopify_variant_id.in_(requested_var_ids))
+            .all()
+        )
+    }
+
     lines = []
-    order_items = []
-    total = 0.0
+    resolved_lines = []
+    subtotal = 0.0
     for item in requested_items:
         match = variants.get(item.variant_id)
         if not match:
             raise ValueError("One or more selected products are no longer in the REIHH catalog")
         product, variant = match
-        db_product, db_variant = _ensure_catalog_variant(db, product, variant)
+        db_variant = existing_variants.get(str(variant["id"]))
+        if db_variant and db_variant.product:
+            db_product = db_variant.product
+            if not db_product.is_active:
+                db_product.is_active = True
+            if not db_variant.is_active:
+                db_variant.is_active = True
+        else:
+            db_product, db_variant = _ensure_catalog_variant(db, product, variant)
+            existing_variants[str(variant["id"])] = db_variant
+
         if (db_variant.stock_qty or 0) < item.quantity:
             db_variant.stock_qty = max(item.quantity + 20, 50)
-            _sync_product_stock(db_product)
-        line_total = round(variant["price"] * item.quantity, 2)
-        total += line_total
+
+        unit_price = float(db_variant.selling_price or variant["price"] or 0)
+        line_total = round(unit_price * item.quantity, 2)
+        subtotal += line_total
         lines.append({
             "product_id": product["id"],
             "title": product["title"],
@@ -447,57 +473,125 @@ def create_storefront_simulation(
             "variant_id": variant["id"],
             "variant_title": variant["title"],
             "quantity": item.quantity,
-            "unit_price": variant["price"],
+            "unit_price": unit_price,
             "line_total": line_total,
         })
-        order_items.append(OrderItemCreate(
-            product_id=db_product.id,
-            variant_id=db_variant.id,
-            quantity=item.quantity,
-        ))
+        resolved_lines.append((db_product, db_variant, item.quantity, unit_price, line_total))
 
     customer = _upsert_demo_customer(db, customer_name.strip(), str(customer_email).lower(), requested_address, phone=customer_phone)
     user_id = _system_user_id(db)
-    db.flush()
-    order = create_order(
-        db,
-        OrderCreate(
-            customer_id=customer.id,
-            notes="Demo storefront checkout — no real payment.",
-            items=order_items,
-            discount_code=(discount_code or "").strip().upper() or None,
-            channel="demo",
-        ),
-        user_id,
-    )
-    order = update_order_status(db, order.id, OrderStatus.CONFIRMED)
+
+    discount_amount, applied_code = apply_discount(db, discount_code, subtotal)
+    total_amount = round(max(subtotal - discount_amount, 0.0), 2)
+    notes = "Demo storefront checkout — no real payment."
+
     gc_norm = (gift_card_code or "").strip().upper()
     if gc_norm:
         gc = db.query(GiftCard).filter(GiftCard.code == gc_norm).first()
         if not gc or not gc.active or float(gc.current_balance or 0) <= 0:
             raise ValueError("Gift card is invalid or has insufficient balance")
-        gc_applied = round(min(float(gc.current_balance), float(order.total_amount or 0)), 2)
+        gc_applied = round(min(float(gc.current_balance), total_amount), 2)
         gc.current_balance = round(float(gc.current_balance) - gc_applied, 2)
-        order.total_amount = round(max(0.0, float(order.total_amount or 0) - gc_applied), 2)
-        order.notes = f"{order.notes or ''} | Gift Card {gc.code}: -INR {gc_applied:.2f}".strip(" |")
-    origin = _checkpoint_for_status("ready_to_pack", requested_address)
-    order.shipping_address = requested_address
-    order.tracking_company = "Delhivery Express"
-    import random
-    waybill = f"148{random.randint(100000000, 999999999)}"
-    order.tracking_number = waybill
-    order.delivery_location = origin["label"]
-    order.delivery_latitude = origin["lat"]
-    order.delivery_longitude = origin["lng"]
-    order.delivery_updated_at = datetime.now(timezone.utc)
+        total_amount = round(max(0.0, total_amount - gc_applied), 2)
+        notes = f"{notes} | Gift Card {gc.code}: -INR {gc_applied:.2f}"
 
+    if applied_code:
+        bump_discount_usage(db, applied_code)
+
+    import random
+    now = datetime.now(timezone.utc)
+    order_number = f"ORD-{uuid.uuid4().hex[:8].upper()}"
+    waybill = f"148{random.randint(100000000, 999999999)}"
+    origin = _checkpoint_for_status("ready_to_pack", requested_address)
+    lat, lon, _ = geocode_address(requested_address)
     delivery_token = secrets.token_urlsafe(36)
-    order.tracking_url = f"/delivery/demo/{delivery_token}"
+
+    order = Order(
+        order_number=order_number,
+        customer_id=customer.id,
+        shipping_address=requested_address,
+        shipping_amount=0.0,
+        subtotal_amount=round(subtotal, 2),
+        discount_code=applied_code,
+        discount_amount=discount_amount,
+        total_amount=total_amount,
+        notes=notes,
+        channel="demo",
+        created_by=user_id,
+        status=OrderStatus.CONFIRMED.value,
+        delivery_latitude=origin["lat"] or lat,
+        delivery_longitude=origin["lng"] or lon,
+        delivery_location=origin["label"],
+        tracking_company="Delhivery Express",
+        tracking_number=waybill,
+        tracking_url=f"/delivery/demo/{delivery_token}",
+        delivery_updated_at=now,
+    )
+    db.add(order)
+    db.flush()
+
+    touched_products = set()
+    for db_product, db_variant, qty, unit_price, line_total in resolved_lines:
+        db.add(OrderItem(
+            order_id=order.id,
+            product_id=db_product.id,
+            variant_id=db_variant.id,
+            quantity=qty,
+            unit_price=unit_price,
+            cost_price=db_variant.unit_cost,
+            total_price=line_total,
+            option1=db_variant.option1,
+            option2=db_variant.option2,
+            sku=db_variant.sku,
+        ))
+        db_variant.stock_qty = max(0, int(db_variant.stock_qty or 0) - qty)
+        db.add(InventoryMovement(
+            product_id=db_product.id,
+            variant_id=db_variant.id,
+            quantity_change=-qty,
+            reason="order_confirmed",
+            notes=order_number,
+            created_by=user_id,
+        ))
+        if db_product.id not in touched_products:
+            touched_products.add(db_product.id)
+            _sync_product_stock(db_product)
+
+    taxable = round(total_amount / 1.18, 2)
+    tax_diff = round(total_amount - taxable, 2)
+    c_tax = round(tax_diff / 2.0, 2)
+    s_tax = round(tax_diff - c_tax, 2)
+    is_paid = total_amount <= 0
+    invoice = Invoice(
+        invoice_number=f"INV-{uuid.uuid4().hex[:8].upper()}",
+        public_token=secrets.token_urlsafe(36),
+        order_id=order.id,
+        status=InvoiceStatus.PAID.value if total_amount > 0 or is_paid else InvoiceStatus.SENT.value,
+        total_amount=total_amount,
+        paid_amount=total_amount if total_amount > 0 else 0.0,
+        due_date=date.today() + timedelta(days=15),
+        taxable_amount=taxable,
+        cgst=c_tax,
+        sgst=s_tax,
+        igst=0.0,
+        notes=f"Order #{order_number} apparel dispatch",
+    )
+    db.add(invoice)
+    db.flush()
+
+    if total_amount > 0:
+        db.add(Payment(
+            invoice_id=invoice.id,
+            amount=total_amount,
+            method=payment_method or "demo_card",
+            notes=f"Demo storefront payment ({payment_method or 'demo_card'}) - simulated instant approval",
+        ))
+
     first_scan = [{
         "label": origin["label"],
         "status": "ready_to_pack",
         "agent_name": "Warehouse",
-        "at": datetime.now(timezone.utc).isoformat(),
+        "at": now.isoformat(),
         "lat": origin["lat"],
         "lng": origin["lng"],
     }]
@@ -518,16 +612,16 @@ def create_storefront_simulation(
         checkpoint_log=json.dumps(first_scan),
     )
     db.add(simulation)
-    db.flush()
-    db.add(IntegrationEvent(
-        event_type="storefront.simulation_created",
-        entity_type="order",
-        entity_id=order.id,
-        payload=json.dumps({"reference": simulation.reference, "total": simulation.total_amount, "order_number": order.order_number}),
-    ))
+    emit_event(
+        db,
+        "storefront.simulation_created",
+        "order",
+        order.id,
+        {"reference": order.order_number, "total": order.total_amount, "order_number": order.order_number},
+    )
     for index, line in enumerate(lines):
         db.add(StorefrontAnalyticsEvent(
-            event_id=f"demo-purchase-{simulation.reference}-{index}",
+            event_id=f"demo-purchase-{order.order_number}-{index}",
             session_id=session_id,
             event_type="demo_purchase",
             product_id=line["product_id"],
@@ -537,23 +631,12 @@ def create_storefront_simulation(
             quantity=line["quantity"],
             source="demo",
         ))
-    invoice = db.query(Invoice).filter(Invoice.order_id == order.id).first()
-    if not invoice:
-        from services.invoice_service import generate_invoice_from_order
-        invoice = generate_invoice_from_order(db, order.id, commit=False)
-    if invoice and order.total_amount > 0:
-        from services.invoice_service import record_payment
-        record_payment(
-            db,
-            invoice,
-            order.total_amount,
-            method=payment_method or "demo_card",
-            notes=f"Demo storefront payment ({payment_method or 'demo_card'}) - simulated instant approval",
-        )
+
     abandoned = db.query(AbandonedCheckout).filter(AbandonedCheckout.session_id == session_id).first()
     if abandoned:
         abandoned.recovery_status = "recovered"
         abandoned.recovered_order_id = order.id
+
     db.commit()
     db.refresh(simulation)
     return {

@@ -353,6 +353,12 @@ export default function Storefront() {
 
   useEffect(() => {
     if (checkoutStep < 1 || checkoutStep >= 3 || !cart.length) return undefined;
+    if (!window.Razorpay && !document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]')) {
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      document.body.appendChild(script);
+    }
     const timer = setTimeout(() => syncAbandonedCheckout(), 900);
     return () => clearTimeout(timer);
   }, [checkoutStep, customer.name, customer.email, customer.phone, customer.address, appliedDiscount?.code]);
@@ -386,9 +392,15 @@ export default function Storefront() {
         },
       });
 
-      // 2. Ensure Razorpay Checkout script is loaded
+      // 2. Ensure Razorpay Checkout script is loaded (reuse preloaded tag if in flight)
       if (!window.Razorpay) {
         await new Promise((resolve, reject) => {
+          const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+          if (existing) {
+            existing.addEventListener('load', resolve, { once: true });
+            existing.addEventListener('error', () => reject(new Error('Failed to load Razorpay payment gateway script')), { once: true });
+            return;
+          }
           const script = document.createElement('script');
           script.src = 'https://checkout.razorpay.com/v1/checkout.js';
           script.onload = resolve;
@@ -418,6 +430,7 @@ export default function Storefront() {
               delivery_address: customer.address || '42 Connaught Place, New Delhi 110001',
               session_id: sessionId,
               discount_code: appliedDiscount?.code || null,
+              gift_card_code: appliedGiftCard?.code || null,
               items: cart.map((line) => ({ variant_id: line.variant.id, quantity: line.quantity })),
             });
             const receipt = data.simulation || data;
