@@ -34,6 +34,54 @@ export function Modal({ title, onClose, children }) {
   );
 }
 
+export function ChannelBadge({ channel, compact = false }) {
+  const isDemo = String(channel || '').toLowerCase() === 'demo';
+  return (
+    <span
+      className={`channel-badge ${isDemo ? 'demo' : 'real'}${compact ? ' compact' : ''}`}
+      title={isDemo ? 'Demo / Simulated Payment' : 'Actual Business Payment'}
+    >
+      {isDemo ? 'DEMO' : 'ACTUAL'}
+    </span>
+  );
+}
+
+export function PaymentSplit({ actual = 0, demo = 0, format = (v) => `₹${Number(v || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` }) {
+  return (
+    <div className="payment-split-row">
+      <span className="split-chip real">
+        <span className="split-dot real" /> Actual: <b>{format(actual)}</b>
+      </span>
+      <span className="split-chip demo">
+        <span className="split-dot demo" /> Demo: <b>{format(demo)}</b>
+      </span>
+    </div>
+  );
+}
+
+export function ChannelFilter({ value, onChange, counts }) {
+  const items = [
+    { id: 'all', label: 'All Payments', count: counts?.all },
+    { id: 'real', label: 'Actual (Real)', count: counts?.real },
+    { id: 'demo', label: 'Demo Only', count: counts?.demo },
+  ];
+  return (
+    <div className="channel-filter-group" role="group" aria-label="Filter by payment channel">
+      {items.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          className={`segment-pill channel-pill-${item.id} ${value === item.id ? 'active' : ''}`}
+          onClick={() => onChange(item.id)}
+        >
+          <span>{item.label}</span>
+          {item.count !== undefined && <span className="channel-count">{item.count}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function ConfirmDialog({
   isOpen,
   title = "Confirm Action",

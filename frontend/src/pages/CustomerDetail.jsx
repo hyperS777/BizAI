@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, Building2, ChevronRight, Mail, MapPin, Phone, ReceiptText, ShoppingBag, WalletCards, Tag, Edit, Save, Check, MessageCircle } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import client from '../api/client';
-import { EmptyState, PageHeader } from '../components/ui';
+import { ChannelBadge, EmptyState, PageHeader, PaymentSplit } from '../components/ui';
 import { apiError, formatDate, money } from '../utils/format';
 import { useToast } from '../context/ToastContext';
 import { subscribeWorkspaceSync } from '../utils/sync';
@@ -63,6 +63,8 @@ export default function CustomerDetail() {
   if (!customer) return <div className="loading compact">Loading customer profile…</div>;
 
   const totalSpend = orders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
+  const actualSpend = orders.filter((o) => o.channel !== 'demo').reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
+  const demoSpend = orders.filter((o) => o.channel === 'demo').reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
   const averageOrder = orders.length ? totalSpend / orders.length : 0;
   const lastOrder = orders[0];
 
@@ -126,6 +128,7 @@ export default function CustomerDetail() {
           <span>Lifetime Spend</span>
           <strong>{money(totalSpend)}</strong>
           <small>Across {orders.length} orders</small>
+          <PaymentSplit actual={actualSpend} demo={demoSpend} format={money} />
         </article>
         <article className="metric blue">
           <span>Average Order</span>
@@ -165,7 +168,10 @@ export default function CustomerDetail() {
                       <small>{formatDate(order.created_at)}</small>
                     </span>
                     <span className={`status-pill ${order.status}`}>{orderStatusLabel(order.status)}</span>
-                    <b>{money(order.total_amount)}</b>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <b>{money(order.total_amount)}</b>
+                      <ChannelBadge channel={order.channel} compact />
+                    </span>
                     <ChevronRight size={16} />
                   </summary>
                   <div className="order-items">

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.customer import Customer
-from models.invoice import Invoice, InvoiceStatus
+from models.invoice import Invoice, InvoiceStatus, Payment
 from models.order import Order, OrderItem, OrderStatus
 from models.product import Product
 from models.user import User
@@ -84,6 +84,7 @@ def simulate_business_data(
         customer_id=customer.id,
         status=OrderStatus.DELIVERED.value,
         total_amount=product.price * 2,
+        channel="demo",
         created_by=current_user.id,
         notes="Synthetic record created by the demo simulator.",
     )
@@ -91,13 +92,24 @@ def simulate_business_data(
     db.flush()
     db.add(OrderItem(order_id=order.id, product_id=product.id, quantity=2, unit_price=product.price, total_price=product.price * 2))
     if payload.scenario in ("order", "showcase"):
-        db.add(Invoice(
+        inv = Invoice(
             invoice_number=f"INV-DEMO-{suffix}",
             order_id=order.id,
             status=InvoiceStatus.PAID.value,
             total_amount=order.total_amount,
             paid_amount=order.total_amount,
+            channel="demo",
             due_date=date.today() + timedelta(days=30),
+            notes="Synthetic demo invoice",
+        )
+        db.add(inv)
+        db.flush()
+        db.add(Payment(
+            invoice_id=inv.id,
+            amount=order.total_amount,
+            method="demo_simulator",
+            channel="demo",
+            notes="Synthetic demo payment",
         ))
     db.commit()
     return {"message": f"Synthetic {payload.scenario} data created", "customer_id": customer.id, "order_id": order.id}

@@ -241,10 +241,12 @@ def reset_and_seed(db: SessionLocal = None):
                 waybill = f"148{839201948 + idx}"
                 lat, lon = get_coords(cust.address)
 
+                order_channel = "demo" if "demo" in (note or "").lower() else "real"
                 order = Order(
                     order_number=f"ORD-REIHH-{idx:03d}",
                     customer_id=cust.id,
                     status=st,
+                    channel=order_channel,
                     tracking_company="Delhivery Express",
                     tracking_number=waybill,
                     tracking_url=f"https://www.delhivery.com/track/package/{waybill}",
@@ -286,14 +288,25 @@ def reset_and_seed(db: SessionLocal = None):
                 order.total_amount = subtotal
 
                 if st == OrderStatus.DELIVERED.value:
+                    inv = Invoice(
+                        invoice_number=f"INV-REIHH-{idx:03d}",
+                        order_id=order.id,
+                        status=InvoiceStatus.PAID.value,
+                        total_amount=subtotal,
+                        paid_amount=subtotal,
+                        channel=order_channel,
+                        due_date=order_time.date() + timedelta(days=15),
+                        created_at=order_time,
+                    )
+                    db.add(inv)
+                    db.flush()
                     db.add(
-                        Invoice(
-                            invoice_number=f"INV-REIHH-{idx:03d}",
-                            order_id=order.id,
-                            status=InvoiceStatus.PAID.value,
-                            total_amount=subtotal,
-                            paid_amount=subtotal,
-                            due_date=order_time.date() + timedelta(days=15),
+                        Payment(
+                            invoice_id=inv.id,
+                            amount=subtotal,
+                            method="demo_driver" if order_channel == "demo" else "bank_transfer",
+                            channel=order_channel,
+                            notes="Demo payment via driver" if order_channel == "demo" else f"Settled for {order.order_number}",
                             created_at=order_time,
                         )
                     )

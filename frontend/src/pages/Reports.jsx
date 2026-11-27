@@ -6,7 +6,7 @@ import {
 } from 'chart.js';
 import { Download, TrendingUp, Users, Package, FileText, Calendar, Filter } from 'lucide-react';
 import client, { downloadPnlPdf, downloadGstr1Csv } from '../api/client';
-import { EmptyState, PageHeader } from '../components/ui';
+import { ChannelBadge, ChannelFilter, EmptyState, PageHeader, PaymentSplit } from '../components/ui';
 import { apiError, money } from '../utils/format';
 import { useToast } from '../context/ToastContext';
 
@@ -53,24 +53,26 @@ export default function Reports() {
   const [customers, setCustomers] = useState([]);
   const [expenses, setExpenses] = useState(null);
   const [staffPerf, setStaffPerf] = useState([]);
+  const [channelFilter, setChannelFilter] = useState('all'); // all | real | demo
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
+    const chParam = channelFilter !== 'all' ? { channel: channelFilter } : undefined;
     const salesUrl = useCustomDates
       ? `/reports/sales?start_date=${startDate}&end_date=${endDate}`
       : `/reports/sales?days=${days}`;
 
     Promise.all([
-      client.get('/reports/dashboard'),
-      client.get(salesUrl),
-      client.get('/reports/top-products?limit=7'),
-      client.get('/reports/customer-activity?limit=8'),
+      client.get('/reports/dashboard', { params: chParam }),
+      client.get(salesUrl, { params: chParam }),
+      client.get('/reports/top-products?limit=7', { params: chParam }),
+      client.get('/reports/customer-activity?limit=8', { params: chParam }),
       client.get('/reports/expenses-summary', {
         params: useCustomDates ? { start_date: startDate, end_date: endDate } : undefined,
       }),
-      client.get('/reports/staff-performance').catch(() => ({ data: [] })),
+      client.get('/reports/staff-performance', { params: chParam }).catch(() => ({ data: [] })),
     ])
       .then(([dashboard, salesRes, topRes, custRes, expRes, staffRes]) => {
         setMetrics(dashboard.data);
@@ -82,10 +84,13 @@ export default function Reports() {
       })
       .catch((err) => setError(apiError(err)))
       .finally(() => setLoading(false));
-}, [days, useCustomDates, startDate, endDate]);
+}, [days, useCustomDates, startDate, endDate, channelFilter]);
 
 const sales = metrics?.sales_summary || {};
 const profit = metrics?.revenue_profit || {};
+const breakdown = metrics?.payment_breakdown || { actual: {}, demo: {} };
+const actualStats = breakdown.actual || {};
+const demoStats = breakdown.demo || {};
 
 const barChart = useMemo(() => ({
   labels: series.map((p) => p.date.slice(5)),
@@ -140,23 +145,24 @@ return (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             className="outline-btn heading-btn"
-            onClick={() => downloadPnlPdf('profit-and-loss-statement.pdf')}
+            onClick={() => downloadPnlPdf('profit-and-loss-statement.pdf', channelFilter)}
             title="Download formal P&L statement PDF"
           >
             <FileText size={14} /> Download P&amp;L (PDF)
           </button>
           <button
             className="outline-btn heading-btn"
-            onClick={() => downloadGstr1Csv('GSTR1-Tax-Report.csv')}
-            title="Download GSTR-1 tax compliance CSV"
+            onClick={() => downloadGstr1Csv('GSTR1-Tax-Report.csv', channelFilter === 'demo' ? 'demo' : 'real')}
+            title="Download GSTR-1 tax compliance CSV (Actual sales by default)"
           >
             <Download size={14} /> Export GSTR-1 (CSV)
           </button>
         </div>
     </PageHeader>
 
-    {/* Date Range Selection Toolbar */}
+    {/* Date Range & Channel Selection Toolbar */}
     <div className="toolbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+      <ChannelFilter value={channelFilter} onChange={setChannelFilter} />
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <select
           value={useCustomDates ? 'custom' : days}
@@ -201,24 +207,36 @@ return (
 {/* KPI Row */ }
 <section className="metric-grid">
   <article className="metric teal">
-    <span>Total sales</span>
+    <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      Total sales {channelFilter !== 'all' && <ChannelBadge channel={channelFilter} compact />}
+    </span>
     <strong>{money(sales.total_sales)}</strong>
     <small>{sales.total_orders || 0} all-time orders</small>
+    <PaymentSplit actual={actualStats.sales} demo={demoStats.sales} format={money} />
   </article>
   <article className="metric blue">
-    <span>This month</span>
+    <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      This month {channelFilter !== 'all' && <ChannelBadge channel={channelFilter} compact />}
+    </span>
     <strong>{money(sales.monthly_sales)}</strong>
     <small>Last month {money(sales.previous_month_sales)}</small>
+    <PaymentSplit actual={actualStats.monthly_sales} demo={demoStats.monthly_sales} format={money} />
   </article>
   <article className="metric yellow">
-    <span>Net profit</span>
+    <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      Net profit {channelFilter !== 'all' && <ChannelBadge channel={channelFilter} compact />}
+    </span>
     <strong>{money(profit.profit)}</strong>
-    <small>Expenses {money(profit.expenses)}</small>
+    <small>{channelFilter === 'demo' ? 'COGS deducted' : `Expenses ${money(profit.expenses)}`}</small>
+    <PaymentSplit actual={actualStats.profit} demo={demoStats.profit} format={money} />
   </article>
   <article className="metric">
-    <span>Today</span>
+    <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      Today {channelFilter !== 'all' && <ChannelBadge channel={channelFilter} compact />}
+    </span>
     <strong>{money(sales.daily_sales)}</strong>
     <small>{sales.daily_orders || 0} orders today</small>
+    <PaymentSplit actual={actualStats.daily_sales} demo={demoStats.daily_sales} format={money} />
   </article>
 </section>
 

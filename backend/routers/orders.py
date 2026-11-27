@@ -23,10 +23,11 @@ def read_orders(
     limit: int = 100,
     status: Optional[OrderStatus] = None,
     customer_id: Optional[int] = None,
+    channel: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_staff),
 ):
-    return get_orders(db, skip=skip, limit=limit, status=status, customer_id=customer_id)
+    return get_orders(db, skip=skip, limit=limit, status=status, customer_id=customer_id, channel=channel)
 
 
 @router.post("", response_model=OrderResponse)

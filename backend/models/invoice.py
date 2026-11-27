@@ -55,6 +55,7 @@ class Invoice(Base):
     total_amount = Column(Float, nullable=False)
     paid_amount = Column(Float, default=0.0)
     due_date = Column(SafeDate, nullable=True)
+    channel = Column(String(20), default="real", nullable=False)  # real | demo
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -82,6 +83,7 @@ class Payment(Base):
     invoice_id = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False)
     amount = Column(Float, nullable=False)
     method = Column(String(40), default="manual")
+    channel = Column(String(20), default="real", nullable=False)  # real | demo
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

@@ -102,7 +102,11 @@ _EXTRA_COLUMNS = {
         ("cgst", "FLOAT DEFAULT 0"),
         ("sgst", "FLOAT DEFAULT 0"),
         ("igst", "FLOAT DEFAULT 0"),
+        ("channel", "VARCHAR(20) DEFAULT 'real'"),
         ("notes", "TEXT"),
+    ],
+    "payments": [
+        ("channel", "VARCHAR(20) DEFAULT 'real'"),
     ],
     "expenses": [
         ("vendor", "VARCHAR(200)"),
@@ -226,8 +230,39 @@ def ensure_schema():
                     text(
                         "UPDATE orders SET channel = 'demo' "
                         "WHERE LOWER(COALESCE(notes, '')) LIKE '%demo%' "
+                        "OR UPPER(order_number) LIKE 'ORD-DEMO-%' "
                         "OR id IN (SELECT order_id FROM storefront_simulations WHERE order_id IS NOT NULL)"
                     )
                 )
         except Exception as exc:
             print(f"Migration note for order channel backfill: {exc}")
+
+    if "invoices" in existing_tables:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("UPDATE invoices SET channel = 'real' WHERE channel IS NULL"))
+                conn.execute(
+                    text(
+                        "UPDATE invoices SET channel = 'demo' "
+                        "WHERE UPPER(invoice_number) LIKE 'INV-DEMO-%' "
+                        "OR LOWER(COALESCE(notes, '')) LIKE '%demo%' "
+                        "OR order_id IN (SELECT id FROM orders WHERE channel = 'demo')"
+                    )
+                )
+        except Exception as exc:
+            print(f"Migration note for invoice channel backfill: {exc}")
+
+    if "payments" in existing_tables:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("UPDATE payments SET channel = 'real' WHERE channel IS NULL"))
+                conn.execute(
+                    text(
+                        "UPDATE payments SET channel = 'demo' "
+                        "WHERE LOWER(COALESCE(method, '')) LIKE 'demo%' "
+                        "OR LOWER(COALESCE(notes, '')) LIKE '%demo%' "
+                        "OR invoice_id IN (SELECT id FROM invoices WHERE channel = 'demo')"
+                    )
+                )
+        except Exception as exc:
+            print(f"Migration note for payment channel backfill: {exc}")

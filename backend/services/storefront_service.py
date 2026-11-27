@@ -417,6 +417,7 @@ def create_storefront_simulation(
     payment_method: str | None = "demo_card",
     customer_phone: str | None = None,
     gift_card_code: str | None = None,
+    channel: str = "demo",
 ) -> dict:
     if not settings.STOREFRONT_SIMULATION_ENABLED:
         raise ValueError("Customer simulation is disabled")
@@ -481,9 +482,14 @@ def create_storefront_simulation(
     customer = _upsert_demo_customer(db, customer_name.strip(), str(customer_email).lower(), requested_address, phone=customer_phone)
     user_id = _system_user_id(db)
 
+    resolved_channel = "real" if channel == "real" else "demo"
     discount_amount, applied_code = apply_discount(db, discount_code, subtotal)
     total_amount = round(max(subtotal - discount_amount, 0.0), 2)
-    notes = "Demo storefront checkout — no real payment."
+    notes = (
+        "Live storefront checkout — verified payment."
+        if resolved_channel == "real"
+        else "Demo storefront checkout — no real payment."
+    )
 
     gc_norm = (gift_card_code or "").strip().upper()
     if gc_norm:
@@ -516,7 +522,7 @@ def create_storefront_simulation(
         discount_amount=discount_amount,
         total_amount=total_amount,
         notes=notes,
-        channel="demo",
+        channel=resolved_channel,
         created_by=user_id,
         status=OrderStatus.CONFIRMED.value,
         delivery_latitude=origin["lat"] or lat,
@@ -574,6 +580,7 @@ def create_storefront_simulation(
         cgst=c_tax,
         sgst=s_tax,
         igst=0.0,
+        channel=resolved_channel,
         notes=f"Order #{order_number} apparel dispatch",
     )
     db.add(invoice)
@@ -584,7 +591,12 @@ def create_storefront_simulation(
             invoice_id=invoice.id,
             amount=total_amount,
             method=payment_method or "demo_card",
-            notes=f"Demo storefront payment ({payment_method or 'demo_card'}) - simulated instant approval",
+            channel=resolved_channel,
+            notes=(
+                f"Live storefront payment ({payment_method})"
+                if resolved_channel == "real"
+                else f"Demo storefront payment ({payment_method or 'demo_card'}) - simulated instant approval"
+            ),
         ))
 
     first_scan = [{

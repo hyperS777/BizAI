@@ -38,12 +38,28 @@ class InventorySummary(BaseModel):
     low_stock_products: int
 
 
+class ChannelPaymentMetrics(BaseModel):
+    sales: float = 0
+    orders: int = 0
+    daily_sales: float = 0
+    monthly_sales: float = 0
+    paid_payments: float = 0
+    pending_payments: float = 0
+    profit: float = 0
+
+
+class PaymentChannelBreakdown(BaseModel):
+    actual: ChannelPaymentMetrics = ChannelPaymentMetrics()
+    demo: ChannelPaymentMetrics = ChannelPaymentMetrics()
+
+
 class DashboardMetrics(BaseModel):
     sales_summary: SalesSummary
     revenue_profit: RevenueProfitSummary
     inventory_summary: InventorySummary
     top_products: List[TopProduct]
     recent_orders: List[Dict[str, Any]]
+    payment_breakdown: Optional[PaymentChannelBreakdown] = None
 
 
 class SalesPoint(BaseModel):

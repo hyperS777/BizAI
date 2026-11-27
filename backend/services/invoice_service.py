@@ -29,8 +29,16 @@ def get_invoice(db: Session, invoice_id: int) -> Optional[Invoice]:
     )
 
 
+def _normalize_channel(value: Optional[str]) -> str:
+    return "demo" if str(value or "").strip().lower() == "demo" else "real"
+
+
 def get_invoices(
-    db: Session, skip: int = 0, limit: int = 100, status: Optional[InvoiceStatus] = None
+    db: Session,
+    skip: int = 0,
+    limit: int = 100,
+    status: Optional[InvoiceStatus] = None,
+    channel: Optional[str] = None,
 ) -> List[Invoice]:
     scan_overdue_invoices(db)
     query = db.query(Invoice).options(
@@ -43,6 +51,8 @@ def get_invoices(
     if status:
         value = status.value if isinstance(status, InvoiceStatus) else status
         query = query.filter(Invoice.status == value)
+    if channel in ("real", "demo"):
+        query = query.filter(Invoice.channel == channel)
     return query.order_by(Invoice.created_at.desc()).offset(skip).limit(limit).all()
 
 
@@ -100,6 +110,7 @@ def generate_invoice_from_order(
     c_tax = round(tax_diff / 2.0, 2)
     s_tax = round(tax_diff - c_tax, 2)
 
+    inv_channel = _normalize_channel(getattr(order, "channel", "real"))
     db_invoice = Invoice(
         invoice_number=invoice_number,
         public_token=secrets.token_urlsafe(36),
@@ -112,6 +123,7 @@ def generate_invoice_from_order(
         cgst=c_tax,
         sgst=s_tax,
         igst=0.0,
+        channel=inv_channel,
         notes=f"Order #{order.order_number} apparel dispatch",
     )
     db.add(db_invoice)
@@ -143,6 +155,7 @@ def create_standalone_invoice(
     cgst: Optional[float] = None,
     sgst: Optional[float] = None,
     igst: Optional[float] = None,
+    channel: str = "real",
     notes: Optional[str] = None,
     commit: bool = True,
 ) -> Invoice:
@@ -183,6 +196,7 @@ def create_standalone_invoice(
         cgst=c_tax,
         sgst=s_tax,
         igst=i_tax,
+        channel=_normalize_channel(channel),
         notes=notes,
     )
     db.add(db_invoice)
@@ -236,6 +250,7 @@ def record_payment(
     amount: float,
     method: str = "manual",
     notes: Optional[str] = None,
+    channel: Optional[str] = None,
 ):
     if invoice.status == InvoiceStatus.CANCELLED.value:
         raise HTTPException(status_code=400, detail="Cannot take payment on a cancelled invoice")
@@ -244,7 +259,14 @@ def record_payment(
     remaining = invoice.balance_due
     applied = min(amount, remaining)
     invoice.paid_amount = round((invoice.paid_amount or 0) + applied, 2)
-    db.add(Payment(invoice_id=invoice.id, amount=applied, method=method or "manual", notes=notes))
+    is_demo = (
+        channel == "demo"
+        or getattr(invoice, "channel", "real") == "demo"
+        or (invoice.order is not None and getattr(invoice.order, "channel", "real") == "demo")
+        or (method or "").lower().startswith("demo")
+    )
+    pay_channel = "demo" if is_demo else "real"
+    db.add(Payment(invoice_id=invoice.id, amount=applied, method=method or "manual", channel=pay_channel, notes=notes))
     customer = (invoice.order.customer if invoice.order else None) or invoice.customer
     if customer:
         customer.outstanding_balance = max(0.0, round((customer.outstanding_balance or 0) - applied, 2))
@@ -272,16 +294,17 @@ def update_invoice(db: Session, invoice_id: int, invoice_update: InvoiceUpdate) 
 
     payment_amount = data.pop("payment_amount", None)
     method = data.pop("method", "manual")
+    pay_channel = data.pop("channel", None)
     notes = data.pop("notes", None)
     absolute_paid = data.pop("paid_amount", None)
     data.pop("status", None)
 
     if payment_amount is not None:
-        record_payment(db, db_invoice, float(payment_amount), method=method, notes=notes)
+        record_payment(db, db_invoice, float(payment_amount), method=method, notes=notes, channel=pay_channel)
     elif absolute_paid is not None:
         delta = round(float(absolute_paid) - (db_invoice.paid_amount or 0), 2)
         if delta > 0:
-            record_payment(db, db_invoice, delta, method=method, notes=notes)
+            record_payment(db, db_invoice, delta, method=method, notes=notes, channel=pay_channel)
 
     _refresh_invoice_status(db_invoice)
     db.commit()
@@ -310,3 +333,75 @@ def scan_overdue_invoices(db: Session) -> int:
     if count:
         db.commit()
     return count
+
+
+def get_payment_summary(db: Session) -> dict:
+    """Return separated Actual (real) vs Demo invoice and payment totals."""
+    invoices = (
+        db.query(Invoice)
+        .options(joinedload(Invoice.order))
+        .filter(Invoice.status != InvoiceStatus.CANCELLED.value)
+        .all()
+    )
+    actual = {"invoiced_total": 0.0, "paid_total": 0.0, "balance_due": 0.0, "invoice_count": 0, "payment_count": 0}
+    demo = {"invoiced_total": 0.0, "paid_total": 0.0, "balance_due": 0.0, "invoice_count": 0, "payment_count": 0}
+    for inv in invoices:
+        ch = inv.channel or (inv.order.channel if inv.order else "real") or "real"
+        bucket = demo if ch == "demo" else actual
+        bucket["invoiced_total"] = round(bucket["invoiced_total"] + float(inv.total_amount or 0), 2)
+        bucket["paid_total"] = round(bucket["paid_total"] + float(inv.paid_amount or 0), 2)
+        bucket["balance_due"] = round(bucket["balance_due"] + max(0.0, float(inv.balance_due or 0)), 2)
+        bucket["invoice_count"] += 1
+
+    payments = db.query(Payment).all()
+    for p in payments:
+        ch = p.channel or "real"
+        if ch == "demo":
+            demo["payment_count"] += 1
+        else:
+            actual["payment_count"] += 1
+
+    return {
+        "actual": actual,
+        "demo": demo,
+        "combined": {
+            "invoiced_total": round(actual["invoiced_total"] + demo["invoiced_total"], 2),
+            "paid_total": round(actual["paid_total"] + demo["paid_total"], 2),
+            "balance_due": round(actual["balance_due"] + demo["balance_due"], 2),
+            "invoice_count": actual["invoice_count"] + demo["invoice_count"],
+            "payment_count": actual["payment_count"] + demo["payment_count"],
+        },
+    }
+
+
+def get_payments_ledger(db: Session, channel: Optional[str] = None, limit: int = 200) -> list[dict]:
+    """Return itemized payment receipts tagged by real vs demo channel."""
+    q = (
+        db.query(Payment)
+        .options(
+            joinedload(Payment.invoice).joinedload(Invoice.order).joinedload(Order.customer),
+            joinedload(Payment.invoice).joinedload(Invoice.customer),
+        )
+        .order_by(Payment.created_at.desc())
+    )
+    if channel in ("real", "demo"):
+        q = q.filter(Payment.channel == channel)
+    rows = q.limit(limit).all()
+    out = []
+    for p in rows:
+        inv = p.invoice
+        order = inv.order if inv else None
+        cust = (order.customer if order else None) or (inv.customer if inv else None)
+        out.append({
+            "id": p.id,
+            "invoice_id": p.invoice_id,
+            "invoice_number": inv.invoice_number if inv else None,
+            "order_number": order.order_number if order else None,
+            "customer_name": cust.name if cust else "Counter Sale",
+            "amount": float(p.amount or 0),
+            "method": p.method or "manual",
+            "channel": p.channel or (inv.channel if inv else "real") or "real",
+            "notes": p.notes,
+            "created_at": p.created_at,
+        })
+    return out

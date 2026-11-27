@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import client from '../api/client';
-import { EmptyState, PageHeader } from '../components/ui';
+import { ChannelBadge, ChannelFilter, EmptyState, PageHeader, PaymentSplit } from '../components/ui';
 import { formatDate, money } from '../utils/format';
 import { subscribeWorkspaceSync } from '../utils/sync';
 
@@ -32,10 +32,11 @@ export default function Dashboard() {
   const [error, setError] = useState('');
   const [lowStock, setLowStock] = useState([]);
   const [funnel, setFunnel] = useState(null);
+  const [channelFilter, setChannelFilter] = useState('all'); // all | real | demo
   const canSeeStorefrontAnalytics = ['admin', 'manager'].includes(role);
   const fetchingDashboardRef = useRef(false);
 
-  const loadDashboardData = () => {
+  const loadDashboardData = (activeChannel = channelFilter) => {
     if (fetchingDashboardRef.current) return;
     if (role === 'employee') {
       fetchingDashboardRef.current = true;
@@ -46,13 +47,14 @@ export default function Dashboard() {
       return;
     }
     fetchingDashboardRef.current = true;
-    const p1 = client.get('/reports/dashboard')
+    const chParam = activeChannel !== 'all' ? { channel: activeChannel } : undefined;
+    const p1 = client.get('/reports/dashboard', { params: chParam })
       .then((dashboard) => {
         setMetrics(dashboard.data);
         setError('');
       })
       .catch((err) => setError(err.response?.data?.detail || 'Could not load live business data.'));
-    const p2 = client.get('/reports/sales?days=30')
+    const p2 = client.get('/reports/sales', { params: { days: 30, ...(chParam || {}) } })
       .then((salesRes) => setSeries(salesRes.data.points || []))
       .catch(() => {});
     const p3 = client.get('/ai/summary')
@@ -67,8 +69,9 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    loadDashboardData();
-  }, [role]);
+    fetchingDashboardRef.current = false;
+    loadDashboardData(channelFilter);
+  }, [role, channelFilter]);
 
   const loadFunnel = () => {
     if (!canSeeStorefrontAnalytics) return;
@@ -81,17 +84,17 @@ export default function Dashboard() {
     loadFunnel();
     const timer = setInterval(() => {
       loadFunnel();
-      loadDashboardData();
+      loadDashboardData(channelFilter);
     }, 15000);
     const unsubscribe = subscribeWorkspaceSync(() => {
-      loadDashboardData();
+      loadDashboardData(channelFilter);
       loadFunnel();
     });
     return () => {
       clearInterval(timer);
       unsubscribe();
     };
-  }, [canSeeStorefrontAnalytics, role]);
+  }, [canSeeStorefrontAnalytics, role, channelFilter]);
 
   const formatOrderStatus = (status) => ({
     draft: 'Draft',
@@ -107,6 +110,9 @@ export default function Dashboard() {
   const profit = metrics?.revenue_profit || {};
   const inventory = metrics?.inventory_summary || {};
   const recentOrders = metrics?.recent_orders || [];
+  const breakdown = metrics?.payment_breakdown || { actual: {}, demo: {} };
+  const actualStats = breakdown.actual || {};
+  const demoStats = breakdown.demo || {};
   const chart = useMemo(() => ({
     labels: series.map((point) => formatDate(point.date).split(' ').slice(0, 2).join(' ')),
     datasets: [{
@@ -127,28 +133,45 @@ export default function Dashboard() {
       <PageHeader
         eyebrow={new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         title={`${getTimeGreeting()}, ${user?.full_name?.split(' ')[0] || 'there'}.`}
-        subtitle={role === 'employee' ? 'Live pulse of customers, stock and orders.' : 'Live pulse of customers, stock, orders and profit.'}
+        subtitle={role === 'employee' ? 'Live pulse of customers, stock and orders.' : 'Live pulse of actual vs demo payments, orders, inventory and profit.'}
       >
-        {role !== 'employee' && <button className="outline-btn" onClick={() => navigate('/reports')}><Search size={16} /> View reports</button>}
+        {role !== 'employee' && (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <ChannelFilter value={channelFilter} onChange={setChannelFilter} />
+            <button className="outline-btn" onClick={() => navigate('/reports')}><Search size={16} /> View reports</button>
+          </div>
+        )}
       </PageHeader>
 
       {error && <div className="notice error">{error}</div>}
 
       {role !== 'employee' && <section className="metric-grid">
         <article className="metric teal" style={{ cursor: 'pointer' }} onClick={() => navigate('/orders')}>
-          <span>Orders today</span>
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+            Orders today
+            {channelFilter !== 'all' && <ChannelBadge channel={channelFilter} compact />}
+          </span>
           <strong>{sales.daily_orders || 0}</strong>
           <small>{money(sales.daily_sales)} sales today · {sales.total_orders || 0} total</small>
+          <PaymentSplit actual={actualStats.daily_sales} demo={demoStats.daily_sales} format={money} />
         </article>
         <article className="metric blue">
-          <span>Total revenue</span>
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+            Total revenue
+            {channelFilter !== 'all' && <ChannelBadge channel={channelFilter} compact />}
+          </span>
           <strong>{money(profit.revenue)}</strong>
           <small>{sales.total_customers || 0} customers</small>
+          <PaymentSplit actual={actualStats.sales} demo={demoStats.sales} format={money} />
         </article>
         <article className="metric yellow">
-          <span>Net profit</span>
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+            Net profit
+            {channelFilter !== 'all' && <ChannelBadge channel={channelFilter} compact />}
+          </span>
           <strong>{money(profit.profit)}</strong>
-          <small>After expenses {money(profit.expenses)}</small>
+          <small>{channelFilter === 'demo' ? 'COGS deducted' : `After expenses ${money(profit.expenses)}`}</small>
+          <PaymentSplit actual={actualStats.profit} demo={demoStats.profit} format={money} />
         </article>
         <article className="metric coral" style={{ cursor: 'pointer' }} onClick={() => navigate('/inventory')}>
           <span>Low-stock items</span>
@@ -156,6 +179,35 @@ export default function Dashboard() {
           <small>{inventory.total_products || 0} products tracked</small>
         </article>
       </section>}
+
+      {role !== 'employee' && (
+        <section className="payment-summary-strip">
+          <div className="payment-summary-card real" style={{ cursor: 'pointer' }} onClick={() => navigate('/invoices')}>
+            <div className="payment-summary-head">
+              <span>Actual Payments Collected</span>
+              <ChannelBadge channel="real" />
+            </div>
+            <strong className="payment-summary-value">{money(actualStats.paid_payments)}</strong>
+            <div className="payment-summary-meta">
+              <span>Pending: {money(actualStats.pending_payments)}</span>
+              <span>Orders: {actualStats.orders || 0}</span>
+              <span>Sales: {money(actualStats.sales)}</span>
+            </div>
+          </div>
+          <div className="payment-summary-card demo" style={{ cursor: 'pointer' }} onClick={() => navigate('/invoices')}>
+            <div className="payment-summary-head">
+              <span>Demo Payments (Sandbox)</span>
+              <ChannelBadge channel="demo" />
+            </div>
+            <strong className="payment-summary-value">{money(demoStats.paid_payments)}</strong>
+            <div className="payment-summary-meta">
+              <span>Pending: {money(demoStats.pending_payments)}</span>
+              <span>Demo Orders: {demoStats.orders || 0}</span>
+              <span>Demo Sales: {money(demoStats.sales)}</span>
+            </div>
+          </div>
+        </section>
+      )}
 
       {canSeeStorefrontAnalytics && (
         <section className="panel live-storefront-pulse" style={{ marginBottom: 20 }}>
@@ -259,11 +311,17 @@ export default function Dashboard() {
               {recentOrders.slice(0, 5).map((order) => (
                 <div className="order-row" key={order.id}>
                   <div>
-                    <strong>#{order.order_number || order.id}</strong>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <strong>#{order.order_number || order.id}</strong>
+                      <ChannelBadge channel={order.channel} compact />
+                    </div>
                     <small>{formatDate(order.created_at)}</small>
                   </div>
                   <span className={`status-pill ${order.status}`}>{formatOrderStatus(order.status)}</span>
-                  <b>{money(order.total_amount)}</b>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <b>{money(order.total_amount)}</b>
+                    {order.channel === 'demo' && <ChannelBadge channel="demo" compact />}
+                  </div>
                 </div>
               ))}
             </div>

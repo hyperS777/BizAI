@@ -18,6 +18,7 @@ class InvoiceBase(BaseModel):
     cgst: Optional[float] = 0.0
     sgst: Optional[float] = 0.0
     igst: Optional[float] = 0.0
+    channel: str = "real"
     notes: Optional[str] = None
 
 
@@ -31,6 +32,7 @@ class InvoiceCreate(BaseModel):
     cgst: Optional[float] = 0.0
     sgst: Optional[float] = 0.0
     igst: Optional[float] = 0.0
+    channel: str = "real"
     notes: Optional[str] = None
 
 
@@ -39,6 +41,7 @@ class InvoiceUpdate(BaseModel):
     paid_amount: Optional[float] = None
     payment_amount: Optional[float] = None
     method: Optional[str] = "manual"
+    channel: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -47,6 +50,7 @@ class PaymentResponse(BaseModel):
     invoice_id: int
     amount: float
     method: Optional[str] = None
+    channel: str = "real"
     notes: Optional[str] = None
     created_at: datetime
 

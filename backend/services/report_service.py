@@ -6,14 +6,23 @@ from calendar import monthrange
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 
-from sqlalchemy import case, func
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
 from models.customer import Customer
 from models.expense import Expense
 from models.integration import AbandonedCheckout
+from models.invoice import Invoice, InvoiceStatus
 from models.order import Order, OrderItem, OrderStatus
 from models.product import Product
+
+
+def _order_channel_cond(channel: Optional[str]):
+    if channel == "demo":
+        return Order.channel == "demo"
+    if channel == "real":
+        return or_(Order.channel == "real", Order.channel.is_(None))
+    return None
 
 IST_OFFSET = timedelta(hours=5, minutes=30)
 
@@ -55,7 +64,7 @@ def sales_between(db: Session, start: date, end: date):
     return float(total or 0), int(count or 0)
 
 
-def get_dashboard_metrics(db: Session):
+def get_dashboard_metrics(db: Session, channel: Optional[str] = None):
     today = _ist_today()
     start, end = _month_bounds()
     prev_start, prev_end = _previous_month_bounds()
@@ -66,18 +75,21 @@ def get_dashboard_metrics(db: Session):
 
     excluded_statuses = [OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value]
     is_valid_order = Order.status.notin_(excluded_statuses)
+    ch_cond = _order_channel_cond(channel)
+    active_filter = (is_valid_order & ch_cond) if ch_cond is not None else is_valid_order
 
-    order_stats = db.query(
-        func.coalesce(func.sum(case((is_valid_order, Order.total_amount), else_=0)), 0),
-        func.count(Order.id),
-        func.coalesce(func.sum(case((Order.status == OrderStatus.DRAFT.value, 1), else_=0)), 0),
-        func.coalesce(func.sum(case((is_valid_order & (Order.created_at >= month_start_utc) & (Order.created_at <= month_end_utc), Order.total_amount), else_=0)), 0),
-        func.coalesce(func.sum(case((is_valid_order & (Order.created_at >= month_start_utc) & (Order.created_at <= month_end_utc), 1), else_=0)), 0),
-        func.coalesce(func.sum(case((is_valid_order & (Order.created_at >= prev_start_utc) & (Order.created_at <= prev_end_utc), Order.total_amount), else_=0)), 0),
-        func.coalesce(func.sum(case((is_valid_order & (Order.created_at >= prev_start_utc) & (Order.created_at <= prev_end_utc), 1), else_=0)), 0),
-        func.coalesce(func.sum(case((is_valid_order & (Order.created_at >= today_start_utc) & (Order.created_at <= today_end_utc), Order.total_amount), else_=0)), 0),
-        func.coalesce(func.sum(case((is_valid_order & (Order.created_at >= today_start_utc) & (Order.created_at <= today_end_utc), 1), else_=0)), 0),
-    ).one()
+    order_q = db.query(
+        func.coalesce(func.sum(case((active_filter, Order.total_amount), else_=0)), 0),
+        func.coalesce(func.sum(case((ch_cond, 1), else_=0)), 0) if ch_cond is not None else func.count(Order.id),
+        func.coalesce(func.sum(case(((Order.status == OrderStatus.DRAFT.value) & ch_cond if ch_cond is not None else Order.status == OrderStatus.DRAFT.value, 1), else_=0)), 0),
+        func.coalesce(func.sum(case((active_filter & (Order.created_at >= month_start_utc) & (Order.created_at <= month_end_utc), Order.total_amount), else_=0)), 0),
+        func.coalesce(func.sum(case((active_filter & (Order.created_at >= month_start_utc) & (Order.created_at <= month_end_utc), 1), else_=0)), 0),
+        func.coalesce(func.sum(case((active_filter & (Order.created_at >= prev_start_utc) & (Order.created_at <= prev_end_utc), Order.total_amount), else_=0)), 0),
+        func.coalesce(func.sum(case((active_filter & (Order.created_at >= prev_start_utc) & (Order.created_at <= prev_end_utc), 1), else_=0)), 0),
+        func.coalesce(func.sum(case((active_filter & (Order.created_at >= today_start_utc) & (Order.created_at <= today_end_utc), Order.total_amount), else_=0)), 0),
+        func.coalesce(func.sum(case((active_filter & (Order.created_at >= today_start_utc) & (Order.created_at <= today_end_utc), 1), else_=0)), 0),
+    )
+    order_stats = order_q.one()
 
     total_sales = float(order_stats[0] or 0)
     total_orders = int(order_stats[1] or 0)
@@ -104,13 +116,77 @@ def get_dashboard_metrics(db: Session):
         .select_from(OrderItem)
         .join(Product, Product.id == OrderItem.product_id)
         .join(Order, Order.id == OrderItem.order_id)
-        .filter(is_valid_order)
+        .filter(active_filter)
         .scalar()
         or 0
     )
 
-    # Net profit strictly deducts realized spend and manufacturing costs
-    profit = total_sales - realized_expenses - cogs
+    # Net profit strictly deducts realized spend and manufacturing costs (expenses apply to actual operations; skip deducting full rent from demo-only slice)
+    profit = (total_sales - realized_expenses - cogs) if channel != "demo" else (total_sales - cogs)
+
+    # Separated Actual vs Demo payment & sales breakdown
+    is_real_ch = or_(Order.channel == "real", Order.channel.is_(None))
+    is_demo_ch = Order.channel == "demo"
+    split_stats = db.query(
+        func.coalesce(func.sum(case((is_valid_order & is_real_ch, Order.total_amount), else_=0)), 0),
+        func.coalesce(func.sum(case((is_valid_order & is_real_ch, 1), else_=0)), 0),
+        func.coalesce(func.sum(case((is_valid_order & is_real_ch & (Order.created_at >= today_start_utc) & (Order.created_at <= today_end_utc), Order.total_amount), else_=0)), 0),
+        func.coalesce(func.sum(case((is_valid_order & is_real_ch & (Order.created_at >= month_start_utc) & (Order.created_at <= month_end_utc), Order.total_amount), else_=0)), 0),
+        func.coalesce(func.sum(case((is_valid_order & is_demo_ch, Order.total_amount), else_=0)), 0),
+        func.coalesce(func.sum(case((is_valid_order & is_demo_ch, 1), else_=0)), 0),
+        func.coalesce(func.sum(case((is_valid_order & is_demo_ch & (Order.created_at >= today_start_utc) & (Order.created_at <= today_end_utc), Order.total_amount), else_=0)), 0),
+        func.coalesce(func.sum(case((is_valid_order & is_demo_ch & (Order.created_at >= month_start_utc) & (Order.created_at <= month_end_utc), Order.total_amount), else_=0)), 0),
+    ).one()
+
+    real_cogs = float(
+        db.query(func.coalesce(func.sum(OrderItem.quantity * Product.cost_price), 0))
+        .select_from(OrderItem)
+        .join(Product, Product.id == OrderItem.product_id)
+        .join(Order, Order.id == OrderItem.order_id)
+        .filter(is_valid_order, is_real_ch)
+        .scalar()
+        or 0
+    )
+    demo_cogs = float(
+        db.query(func.coalesce(func.sum(OrderItem.quantity * Product.cost_price), 0))
+        .select_from(OrderItem)
+        .join(Product, Product.id == OrderItem.product_id)
+        .join(Order, Order.id == OrderItem.order_id)
+        .filter(is_valid_order, is_demo_ch)
+        .scalar()
+        or 0
+    )
+
+    inv_real_ch = or_(Invoice.channel == "real", Invoice.channel.is_(None))
+    inv_demo_ch = Invoice.channel == "demo"
+    inv_valid = Invoice.status != InvoiceStatus.CANCELLED.value
+    inv_split = db.query(
+        func.coalesce(func.sum(case((inv_valid & inv_real_ch, Invoice.paid_amount), else_=0)), 0),
+        func.coalesce(func.sum(case((inv_valid & inv_real_ch, Invoice.total_amount - Invoice.paid_amount), else_=0)), 0),
+        func.coalesce(func.sum(case((inv_valid & inv_demo_ch, Invoice.paid_amount), else_=0)), 0),
+        func.coalesce(func.sum(case((inv_valid & inv_demo_ch, Invoice.total_amount - Invoice.paid_amount), else_=0)), 0),
+    ).one()
+
+    payment_breakdown = {
+        "actual": {
+            "sales": float(split_stats[0] or 0),
+            "orders": int(split_stats[1] or 0),
+            "daily_sales": float(split_stats[2] or 0),
+            "monthly_sales": float(split_stats[3] or 0),
+            "paid_payments": round(float(inv_split[0] or 0), 2),
+            "pending_payments": round(max(0.0, float(inv_split[1] or 0)), 2),
+            "profit": round(float(split_stats[0] or 0) - realized_expenses - real_cogs, 2),
+        },
+        "demo": {
+            "sales": float(split_stats[4] or 0),
+            "orders": int(split_stats[5] or 0),
+            "daily_sales": float(split_stats[6] or 0),
+            "monthly_sales": float(split_stats[7] or 0),
+            "paid_payments": round(float(inv_split[2] or 0), 2),
+            "pending_payments": round(max(0.0, float(inv_split[3] or 0)), 2),
+            "profit": round(float(split_stats[4] or 0) - demo_cogs, 2),
+        },
+    }
 
     product_stats = db.query(
         func.coalesce(func.sum(case((Product.is_active == True, 1), else_=0)), 0),
@@ -129,7 +205,7 @@ def get_dashboard_metrics(db: Session):
         .join(OrderItem, OrderItem.product_id == Product.id)
         .join(Order, Order.id == OrderItem.order_id)
         .filter(
-            is_valid_order,
+            active_filter,
             Product.is_active == True,
             OrderItem.total_price > 0,
         )
@@ -150,14 +226,16 @@ def get_dashboard_metrics(db: Session):
     top_products = [_format_perf(row) for row in product_perf_rows[:5]]
     bottom_products = [_format_perf(row) for row in sorted(product_perf_rows, key=lambda r: float(r.revenue or 0))[:5]]
 
-    recent_orders = (
-        db.query(Order).order_by(Order.created_at.desc()).limit(8).all()
-    )
+    recent_q = db.query(Order)
+    if ch_cond is not None:
+        recent_q = recent_q.filter(ch_cond)
+    recent_orders = recent_q.order_by(Order.created_at.desc()).limit(8).all()
     recent_orders_list = [
         {
             "id": o.id,
             "order_number": o.order_number,
             "status": o.status,
+            "channel": o.channel or "real",
             "total_amount": o.total_amount,
             "created_at": o.created_at,
             "customer_id": o.customer_id,
@@ -200,10 +278,11 @@ def get_dashboard_metrics(db: Session):
         "top_products": top_products,
         "bottom_products": bottom_products,
         "recent_orders": recent_orders_list,
+        "payment_breakdown": payment_breakdown,
     }
 
 
-def get_sales_series(db: Session, days: int = 30, start_date: Optional[date] = None, end_date: Optional[date] = None):
+def get_sales_series(db: Session, days: int = 30, start_date: Optional[date] = None, end_date: Optional[date] = None, channel: Optional[str] = None):
     if start_date and end_date:
         start = start_date
         end = end_date
@@ -213,16 +292,15 @@ def get_sales_series(db: Session, days: int = 30, start_date: Optional[date] = N
         start = end - timedelta(days=days - 1)
         total_days = days
 
-    rows = (
-        db.query(func.date(Order.created_at), func.coalesce(func.sum(Order.total_amount), 0))
-        .filter(
-            Order.created_at >= datetime.combine(start, datetime.min.time()),
-            Order.created_at <= datetime.combine(end, datetime.max.time()),
-            Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value]),
-        )
-        .group_by(func.date(Order.created_at))
-        .all()
+    q = db.query(func.date(Order.created_at), func.coalesce(func.sum(Order.total_amount), 0)).filter(
+        Order.created_at >= datetime.combine(start, datetime.min.time()),
+        Order.created_at <= datetime.combine(end, datetime.max.time()),
+        Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value]),
     )
+    ch_cond = _order_channel_cond(channel)
+    if ch_cond is not None:
+        q = q.filter(ch_cond)
+    rows = q.group_by(func.date(Order.created_at)).all()
     by_day = {str(r[0]): float(r[1] or 0) for r in rows}
     series = []
     for i in range(total_days):
@@ -232,9 +310,12 @@ def get_sales_series(db: Session, days: int = 30, start_date: Optional[date] = N
     return series
 
 
-def get_pnl_data(db: Session, start_date: Optional[date] = None, end_date: Optional[date] = None) -> dict:
+def get_pnl_data(db: Session, start_date: Optional[date] = None, end_date: Optional[date] = None, channel: Optional[str] = None) -> dict:
     today = date.today()
     q_orders = db.query(Order).filter(Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value]))
+    ch_cond = _order_channel_cond(channel)
+    if ch_cond is not None:
+        q_orders = q_orders.filter(ch_cond)
     q_expenses = db.query(Expense).filter(Expense.date <= today)
 
     if start_date:
@@ -256,7 +337,7 @@ def get_pnl_data(db: Session, start_date: Optional[date] = None, end_date: Optio
 
     gross_profit = gross_sales - cogs
 
-    expenses = q_expenses.all()
+    expenses = q_expenses.all() if channel != "demo" else []
     operating_expenses = sum(float(e.amount or 0) for e in expenses)
     net_profit = gross_profit - operating_expenses
 
@@ -280,8 +361,8 @@ def get_pnl_data(db: Session, start_date: Optional[date] = None, end_date: Optio
 
 
 
-def get_top_products(db: Session, limit: int = 10):
-    rows = (
+def get_top_products(db: Session, limit: int = 10, channel: Optional[str] = None):
+    q = (
         db.query(
             Product.id,
             Product.name,
@@ -296,11 +377,11 @@ def get_top_products(db: Session, limit: int = 10):
             Product.is_active == True,
             OrderItem.total_price > 0,
         )
-        .group_by(Product.id, Product.name, Product.sku)
-        .order_by(func.sum(OrderItem.total_price).desc())
-        .limit(limit)
-        .all()
     )
+    ch_cond = _order_channel_cond(channel)
+    if ch_cond is not None:
+        q = q.filter(ch_cond)
+    rows = q.group_by(Product.id, Product.name, Product.sku).order_by(func.sum(OrderItem.total_price).desc()).limit(limit).all()
     return [
         {
             "product_id": r.id,
@@ -315,7 +396,11 @@ def get_top_products(db: Session, limit: int = 10):
     ]
 
 
-def get_customer_activity(db: Session, limit: int = 10):
+def get_customer_activity(db: Session, limit: int = 10, channel: Optional[str] = None):
+    order_join_cond = (Order.customer_id == Customer.id) & (Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value]))
+    ch_cond = _order_channel_cond(channel)
+    if ch_cond is not None:
+        order_join_cond = order_join_cond & ch_cond
     rows = (
         db.query(
             Customer.id,
@@ -324,7 +409,7 @@ def get_customer_activity(db: Session, limit: int = 10):
             func.count(Order.id).label("order_count"),
             func.coalesce(func.sum(Order.total_amount), 0).label("total_spent"),
         )
-        .outerjoin(Order, (Order.customer_id == Customer.id) & (Order.status.notin_([OrderStatus.CANCELLED.value, OrderStatus.DRAFT.value])))
+        .outerjoin(Order, order_join_cond)
         .group_by(Customer.id, Customer.name, Customer.email)
         .order_by(func.coalesce(func.sum(Order.total_amount), 0).desc())
         .limit(limit)
@@ -535,9 +620,9 @@ def build_business_snapshot(db: Session) -> dict:
     }
 
 
-def get_staff_performance(db: Session, limit: int = 10) -> list[dict]:
+def get_staff_performance(db: Session, limit: int = 10, channel: Optional[str] = None) -> list[dict]:
     from models.user import User
-    rows = (
+    q = (
         db.query(
             User.id.label("user_id"),
             User.full_name.label("full_name"),
@@ -547,11 +632,11 @@ def get_staff_performance(db: Session, limit: int = 10) -> list[dict]:
         )
         .join(Order, Order.created_by == User.id)
         .filter(Order.status != OrderStatus.CANCELLED.value)
-        .group_by(User.id)
-        .order_by(func.sum(Order.total_amount).desc())
-        .limit(limit)
-        .all()
     )
+    ch_cond = _order_channel_cond(channel)
+    if ch_cond is not None:
+        q = q.filter(ch_cond)
+    rows = q.group_by(User.id).order_by(func.sum(Order.total_amount).desc()).limit(limit).all()
     return [
         {
             "user_id": r.user_id,

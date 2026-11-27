@@ -8,7 +8,7 @@ import {
 import { CircleMarker, MapContainer, Popup, TileLayer, ZoomControl, useMap, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import client, { downloadPackingSlipPdf } from '../api/client';
-import { EmptyState, Modal, PageHeader, ConfirmDialog } from '../components/ui';
+import { ChannelBadge, ChannelFilter, EmptyState, Modal, PageHeader, ConfirmDialog } from '../components/ui';
 import { apiError, formatDate, money } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -91,12 +91,8 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onE
         </td>
         <td>
           <span className="order-expand-icon">{expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
-          <strong>#{order.order_number}</strong>
-          {order.channel === 'demo' && (
-            <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 5px', borderRadius: 4, background: 'rgba(139,92,246,0.14)', color: '#7c3aed', fontWeight: 700 }}>
-              DEMO
-            </span>
-          )}
+          <strong>#{order.order_number}</strong>{' '}
+          <ChannelBadge channel={order.channel} compact />
         </td>
         <td>
           <div className="order-customer-cell">
@@ -125,7 +121,12 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onE
             : order.tracking_number || (order.status === 'shipped' ? 'Awaiting carrier' : '—')}
           {order.delivery_location && <small>{order.delivery_location}</small>}
         </td>
-        <td><strong>{money(order.total_amount)}</strong></td>
+        <td>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <strong>{money(order.total_amount)}</strong>
+            <ChannelBadge channel={order.channel} compact />
+          </div>
+        </td>
         <td>{formatDate(order.created_at)}</td>
         <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
           {canStatus && order.status === 'draft' && (
@@ -229,7 +230,9 @@ function OrderRow({ order, canStatus, canInvoice, onChangeStatus, onInvoice, onE
                   {order.discount_amount > 0 && <span><strong>Discount applied:</strong> −{money(order.discount_amount)}</span>}
                   {order.shipping_amount > 0 && <span><strong>Shipping:</strong> +{money(order.shipping_amount)}</span>}
                   <span><strong>Subtotal:</strong> {money(order.subtotal_amount || order.total_amount)}</span>
-                  <span><strong>Total:</strong> {money(order.total_amount)}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <strong>Total:</strong> {money(order.total_amount)} <ChannelBadge channel={order.channel} compact />
+                  </span>
                   {order.invoice && (
                     <span>
                       <strong>Invoice:</strong> #{order.invoice.invoice_number}
@@ -328,6 +331,7 @@ export default function Orders() {
     const t = searchParams.get('tab') || 'all';
     return t === 'draft' ? 'draft_real' : t;
   });
+  const [channelFilter, setChannelFilter] = useState('all'); // all | real | demo
   const [search, setSearch] = useState(() => searchParams.get('q') || '');
   const [view, setView] = useState('orders');
   const [error, setError] = useState('');
@@ -345,6 +349,7 @@ export default function Orders() {
     shipping_address: '',
     discount_code: '',
     shipping_amount: 0,
+    channel: 'real',
     notes: '',
     items: [{ product_id: '', variant_id: '', quantity: 1, unit_price: 0 }],
   });
@@ -408,15 +413,42 @@ export default function Orders() {
     return counts;
   }, { all: 0, draft_real: 0, draft_demo: 0, abandoned: openAbandonedCount, simulations: simulations.length }), [orders, openAbandonedCount, simulations.length]);
 
+  const channelCounts = useMemo(() => {
+    const real = orders.filter((o) => o.channel !== 'demo').length;
+    const demo = orders.filter((o) => o.channel === 'demo').length;
+    return { all: orders.length, real, demo };
+  }, [orders]);
+
+  const orderTotalsByChannel = useMemo(() => {
+    let actualTotal = 0;
+    let demoTotal = 0;
+    let actualCount = 0;
+    let demoCount = 0;
+    for (const o of orders) {
+      if (o.status === 'cancelled' || o.status === 'draft') continue;
+      if (o.channel === 'demo') {
+        demoTotal += Number(o.total_amount || 0);
+        demoCount += 1;
+      } else {
+        actualTotal += Number(o.total_amount || 0);
+        actualCount += 1;
+      }
+    }
+    return { actualTotal, demoTotal, actualCount, demoCount };
+  }, [orders]);
+
   const tabs = canSeeSimulations ? [...statusTabs, { id: 'simulations', label: 'Demo runs' }] : statusTabs;
   const visibleOrders = useMemo(() => {
     let list = orders;
+    if (channelFilter !== 'all') {
+      list = list.filter((order) => (order.channel === 'demo' ? 'demo' : 'real') === channelFilter);
+    }
     if (status === 'draft_real') {
-      list = orders.filter((order) => order.status === 'draft' && order.channel !== 'demo');
+      list = list.filter((order) => order.status === 'draft' && order.channel !== 'demo');
     } else if (status === 'draft_demo') {
-      list = orders.filter((order) => order.status === 'draft' && order.channel === 'demo');
+      list = list.filter((order) => order.status === 'draft' && order.channel === 'demo');
     } else if (status !== 'all') {
-      list = orders.filter((order) => order.status === status);
+      list = list.filter((order) => order.status === status);
     }
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -428,7 +460,7 @@ export default function Orders() {
       );
     }
     return list;
-  }, [orders, status, search]);
+  }, [orders, status, search, channelFilter]);
 
   const mappedOrders = useMemo(() => visibleOrders.filter((order) => (
     order.status !== 'cancelled'
@@ -650,12 +682,13 @@ export default function Orders() {
     }
   };
 
-  const save = async (event, orderStatus = 'pending', orderChannel = 'real') => {
+  const save = async (event, orderStatus = 'pending', orderChannel = null) => {
     event.preventDefault();
+    const resolvedChannel = orderChannel || form.channel || 'real';
     try {
       const { data: created } = await client.post('/orders', {
         status: orderStatus,
-        channel: orderChannel,
+        channel: resolvedChannel,
         customer_id: Number(form.customer_id),
         shipping_address: form.shipping_address || null,
         discount_code: appliedDiscount?.code || form.discount_code || null,
@@ -854,6 +887,34 @@ export default function Orders() {
 
       {notice && <div className="notice success" style={{ background: '#eaf4f1', borderColor: 'var(--teal)', color: 'var(--teal-dark)' }}>{notice}</div>}
       {error && <div className="notice error">{error}</div>}
+
+      {/* Actual vs Demo Order Payment Totals */}
+      <section className="payment-summary-strip">
+        <div className="payment-summary-card real" style={{ cursor: 'pointer' }} onClick={() => setChannelFilter('real')}>
+          <div className="payment-summary-head">
+            <span>Actual Orders Total</span>
+            <ChannelBadge channel="real" />
+          </div>
+          <strong className="payment-summary-value">{money(orderTotalsByChannel.actualTotal)}</strong>
+          <div className="payment-summary-meta">
+            <span>{orderTotalsByChannel.actualCount} active real orders</span>
+          </div>
+        </div>
+        <div className="payment-summary-card demo" style={{ cursor: 'pointer' }} onClick={() => setChannelFilter('demo')}>
+          <div className="payment-summary-head">
+            <span>Demo Orders Total (Storefront / Sandbox)</span>
+            <ChannelBadge channel="demo" />
+          </div>
+          <strong className="payment-summary-value">{money(orderTotalsByChannel.demoTotal)}</strong>
+          <div className="payment-summary-meta">
+            <span>{orderTotalsByChannel.demoCount} demo orders</span>
+          </div>
+        </div>
+      </section>
+
+      <div style={{ marginBottom: 10 }}>
+        <ChannelFilter value={channelFilter} onChange={setChannelFilter} counts={channelCounts} />
+      </div>
 
       <div className="orders-toolbar" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between' }}>
         <div className="order-status-tabs" role="tablist" aria-label="Filter orders by status">
@@ -1469,6 +1530,13 @@ export default function Orders() {
                 <span style={{ color: 'var(--teal)' }}>{money(grandTotal)}</span>
               </div>
             </div>
+
+            <label>Order Type (Actual vs Demo)
+              <select value={form.channel || 'real'} onChange={(e) => setForm({ ...form, channel: e.target.value })}>
+                <option value="real">Actual Business Order (Real Payment)</option>
+                <option value="demo">Demo / Sandbox Order</option>
+              </select>
+            </label>
 
             <label>Order Notes / Delivery Instructions
               <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="e.g. Leave package with guard" />

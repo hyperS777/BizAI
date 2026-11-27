@@ -110,6 +110,7 @@ def read_public_tracking(tracking_number: str, db: Session = Depends(get_db)):
         "location": order.delivery_location,
         "shipping_address": order.shipping_address,
         "customer_name": order.customer.name if order.customer else None,
+        "channel": order.channel or "real",
         "total_amount": float(order.total_amount or 0),
         "created_at": order.created_at,
         "updated_at": order.delivery_updated_at or order.updated_at,

@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CircleDollarSign, Plus, Download, MessageCircle, Mail, CheckCircle2, CreditCard, FileText, Link2 } from 'lucide-react';
 import client, { downloadInvoicePdf } from '../api/client';
-import { EmptyState, Modal, PageHeader } from '../components/ui';
+import { ChannelBadge, ChannelFilter, EmptyState, Modal, PageHeader } from '../components/ui';
 import { apiError, formatDate, money } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -21,6 +21,10 @@ export default function Invoices() {
   const toast = useToast();
   const canPay = can(['admin', 'manager', 'accountant']);
   const [invoices, setInvoices] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [paymentSummary, setPaymentSummary] = useState(null);
+  const [channelFilter, setChannelFilter] = useState('all'); // all | real | demo
+  const [activeView, setActiveView] = useState('invoices'); // invoices | payments
   const [customers, setCustomers] = useState([]);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -34,6 +38,7 @@ export default function Invoices() {
     due_date: new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10),
     payment_method: 'bank_transfer',
     tax_rate_type: 'intra_state', // 'intra_state' | 'inter_state' | 'exempt'
+    channel: 'real',
     notes: 'Luxury Garment Supply & Tailoring',
   });
 
@@ -41,6 +46,7 @@ export default function Invoices() {
   const [payForm, setPayForm] = useState({
     amount: '',
     method: 'bank_transfer',
+    channel: 'real',
     notes: '',
   });
 
@@ -48,6 +54,12 @@ export default function Invoices() {
     client.get('/invoices')
       .then((res) => setInvoices(res.data || []))
       .catch((err) => setError(apiError(err)));
+    client.get('/invoices/summary')
+      .then((res) => setPaymentSummary(res.data))
+      .catch(() => {});
+    client.get('/payments')
+      .then((res) => setPayments(res.data || []))
+      .catch(() => {});
   };
 
   useEffect(() => {
@@ -86,6 +98,7 @@ export default function Invoices() {
         cgst: cgst,
         sgst: sgst,
         igst: igst,
+        channel: invoiceForm.channel || 'real',
         notes: invoiceForm.notes,
       });
 
@@ -101,10 +114,12 @@ export default function Invoices() {
   };
 
   const openPaymentModal = (invoice) => {
+    const ch = invoice.channel === 'demo' || invoice.order?.channel === 'demo' ? 'demo' : 'real';
     setPaymentModal(invoice);
     setPayForm({
       amount: invoice.balance_due || invoice.total_amount,
-      method: invoice.payment_method || 'bank_transfer',
+      method: invoice.payment_method || (ch === 'demo' ? 'demo_card' : 'bank_transfer'),
+      channel: ch,
       notes: '',
     });
   };
@@ -115,6 +130,7 @@ export default function Invoices() {
       await client.post(`/invoices/${paymentModal.id}/payments`, {
         payment_amount: Number(payForm.amount),
         method: payForm.method,
+        channel: payForm.channel || 'real',
         notes: payForm.notes,
       });
       setPaymentModal(null);
@@ -166,10 +182,37 @@ export default function Invoices() {
     window.location.href = `mailto:${custEmail}?subject=${subject}&body=${body}`;
   };
 
+  const getInvChannel = (inv) => (inv.channel === 'demo' || inv.order?.channel === 'demo' ? 'demo' : 'real');
+
+  const invoiceCounts = useMemo(() => {
+    const real = invoices.filter((inv) => getInvChannel(inv) === 'real').length;
+    const demo = invoices.filter((inv) => getInvChannel(inv) === 'demo').length;
+    return { all: invoices.length, real, demo };
+  }, [invoices]);
+
+  const paymentCounts = useMemo(() => {
+    const real = payments.filter((p) => p.channel !== 'demo').length;
+    const demo = payments.filter((p) => p.channel === 'demo').length;
+    return { all: payments.length, real, demo };
+  }, [payments]);
+
+  const visibleInvoices = useMemo(() => {
+    if (channelFilter === 'all') return invoices;
+    return invoices.filter((inv) => getInvChannel(inv) === channelFilter);
+  }, [invoices, channelFilter]);
+
+  const visiblePayments = useMemo(() => {
+    if (channelFilter === 'all') return payments;
+    return payments.filter((p) => (p.channel === 'demo' ? 'demo' : 'real') === channelFilter);
+  }, [payments, channelFilter]);
+
+  const actualStats = paymentSummary?.actual || { paid_total: 0, invoiced_total: 0, balance_due: 0, invoice_count: invoiceCounts.real, payment_count: paymentCounts.real };
+  const demoStats = paymentSummary?.demo || { paid_total: 0, invoiced_total: 0, balance_due: 0, invoice_count: invoiceCounts.demo, payment_count: paymentCounts.demo };
+
   return (
     <>
-      <PageHeader eyebrow="Billing" title="Invoices" subtitle="Tax invoices with automated GST breakdown, partial payment receipts, and sharing.">
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+      <PageHeader eyebrow="Billing & Payments" title="Invoices &amp; Payments" subtitle="Actual business payments separated from demo storefront/sandbox payments, with automated GST &amp; receipts.">
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {canPay && (
             <button className="primary-btn heading-btn" onClick={() => setCreateModal(true)}>
               <Plus size={14} /> Create Invoice
@@ -181,7 +224,110 @@ export default function Invoices() {
       {notice && <div className="notice success" style={{ background: '#eaf4f1', borderColor: 'var(--teal)', color: 'var(--teal-dark)' }}>{notice}</div>}
       {error && <div className="notice error">{error}</div>}
 
-      {invoices.length ? (
+      {/* Actual vs Demo Payments Summary Strip */}
+      <section className="payment-summary-strip">
+        <div className="payment-summary-card real" style={{ cursor: 'pointer' }} onClick={() => setChannelFilter('real')}>
+          <div className="payment-summary-head">
+            <span>Actual Payments Received</span>
+            <ChannelBadge channel="real" />
+          </div>
+          <strong className="payment-summary-value">{money(actualStats.paid_total)}</strong>
+          <div className="payment-summary-meta">
+            <span>Invoiced: {money(actualStats.invoiced_total)}</span>
+            <span>Pending: {money(actualStats.balance_due)}</span>
+            <span>{actualStats.invoice_count} invoices</span>
+          </div>
+        </div>
+        <div className="payment-summary-card demo" style={{ cursor: 'pointer' }} onClick={() => setChannelFilter('demo')}>
+          <div className="payment-summary-head">
+            <span>Demo Payments (Sandbox)</span>
+            <ChannelBadge channel="demo" />
+          </div>
+          <strong className="payment-summary-value">{money(demoStats.paid_total)}</strong>
+          <div className="payment-summary-meta">
+            <span>Invoiced: {money(demoStats.invoiced_total)}</span>
+            <span>Pending: {money(demoStats.balance_due)}</span>
+            <span>{demoStats.invoice_count} demo invoices</span>
+          </div>
+        </div>
+        <div className="payment-summary-card" style={{ cursor: 'pointer' }} onClick={() => setChannelFilter('all')}>
+          <div className="payment-summary-head">
+            <span>Combined Ledger Total</span>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>Actual + Demo</span>
+          </div>
+          <strong className="payment-summary-value">{money((actualStats.paid_total || 0) + (demoStats.paid_total || 0))}</strong>
+          <div className="payment-summary-meta">
+            <span>Actual: {money(actualStats.paid_total)}</span>
+            <span>Demo: {money(demoStats.paid_total)}</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Channel Filter + View Switcher */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+        <ChannelFilter
+          value={channelFilter}
+          onChange={setChannelFilter}
+          counts={activeView === 'payments' ? paymentCounts : invoiceCounts}
+        />
+        <div className="channel-filter-group">
+          <button
+            type="button"
+            className={`segment-pill ${activeView === 'invoices' ? 'active' : ''}`}
+            onClick={() => setActiveView('invoices')}
+          >
+            Invoices ({visibleInvoices.length})
+          </button>
+          <button
+            type="button"
+            className={`segment-pill ${activeView === 'payments' ? 'active' : ''}`}
+            onClick={() => setActiveView('payments')}
+          >
+            Payment Receipts ({visiblePayments.length})
+          </button>
+        </div>
+      </div>
+
+      {activeView === 'payments' ? (
+        visiblePayments.length ? (
+          <section className="panel table-panel invoice-table-panel">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Receipt</th>
+                  <th>Type</th>
+                  <th>Invoice / Order</th>
+                  <th>Customer</th>
+                  <th>Method</th>
+                  <th>Amount Paid</th>
+                  <th>Date</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visiblePayments.map((p) => (
+                  <tr key={p.id}>
+                    <td><strong>PAY-{String(p.id).padStart(4, '0')}</strong></td>
+                    <td><ChannelBadge channel={p.channel} /></td>
+                    <td>
+                      <strong>#{p.invoice_number || `INV-${p.invoice_id}`}</strong>
+                      {p.order_number && <small style={{ display: 'block', color: 'var(--muted)', fontSize: 11 }}>Order #{p.order_number}</small>}
+                    </td>
+                    <td>{p.customer_name}</td>
+                    <td><code>{p.method}</code></td>
+                    <td>
+                      <strong style={{ fontSize: 13.5 }}>{money(p.amount)}</strong>{' '}
+                      <ChannelBadge channel={p.channel} compact />
+                    </td>
+                    <td>{formatDate(p.created_at)}</td>
+                    <td style={{ fontSize: 12, color: 'var(--muted)', maxWidth: 260 }}>{p.notes || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        ) : <EmptyState icon={CreditCard} text={`No ${channelFilter === 'all' ? '' : channelFilter === 'demo' ? 'demo ' : 'actual '}payment receipts recorded yet.`} />
+      ) : visibleInvoices.length ? (
         <section className="panel table-panel invoice-table-panel">
           <table className="data-table">
             <thead>
@@ -198,8 +344,9 @@ export default function Invoices() {
               </tr>
             </thead>
             <tbody>
-              {invoices.map((invoice) => {
+              {visibleInvoices.map((invoice) => {
                 const customer = invoice.order?.customer || invoice.customer;
+                const invChannel = getInvChannel(invoice);
                 const taxable = invoice.taxable_amount || Math.round((invoice.total_amount / 1.18) * 100) / 100;
                 const gst = Math.round((invoice.total_amount - taxable) * 100) / 100;
                 const hasIgst = (invoice.igst || 0) > 0;
@@ -209,7 +356,10 @@ export default function Invoices() {
                 return (
                   <tr key={invoice.id}>
                     <td>
-                      <strong>#{invoice.invoice_number}</strong>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <strong>#{invoice.invoice_number}</strong>
+                        <ChannelBadge channel={invChannel} compact />
+                      </div>
                       <small style={{ display: 'block', color: 'var(--muted)', fontSize: 11 }}>
                         {invoice.order ? `Order #${invoice.order.order_number}` : 'Direct Sale'}
                       </small>
@@ -223,7 +373,12 @@ export default function Invoices() {
                       <div>{money(gstAmount)}</div>
                       <small style={{ color: 'var(--muted)', fontSize: 10 }}>{gstRateLabel}</small>
                     </td>
-                    <td><strong style={{ fontSize: 13.5 }}>{money(invoice.total_amount)}</strong></td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <strong style={{ fontSize: 13.5 }}>{money(invoice.total_amount)}</strong>
+                        <ChannelBadge channel={invChannel} compact />
+                      </div>
+                    </td>
                     <td>
                       <div style={{ color: invoice.balance_due <= 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>
                         {invoice.balance_due <= 0 ? 'Fully Paid' : `Bal: ${money(invoice.balance_due)}`}
@@ -351,6 +506,16 @@ export default function Invoices() {
               </label>
             </div>
 
+            <label>Payment Type (Actual vs Demo)*
+              <select
+                value={invoiceForm.channel}
+                onChange={(e) => setInvoiceForm({ ...invoiceForm, channel: e.target.value })}
+              >
+                <option value="real">Actual Business Invoice (Real Payment)</option>
+                <option value="demo">Demo / Sandbox Test Invoice</option>
+              </select>
+            </label>
+
             <label>Description / Line Items
               <textarea
                 rows={2}
@@ -415,6 +580,17 @@ export default function Invoices() {
                 {PAYMENT_METHODS.map((m) => (
                   <option key={m.id} value={m.id}>{m.label}</option>
                 ))}
+                <option value="demo_card">Demo / Sandbox Payment</option>
+              </select>
+            </label>
+
+            <label>Payment Classification*
+              <select
+                value={payForm.channel}
+                onChange={(e) => setPayForm({ ...payForm, channel: e.target.value })}
+              >
+                <option value="real">Actual Payment (Real)</option>
+                <option value="demo">Demo Payment (Sandbox)</option>
               </select>
             </label>
 

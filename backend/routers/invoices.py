@@ -12,7 +12,7 @@ from models.user import User
 from schemas.invoice import InvoiceUpdate, InvoiceResponse, InvoiceCreate
 from services.invoice_service import (
     get_invoices, get_invoice, generate_invoice_from_order, update_invoice,
-    create_standalone_invoice, record_payment
+    create_standalone_invoice, record_payment, get_payment_summary,
 )
 from utils.pdf import build_invoice_pdf
 from utils.permissions import require_accountant, require_staff
@@ -25,10 +25,19 @@ def read_invoices(
     skip: int = 0,
     limit: int = 100,
     status: Optional[InvoiceStatus] = None,
+    channel: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_accountant),
 ):
-    return get_invoices(db, skip=skip, limit=limit, status=status)
+    return get_invoices(db, skip=skip, limit=limit, status=status, channel=channel)
+
+
+@router.get("/summary")
+def read_invoice_payment_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_accountant),
+):
+    return get_payment_summary(db)
 
 
 @router.get("/public/{token}/pdf")
@@ -70,6 +79,7 @@ def create_standalone_invoice_endpoint(
         cgst=payload.cgst,
         sgst=payload.sgst,
         igst=payload.igst,
+        channel=payload.channel,
         notes=payload.notes,
     )
 
@@ -87,7 +97,7 @@ def record_invoice_payment_endpoint(
     amount = payload.payment_amount or payload.paid_amount or 0.0
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Payment amount must be greater than zero")
-    record_payment(db, db_invoice, amount, method=payload.method or "manual", notes=payload.notes)
+    record_payment(db, db_invoice, amount, method=payload.method or "manual", notes=payload.notes, channel=payload.channel)
     db.commit()
     return get_invoice(db, invoice_id)
 

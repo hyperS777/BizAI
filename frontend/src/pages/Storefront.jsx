@@ -720,7 +720,12 @@ export default function Storefront() {
                   <div className="order-history-card" key={order.reference}>
                     <div className="order-history-card-top">
                       <span className="order-history-ref">{order.reference}</span>
-                      <span className="order-history-total">{money(order.total_amount)}</span>
+                      <span className="order-history-total">
+                        {money(order.total_amount)}{' '}
+                        <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 4, background: 'rgba(139,92,246,0.16)', color: '#7c3aed', fontWeight: 700 }}>
+                          DEMO
+                        </span>
+                      </span>
                     </div>
                     <div className="order-history-items-preview">
                       {order.items?.slice(0, 3).map((item) => (
@@ -1129,7 +1134,15 @@ export default function Storefront() {
                 <span>−{money(giftCardAmount)}</span>
               </div>
             )}
-            <div className="total-row"><span>Total</span><span>{money(orderTotal)}</span></div>
+            <div className="total-row">
+              <span>
+                Total{' '}
+                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'rgba(139,92,246,0.16)', color: '#7c3aed', fontWeight: 700, verticalAlign: 'middle' }}>
+                  DEMO PAYMENT
+                </span>
+              </span>
+              <span>{money(orderTotal)}</span>
+            </div>
           </div>
 
           {checkoutError && <p className="simulation-error">{checkoutError}</p>}
@@ -1237,7 +1250,12 @@ export default function Storefront() {
             </div>
           )}
           <div className="total-row">
-            <span>Total</span>
+            <span>
+              Total{' '}
+              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'rgba(139,92,246,0.16)', color: '#7c3aed', fontWeight: 700, verticalAlign: 'middle' }}>
+                DEMO
+              </span>
+            </span>
             <span>{money(orderTotal)}</span>
           </div>
           <div className="free-shipping-row">

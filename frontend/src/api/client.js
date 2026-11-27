@@ -67,9 +67,10 @@ export async function downloadPackingSlipPdf(orderId, filename) {
   URL.revokeObjectURL(url);
 }
 
-export async function downloadPnlPdf(filename) {
+export async function downloadPnlPdf(filename, channel) {
   const token = localStorage.getItem('token');
-  const response = await fetch(`${API_URL}/reports/pnl/pdf`, {
+  const qs = channel && channel !== 'all' ? `?channel=${encodeURIComponent(channel)}` : '';
+  const response = await fetch(`${API_URL}/reports/pnl/pdf${qs}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Could not download P&L statement');
@@ -82,9 +83,10 @@ export async function downloadPnlPdf(filename) {
   URL.revokeObjectURL(url);
 }
 
-export async function downloadGstr1Csv(filename) {
+export async function downloadGstr1Csv(filename, channel = 'real') {
   const token = localStorage.getItem('token');
-  const response = await fetch(`${API_URL}/reports/gstr1-export`, {
+  const qs = channel && channel !== 'all' ? `?channel=${encodeURIComponent(channel)}` : '?channel=all';
+  const response = await fetch(`${API_URL}/reports/gstr1-export${qs}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Could not download GSTR-1 report');

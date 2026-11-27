@@ -15,8 +15,11 @@ from sqlalchemy.orm import Session
 
 from config import settings
 from database import get_db
+from models.user import User
 from schemas.integration import StorefrontSimulationItem
+from services.invoice_service import get_payment_summary, get_payments_ledger
 from services.storefront_service import create_storefront_simulation
+from utils.permissions import require_accountant
 
 logger = logging.getLogger("bizai.payments")
 
@@ -42,6 +45,26 @@ class RazorpayVerifyRequest(BaseModel):
     items: List[StorefrontSimulationItem]
     discount_code: Optional[str] = None
     gift_card_code: Optional[str] = None
+
+
+@router.get("")
+def list_payments(
+    channel: Optional[str] = None,
+    limit: int = 200,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_accountant),
+):
+    """List itemized payments separated by actual (real) vs demo channel."""
+    return get_payments_ledger(db, channel=channel, limit=max(1, min(limit, 500)))
+
+
+@router.get("/summary")
+def read_payments_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_accountant),
+):
+    """Aggregated Actual vs Demo payment totals."""
+    return get_payment_summary(db)
 
 
 @router.get("/config")
@@ -125,6 +148,7 @@ def verify_razorpay_payment(payload: RazorpayVerifyRequest, db: Session = Depend
     Verifies Razorpay HMAC SHA256 payment signature and executes real order fulfillment.
     """
     # 1. Signature check if live keys are configured
+    is_live_payment = False
     if settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET and payload.razorpay_signature:
         generated = hmac.new(
             settings.RAZORPAY_KEY_SECRET.encode("utf-8"),
@@ -136,6 +160,7 @@ def verify_razorpay_payment(payload: RazorpayVerifyRequest, db: Session = Depend
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Payment signature verification failed. Tampering detected.",
             )
+        is_live_payment = not str(payload.razorpay_order_id or "").startswith("order_test_")
 
     # 2. Convert to confirmed order via storefront service
     try:
@@ -150,12 +175,14 @@ def verify_razorpay_payment(payload: RazorpayVerifyRequest, db: Session = Depend
             gift_card_code=payload.gift_card_code,
             payment_method=f"Razorpay ({payload.razorpay_payment_id})",
             customer_phone=payload.customer_phone,
+            channel="real" if is_live_payment else "demo",
         )
     except ValueError as err:
         raise HTTPException(status_code=400, detail=str(err))
 
     return {
         "status": "success",
+        "channel": "real" if is_live_payment else "demo",
         "payment_id": payload.razorpay_payment_id,
         "order_id": payload.razorpay_order_id,
         "simulation": simulation,

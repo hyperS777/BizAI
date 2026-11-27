@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Users, Download, Upload, Plus, Tag, ShieldCheck, Trash2, MessageCircle } from 'lucide-react';
 import client from '../api/client';
-import { EmptyState, Modal, PageHeader, ConfirmDialog } from '../components/ui';
+import { ChannelBadge, EmptyState, Modal, PageHeader, ConfirmDialog } from '../components/ui';
 import { apiError, formatDate, money } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -395,7 +395,10 @@ export default function Customers() {
                     <strong>#{order.order_number}</strong>
                     <span className={`status-pill ${order.status}`}>{orderStatusLabel(order.status)}</span>
                     <span>{formatDate(order.created_at)}</span>
-                    <b>{money(order.total_amount)}</b>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <b>{money(order.total_amount)}</b>
+                      <ChannelBadge channel={order.channel} compact />
+                    </span>
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--muted)' }}>
                     {(order.items || []).map((it) => `${it.quantity}× ${it.product?.name || `Item #${it.product_id}`}`).join(', ') || 'Apparel items'}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Clock3, MapPin, Package, Search, Truck } from 'lucide-react';
 import client from '../api/client';
+import { ChannelBadge } from '../components/ui';
 import { formatDate, money } from '../utils/format';
 
 const STATUS_DISPLAY = {
@@ -140,7 +141,10 @@ export default function TrackOrder() {
                 <div style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
                   <Package size={13} /> Parcel Summary
                 </div>
-                <strong style={{ display: 'block', marginTop: 4 }}>{money(data.total_amount)}</strong>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                  <strong>{money(data.total_amount)}</strong>
+                  <ChannelBadge channel={data.channel} compact />
+                </div>
                 {(data.items || []).map((item, idx) => (
                   <small key={idx} style={{ display: 'block', marginTop: 2, color: 'var(--muted)' }}>
                     {item.quantity}x {item.name} {item.option2 ? `(${item.option2})` : ''}

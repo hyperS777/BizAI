@@ -68,6 +68,7 @@ def get_orders(
     limit: int = 100,
     status: Optional[OrderStatus] = None,
     customer_id: Optional[int] = None,
+    channel: Optional[str] = None,
 ) -> List[Order]:
     query = db.query(Order).options(
         joinedload(Order.items).joinedload(OrderItem.product),
@@ -79,6 +80,8 @@ def get_orders(
         query = query.filter(Order.status == _status_value(status))
     if customer_id:
         query = query.filter(Order.customer_id == customer_id)
+    if channel in ("real", "demo"):
+        query = query.filter(Order.channel == channel)
     return query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
 
 
