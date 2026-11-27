@@ -370,7 +370,7 @@ export default function Products() {
 
       {/* Add / Edit Product Modal */}
       {modal && (
-        <Modal title={form.id ? `Edit product · ${form.name}` : 'Add new product'} onClose={() => setModal(false)}>
+        <Modal title={form.id ? `Edit product · ${form.name}` : 'Add new product'} onClose={() => setModal(false)} size="lg">
           <form className="stack-form" onSubmit={save} style={{ maxHeight: '78vh', overflowY: 'auto', paddingRight: 6 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <label>Product Name*

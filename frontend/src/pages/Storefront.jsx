@@ -1456,26 +1456,20 @@ export default function Storefront() {
                     </div>
                     <span className="product-category">{product.category}</span>
 
-                    {product.variants.length > 1 && (
-                      <label className="store-variant-select">
-                        <span>Variant ({product.variants.length} available)</span>
-                        <select
-                          value={selectedVariants[product.id] || product.variants[0]?.id}
-                          onChange={(e) => {
-                            const vId = e.target.value;
-                            setSelectedVariants((prev) => ({ ...prev, [product.id]: vId }));
-                            const chosen = product.variants.find((v) => v.id === vId);
-                            if (chosen) trackStoreEvent({ sessionId, eventType: 'variant_selected', product, variant: chosen });
-                          }}
-                        >
-                          {product.variants.map((v) => (
-                            <option key={v.id} value={v.id} disabled={!v.available}>
-                              {v.options?.join(' / ') || v.title} {!v.available ? '(Sold out)' : ''}
-                            </option>
+                    {product.variants?.length > 0 && (() => {
+                      const sizes = [...new Set(product.variants.map((v) => v.option2).filter(Boolean))];
+                      if (!sizes.length) return null;
+                      const visible = sizes.slice(0, 6);
+                      const overflow = sizes.length - 6;
+                      return (
+                        <div className="store-size-chips">
+                          {visible.map((sz) => (
+                            <span key={sz} className="store-size-chip">{sz}</span>
                           ))}
-                        </select>
-                      </label>
-                    )}
+                          {overflow > 0 && <span className="store-size-chip-more">+{overflow}</span>}
+                        </div>
+                      );
+                    })()}
 
                     <button
                       className="store-add-button"

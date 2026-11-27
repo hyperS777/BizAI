@@ -20,10 +20,10 @@ export function PageHeader({ eyebrow, title, subtitle, children }) {
   );
 }
 
-export function Modal({ title, onClose, children }) {
+export function Modal({ title, onClose, children, size }) {
   return (
     <div className="modal-backdrop" onClick={onClose} role="presentation">
-      <div className="modal" onClick={(event) => event.stopPropagation()}>
+      <div className={`modal${size === 'lg' ? ' modal-lg' : ''}`} onClick={(event) => event.stopPropagation()}>
         <div className="modal-head">
           <h2>{title}</h2>
           <button className="icon-btn" type="button" onClick={onClose} aria-label="Close">×</button>
