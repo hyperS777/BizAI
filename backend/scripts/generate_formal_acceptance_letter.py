@@ -39,11 +39,11 @@ INTRO_TEXT = (
 )
 
 BULLETS = [
-    "All functional specifications and SRS requirements have been successfully satisfied, with the complete application deployed and verified on live production hosts (Vercel & Microsoft Azure App Service).",
+    "All core functional specifications and SRS requirements have been satisfied, with the application deployed and verified on live production hosts (Vercel & Microsoft Azure App Service).",
     "Inventory, catalog, and financial management — including garment variants, metafields, multi-location warehouses, order lifecycle controls, automated GST invoices, recurring expenses, and GSTR-1/P&L exports — have been validated and accepted.",
-    "Role-Based Access Control (RBAC) with distinct permissions for Admins, Managers, Employees, and Accountants, together with the AI Business Advisor, Discounts, Gift Cards, and live Razorpay storefront checkout, has passed all verification checks.",
-    "Regarding agreed commercial payment terms, we confirm that ₹1,00,000 (One Lakh Rupees) has already been paid to the development team, and the remaining balance of ₹1,00,000 (One Lakh Rupees) will be paid upon final handover.",
-    "The platform is hereby officially approved and handed over into active production and operational status.",
+    "Role-Based Access Control (RBAC) with distinct permissions for Admins, Managers, Employees, and Accountants, together with the AI Business Advisor, Discounts, Gift Cards, and sandbox storefront checkout, has passed all verification checks.",
+    "Planned Phase-2 Go-Live Scope: Integration of live Delhivery courier API pickup/webhooks, cutover to the actual live reihh.com Shopify store with live Razorpay merchant KYC keys, and final custom-domain (www.bizai-reihh.site) rollout are scheduled as final handover deliverables.",
+    "Payment Terms: We confirm that Rs. 1,00,000 (One Lakh Rupees) has already been paid to Team YATRI for the delivered core platform, and the remaining balance of Rs. 1,00,000 (One Lakh Rupees) will be paid after completing the above live Delhivery courier and actual-site integrations at final handover.",
 ]
 
 CLOSING_1 = (
@@ -58,19 +58,19 @@ CLOSING_2 = (
 def build_docx(paths: list[Path]):
     doc = Document()
     for sec in doc.sections:
-        sec.top_margin = Inches(0.85)
-        sec.bottom_margin = Inches(0.85)
-        sec.left_margin = Inches(0.95)
-        sec.right_margin = Inches(0.95)
+        sec.top_margin = Inches(0.6)
+        sec.bottom_margin = Inches(0.6)
+        sec.left_margin = Inches(0.85)
+        sec.right_margin = Inches(0.85)
 
     normal = doc.styles["Normal"]
     normal.font.name = "Arial"
-    normal.font.size = Pt(10.5)
+    normal.font.size = Pt(10)
     normal.font.color.rgb = RGBColor(0x11, 0x18, 0x27)
 
     # Date
     p_date = doc.add_paragraph()
-    p_date.paragraph_format.space_after = Pt(12)
+    p_date.paragraph_format.space_after = Pt(8)
     r_lbl = p_date.add_run("Date: ")
     r_lbl.bold = True
     p_date.add_run(DATE_TEXT)
@@ -82,12 +82,12 @@ def build_docx(paths: list[Path]):
     r_to.bold = True
 
     p_to = doc.add_paragraph("\n".join(TEAM_MEMBERS))
-    p_to.paragraph_format.space_after = Pt(12)
-    p_to.paragraph_format.line_spacing = 1.15
+    p_to.paragraph_format.space_after = Pt(8)
+    p_to.paragraph_format.line_spacing = 1.12
 
     # Subject
     p_subj = doc.add_paragraph()
-    p_subj.paragraph_format.space_after = Pt(10)
+    p_subj.paragraph_format.space_after = Pt(8)
     r_sl = p_subj.add_run("Subject: ")
     r_sl.bold = True
     r_st = p_subj.add_run(SUBJECT_TEXT)
@@ -95,34 +95,34 @@ def build_docx(paths: list[Path]):
 
     # Salutation
     p_sal = doc.add_paragraph("Dear Development Team,")
-    p_sal.paragraph_format.space_after = Pt(8)
+    p_sal.paragraph_format.space_after = Pt(6)
 
     # Intro
     p_intro = doc.add_paragraph(INTRO_TEXT)
-    p_intro.paragraph_format.space_after = Pt(8)
-    p_intro.paragraph_format.line_spacing = 1.18
+    p_intro.paragraph_format.space_after = Pt(6)
+    p_intro.paragraph_format.line_spacing = 1.14
 
     # Bullets lead-in
     p_lead = doc.add_paragraph("Following comprehensive evaluation, we formally confirm the following:")
-    p_lead.paragraph_format.space_after = Pt(6)
+    p_lead.paragraph_format.space_after = Pt(4)
 
     for b in BULLETS:
         pb = doc.add_paragraph(style="List Bullet")
-        pb.paragraph_format.space_after = Pt(5)
-        pb.paragraph_format.line_spacing = 1.15
+        pb.paragraph_format.space_after = Pt(4)
+        pb.paragraph_format.line_spacing = 1.12
         pb.add_run(b)
 
     # Closings
     p_c1 = doc.add_paragraph(CLOSING_1)
-    p_c1.paragraph_format.space_before = Pt(6)
-    p_c1.paragraph_format.space_after = Pt(8)
-    p_c1.paragraph_format.line_spacing = 1.18
+    p_c1.paragraph_format.space_before = Pt(4)
+    p_c1.paragraph_format.space_after = Pt(6)
+    p_c1.paragraph_format.line_spacing = 1.14
 
     p_c2 = doc.add_paragraph(CLOSING_2)
-    p_c2.paragraph_format.space_after = Pt(12)
+    p_c2.paragraph_format.space_after = Pt(8)
 
     p_sinc = doc.add_paragraph("Sincerely,")
-    p_sinc.paragraph_format.space_after = Pt(34)
+    p_sinc.paragraph_format.space_after = Pt(28)
 
     p_sig = doc.add_paragraph()
     p_sig.paragraph_format.space_after = Pt(0)
@@ -146,16 +146,16 @@ def build_pdf(paths: list[Path]):
         "LetterBody",
         parent=styles["Normal"],
         fontName="Helvetica",
-        fontSize=10.5,
-        leading=14.5,
+        fontSize=10.0,
+        leading=13.5,
         textColor="#111827",
     )
     bullet_style = ParagraphStyle(
         "LetterBullet",
         parent=body,
-        leftIndent=18,
-        firstLineIndent=-10,
-        spaceAfter=5,
+        leftIndent=16,
+        firstLineIndent=-9,
+        spaceAfter=4,
     )
 
     for out in paths:
@@ -163,36 +163,36 @@ def build_pdf(paths: list[Path]):
         doc = SimpleDocTemplate(
             str(out),
             pagesize=A4,
-            leftMargin=0.9 * inch,
-            rightMargin=0.9 * inch,
-            topMargin=0.8 * inch,
-            bottomMargin=0.75 * inch,
+            leftMargin=0.8 * inch,
+            rightMargin=0.8 * inch,
+            topMargin=0.58 * inch,
+            bottomMargin=0.55 * inch,
         )
         story = []
         story.append(Paragraph(f"<b>Date:</b> {escape(DATE_TEXT)}", body))
-        story.append(Spacer(1, 10))
+        story.append(Spacer(1, 7))
         story.append(Paragraph("<b>To:</b><br/>" + "<br/>".join(escape(m) for m in TEAM_MEMBERS), body))
-        story.append(Spacer(1, 10))
+        story.append(Spacer(1, 7))
         story.append(Paragraph(f"<b>Subject: {escape(SUBJECT_TEXT)}</b>", body))
-        story.append(Spacer(1, 10))
+        story.append(Spacer(1, 7))
         story.append(Paragraph("Dear Development Team,", body))
-        story.append(Spacer(1, 8))
-        story.append(Paragraph(escape(INTRO_TEXT), body))
-        story.append(Spacer(1, 8))
-        story.append(Paragraph("Following comprehensive evaluation, we formally confirm the following:", body))
         story.append(Spacer(1, 6))
+        story.append(Paragraph(escape(INTRO_TEXT), body))
+        story.append(Spacer(1, 6))
+        story.append(Paragraph("Following comprehensive evaluation, we formally confirm the following:", body))
+        story.append(Spacer(1, 4))
 
         for b in BULLETS:
             b_pdf = escape(b.replace("₹", "Rs. "))
             story.append(Paragraph(f"&bull;&nbsp;&nbsp;{b_pdf}", bullet_style))
 
-        story.append(Spacer(1, 6))
+        story.append(Spacer(1, 4))
         story.append(Paragraph(escape(CLOSING_1), body))
-        story.append(Spacer(1, 8))
+        story.append(Spacer(1, 6))
         story.append(Paragraph(escape(CLOSING_2), body))
-        story.append(Spacer(1, 12))
+        story.append(Spacer(1, 9))
         story.append(Paragraph("Sincerely,", body))
-        story.append(Spacer(1, 34))
+        story.append(Spacer(1, 26))
         story.append(Paragraph("<b>Amber Abbas</b><br/>REIHH Studio", body))
         doc.build(story)
 
